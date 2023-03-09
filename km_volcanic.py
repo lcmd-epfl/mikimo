@@ -16,7 +16,6 @@ from tqdm import tqdm
 def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, t_span, c0, timeout):
    
     initial_conc = np.loadtxt(c0, dtype=np.float64)
-    
     df_network.fillna(0, inplace=True)
     rxn_network_all = df_network.to_numpy()[:, 1:]
     rxn_network_all = rxn_network_all.astype(np.int32)
@@ -39,7 +38,7 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
 
     Rp, _ = pad_network(rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot+nR], n_INT_all, rxn_network)
     Pp, _ = pad_network(rxn_network_all[:n_INT_tot, n_INT_tot+nR:], n_INT_all, rxn_network)   
-    
+
     # pad initial_conc in case [cat, R] are only specified.
     if len(initial_conc) != rxn_network_all.shape[1]:
         tmp = np.zeros(rxn_network_all.shape[1])
@@ -47,7 +46,7 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
             if i == 0: tmp[0] = initial_conc[0]
             else: tmp[n_INT_tot + i -1] = c
         initial_conc = np.array(tmp)
-              
+                
     k_forward_all = []
     k_reverse_all = []
 
@@ -56,7 +55,7 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
             energy_profile_all[i], dgr_all[i], coeff_TS_all[i], temperature=temperature)
         k_forward_all.append(k_forward)
         k_reverse_all.append(k_reverse)
-    
+
     dydt = system_KE(
         k_forward_all,
         k_reverse_all,
@@ -66,61 +65,83 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
         n_INT_all,
         initial_conc)
     
+    # first try BDF + ag with various rtol and atol
+    # then LSODA + FD if all BDF attempts fail
+    # the last resort is a Radau
+    # if all fail, return NaN
     max_step = (t_span[1] - t_span[0]) / 10.0
-    #TODO: integrate longer than x seconds, no evolution, error
-    
-    try:
-        result_solve_ivp = solve_ivp(
-            dydt,
-            t_span,
-            initial_conc,
-            method="BDF",
-            dense_output=True,
-            rtol=1e-3,
-            atol=1e-6,
-            jac=dydt.jac,
-            max_step=max_step,
-            timeout=timeout,
-        )
-    except Exception as e:
-        # print(f"First attempt fails due to {e}")
-        # possible arraybox error
-        result_solve_ivp = solve_ivp(
-            dydt,
-            t_span,
-            initial_conc,
-            method="BDF",
-            dense_output=True,
-            rtol=1e-6,
-            atol=1e-6,
-            max_step=max_step,
-            timeout=timeout,
-    )        
-        # no evolution (although likely won't happen when using BDF)
+    rtol_values = [1e-3, 1e-6, 1e-9, 1e-10 ]
+    atol_values = [1e-6, 1e-6, 1e-9, 1e-10]
+    last_ = [rtol_values[-1], atol_values[-1]]
+    success=False
+    cont=False
+    while success==False:
+        atol = atol_values.pop(0)
+        rtol = rtol_values.pop(0)
         try:
-            if np.array_equal(result_solve_ivp.y.reshape((len(initial_conc))),initial_conc):
-                # print("no evolution")
-                result_solve_ivp = solve_ivp(
-                    dydt,
-                    (t_span),
-                    initial_conc,
-                    method="LSODA",
-                    dense_output=True,
-                    rtol=1e-6,
-                    atol=1e-6,
-                    max_step=max_step,
-                    timeout=timeout,
-                )
-        except ValueError as e:
-            pass
-            
-    idx_target_all = [states.index(i) for i in states if "*" in i]
-    c_target_t = [result_solve_ivp.y[i][-1] for i in idx_target_all] 
+            result_solve_ivp = solve_ivp(
+                dydt,
+                t_span,
+                initial_conc,
+                method="BDF",
+                dense_output=True,
+                rtol=rtol,
+                atol=atol,
+                jac=dydt.jac,
+                max_step=max_step,
+                timeout=timeout,
+            )
+            #timeout
+            if result_solve_ivp == "Shiki": 
+                if rtol == last_[0] and atol == last_[1]:
+                    success=True
+                    cont=True
+                continue
+            else: success=True
         
-    return c_target_t
+        # should be arraybox failure
+        except Exception as e:
+            if rtol == last_[0] and atol == last_[1]:
+                success=True
+                cont=True
+            continue
+
+    if cont:
+        try:
+            result_solve_ivp = solve_ivp(
+                dydt,
+                t_span,
+                initial_conc,
+                method="LSODA",
+                dense_output=True,
+                rtol=1e-6,
+                atol=1e-9,
+                max_step=max_step,
+                timeout=timeout,
+            )
+        except Exception as e:
+            # Last resort
+            result_solve_ivp = solve_ivp(
+                dydt,
+                t_span,
+                initial_conc,
+                method="Radau",
+                dense_output=True,
+                rtol=1e-6,
+                atol=1e-9,
+                max_step=max_step,
+                jac=dydt.jac,
+                timeout=timeout,
+            )
+        
+    try:     
+        idx_target_all = [states.index(i) for i in states if "*" in i]
+        c_target_t = [result_solve_ivp.y[i][-1] for i in idx_target_all]
+        return c_target_t
+    except IndexError as e: 
+        return np.NaN
 
 if __name__ == "__main__":
-
 
     # Input
     parser = argparse.ArgumentParser(
@@ -234,6 +255,7 @@ if __name__ == "__main__":
     idx = user_choose_1_dv(dvs, r2s, tags) # choosing descp
     
     X, tag, tags, d, d2, coeff = get_reg_targets(idx, d, tags, coeff, regress, mode="k")
+    descp_idx = np.where(tag == tags)[0][0]
     lnsteps = range(d.shape[1])
     xmax = bround(X.max() + rmargin, xbase)
     xmin = bround(X.min() - lmargin, xbase)
@@ -300,15 +322,25 @@ if __name__ == "__main__":
                 print(e)
                 prod_conc.append(np.nan)
 
-    descr_all = np.array([i[4] for i in dgs])
+    descr_all = np.array([i[descp_idx] for i in dgs])
     prod_conc = np.array([i for i in prod_conc])
 
-    #TODO always choose the first and the last, but what if they fuck up/ duplicate problem
-    missing_indices = np.isnan(prod_conc)
+    #sort both 
+    sort_indices = np.argsort(descr_all)
+    descr_all = descr_all[sort_indices]
+    prod_conc = prod_conc[sort_indices]
+
+    # to avoid interpolating beyond the range
+    if prod_conc[0] == np.NaN:
+        descr_all = descr_all[1:]
+        prod_conc = prod_conc[1:]
+    elif prod_conc[-1] == np.NaN:
+        descr_all = descr_all[:-1]
+        prod_conc = prod_conc[:-1] 
+    missing_indices = np.isnan(prod_conc
+                               )
     f = interp1d(descr_all[~missing_indices], prod_conc[~missing_indices], kind='cubic')
-
     y_interp = f(descr_all[missing_indices])
-
     prod_conc_ = prod_conc.copy()
     prod_conc_[missing_indices] = y_interp
 
@@ -326,15 +358,16 @@ if __name__ == "__main__":
         except Exception as e:
             prod_conc_pt.append(np.nan)
 
-    #TODO always choose the first and the last, but what if they fuck up/ duplicate problem
     prod_conc_pt = np.array(prod_conc_pt)
-    descrp_pt = np.array([i[4] for i in d ]) 
+    descrp_pt = np.array([i[descp_idx] for i in d ])
+    sort_indices = np.argsort(descrp_pt)
+    descrp_pt = descrp_pt[sort_indices]
+    prod_conc_pt = prod_conc_pt[sort_indices] 
+    
     if np.any(np.isnan(prod_conc_pt)):
         missing_indices = np.isnan(prod_conc_pt)
         f = interp1d(descrp_pt[~missing_indices], prod_conc_pt[~missing_indices], kind='cubic')
-
         y_interp = f(descrp_pt[missing_indices])
-
         prod_conc_pt_ = prod_conc_pt.copy()
         prod_conc_pt_[missing_indices] = y_interp
     else:
