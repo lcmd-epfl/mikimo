@@ -1,0 +1,5 @@
+*.png
+output/
+model/
+archive/
+test_cases/archive/
