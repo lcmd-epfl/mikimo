@@ -301,7 +301,7 @@ if __name__ == "__main__":
             continue
         else:
             try:
-                result = calc_km([profile[:-1]], [profile[-1]], 298.15, coeff_TS_all, df_network, (0, 1e5), c0, timeout=timeout)
+                result = calc_km([profile[:-1]], [profile[-1]], temperature, coeff_TS_all, df_network, (0, 1e5), c0, timeout=timeout)
                 if result[0] is None:
                     prod_conc.append(np.nan)
                     continue
@@ -350,7 +350,7 @@ if __name__ == "__main__":
     for profile in tqdm(d, total=len(d), ncols=80):
         
         try:
-            result = calc_km([profile[:-1]], [profile[-1]], 298.15, coeff_TS_all, df_network, (0, 1e5), c0, timeout=timeout)
+            result = calc_km([profile[:-1]], [profile[-1]], temperature, coeff_TS_all, df_network, (0, 1e5), c0, timeout=timeout)
             if result is None:
                 prod_conc_pt.append(np.nan)
                 continue
