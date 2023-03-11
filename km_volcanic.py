@@ -6,12 +6,13 @@ from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.tof import calc_tof
 import scipy.stats as stats
 from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from kinetic_solver_v3 import *
 from tqdm import tqdm
-
+import h5py
 
 def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, t_span, c0, timeout):
    
@@ -140,6 +141,77 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
         return c_target_t
     except IndexError as e: 
         return np.NaN
+
+
+    """
+    Detects spikes in a plot using the difference between the data and a smoothed version of the data.
+
+    Parameters:
+    x (numpy.ndarray): Array of x-coordinates.
+    y (numpy.ndarray): Array of y-coordinates.
+    z_thresh (float): Threshold for the z-score. Observations with a z-score
+        above this threshold are considered spikes.
+    window_size (int): The size of the sliding window to use for smoothing the data.
+    polyorder (int): The order of the polynomial to fit to the sliding window.
+
+    Returns:
+    numpy.ndarray: Boolean array indicating whether each observation is a spike.
+    numpy.ndarray: Array of y-coordinates with spikes replaced by NaNs.
+    numpy.ndarray: Array of y-coordinates with interpolated values for NaNs.
+    """
+    y_smooth = savgol_filter(y, window_length=window_size, polyorder=polyorder)
+    y_diff = np.abs(y - y_smooth)
+    y_std = np.std(y_diff)
+    y_zscore = y_diff / y_std
+    
+    is_spike = np.abs(y_zscore) > z_thresh
+    is_spike &= y_zscore > 0 
+    y_clean = y.copy()
+    y_clean[is_spike] = np.nan
+    
+    nan_indices = np.where(np.isnan(y_clean))[0]
+    y_interp = y_clean.copy()
+    y_interp[nan_indices] = np.interp(nan_indices, np.where(~np.isnan(y_clean))[0], y_clean[~np.isnan(y_clean)])    
+
+    return is_spike, y_clean, y_interp
+
+def detect_spikes(x, y, z_thresh=3.0, window_size=51, polyorder_1=2, polyorder_2=1):
+    """
+    Detects spikes in a plot using the difference between the data and a smoothed version of the data.
+
+    Parameters:
+    x (numpy.ndarray): Array of x-coordinates.
+    y (numpy.ndarray): Array of y-coordinates.
+    z_thresh (float): Threshold for the z-score. Observations with a z-score
+        above this threshold are considered spikes.
+    window_size (int): The size of the sliding window to use for smoothing the data.
+    polyorder_1 (int): The order of the polynomial to fit to the sliding window.
+    polyorder_2 (int): The order of the polynomial for the smoothed version of the data.
+    
+    Returns:
+    numpy.ndarray: Boolean array indicating whether each observation is a spike.
+    numpy.ndarray: Array of y-coordinates with spikes replaced by NaNs.
+    numpy.ndarray: Array of y-coordinates with interpolated values for NaNs.
+    """
+    y_smooth = savgol_filter(y, window_length=window_size, polyorder=polyorder_1)
+    y_diff = np.abs(y - y_smooth)
+    y_std = np.std(y_diff)
+    y_zscore = y_diff / y_std
+    
+    y_poly = np.polyfit(x, y, polyorder_2)
+    y_polyval = np.polyval(y_poly, x)
+    is_spike = np.abs(y_zscore) > z_thresh
+    is_spike &= ((y - y_polyval) > 0) & (y_zscore > 0) | ((y - y_polyval) < 0) & (y_zscore < 0)
+    y_clean = y.copy()
+    y_clean[is_spike] = np.nan
+    nan_indices = np.where(np.isnan(y_clean))[0]
+    x_interp = x.copy()
+    x_interp = x_interp[~np.isnan(y_clean)]
+    y_interp = y_clean[~np.isnan(y_clean)]
+    f = interp1d(x_interp, y_interp, kind='cubic')
+    y_interp = f(x)
+    return is_spike, y_clean, y_interp
+
 
 if __name__ == "__main__":
 
@@ -301,7 +373,7 @@ if __name__ == "__main__":
             continue
         else:
             try:
-                result = calc_km([profile[:-1]], [profile[-1]], temperature, coeff_TS_all, df_network, (0, 1e5), c0, timeout=timeout)
+                result = calc_km([profile[:-1]], [profile[-1]], temperature, coeff_TS_all, df_network, t_span, c0, timeout=timeout)
                 if result[0] is None:
                     prod_conc.append(np.nan)
                     continue
@@ -325,24 +397,27 @@ if __name__ == "__main__":
     descr_all = np.array([i[descp_idx] for i in dgs])
     prod_conc = np.array([i for i in prod_conc])
 
-    #sort both 
-    sort_indices = np.argsort(descr_all)
-    descr_all = descr_all[sort_indices]
-    prod_conc = prod_conc[sort_indices]
-
-    # to avoid interpolating beyond the range
-    if prod_conc[0] == np.NaN:
-        descr_all = descr_all[1:]
-        prod_conc = prod_conc[1:]
-    elif prod_conc[-1] == np.NaN:
-        descr_all = descr_all[:-1]
-        prod_conc = prod_conc[:-1] 
+    # interpolation
     missing_indices = np.isnan(prod_conc
                                )
-    f = interp1d(descr_all[~missing_indices], prod_conc[~missing_indices], kind='cubic')
+    f = interp1d(descr_all[~missing_indices], prod_conc[~missing_indices], kind='cubic', fill_value="extrapolate")
     y_interp = f(descr_all[missing_indices])
     prod_conc_ = prod_conc.copy()
     prod_conc_[missing_indices] = y_interp
+
+    # dealing with spikes
+    is_spike, y_clean, yhat = detect_spikes(descr_all, prod_conc_, z_thresh=2.7, window_size=30, polyorder_1=5, polyorder_2=1)
+    if np.any(np.isnan(is_spike)):
+        if verb > 1:
+            print("""
+                Detected significant spikes in the plot, proceed to smooth the volcano line.
+                Note that the default setting for detect_spikes function might not be suitable for your case.
+                Please do adjust z_thresh, window_size, polyorder_1, and polyorder_2. If the smoothed plot
+                still contains spikes or appears too different from the original one.
+                    """
+                    )
+        prod_conc_sm = yhat
+    else: prod_conc_sm = prod_conc_
 
     #%% volcano point
     print(f"Performing microkinetics modelling for the volcano line ({len(d)})")
@@ -350,7 +425,8 @@ if __name__ == "__main__":
     for profile in tqdm(d, total=len(d), ncols=80):
         
         try:
-            result = calc_km([profile[:-1]], [profile[-1]], temperature, coeff_TS_all, df_network, (0, 1e5), c0, timeout=timeout)
+            result = calc_km([profile[:-1]], [profile[-1]], temperature, coeff_TS_all, \
+                df_network, t_span, c0, timeout=timeout)
             if result is None:
                 prod_conc_pt.append(np.nan)
                 continue
@@ -360,13 +436,11 @@ if __name__ == "__main__":
 
     prod_conc_pt = np.array(prod_conc_pt)
     descrp_pt = np.array([i[descp_idx] for i in d ])
-    sort_indices = np.argsort(descrp_pt)
-    descrp_pt = descrp_pt[sort_indices]
-    prod_conc_pt = prod_conc_pt[sort_indices] 
     
+    # interpolation    
     if np.any(np.isnan(prod_conc_pt)):
         missing_indices = np.isnan(prod_conc_pt)
-        f = interp1d(descrp_pt[~missing_indices], prod_conc_pt[~missing_indices], kind='cubic')
+        f = interp1d(descrp_pt[~missing_indices], prod_conc_pt[~missing_indices], kind='cubic', fill_value="extrapolate")
         y_interp = f(descrp_pt[missing_indices])
         prod_conc_pt_ = prod_conc_pt.copy()
         prod_conc_pt_[missing_indices] = y_interp
@@ -379,6 +453,30 @@ if __name__ == "__main__":
     xlabel = f"{tag} [kcal/mol]"
     ylabel = "Product concentraion (M)"   
     
-    plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_, \
-        xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
-                xlabel=xlabel, ylabel=ylabel)
+    if np.array_equal(prod_conc_sm, prod_conc_):
+        plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_, \
+            xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
+                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
+    else: 
+        if verb > 1:
+            print("plotting both smoothened and original volcano plots")
+
+            # create an HDF5 file
+            with h5py.File('data.h5', 'w') as f:
+                # create a group to hold the datasets
+                group = f.create_group('data')
+
+                # save each numpy array as a dataset in the group
+                group.create_dataset('descr_all', data=descr_all)
+                group.create_dataset('prod_conc_sm', data=prod_conc_sm)
+                group.create_dataset('descrp_pt', data=descrp_pt)
+                group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
+                group.create_dataset('cb', data=cb)
+                group.create_dataset('ms', data=ms)
+                
+        plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_, \
+            xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
+                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_o.png")
+        plot_2d(descr_all, prod_conc_sm, descrp_pt, prod_conc_pt_, \
+            xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
+                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_clean.png")
