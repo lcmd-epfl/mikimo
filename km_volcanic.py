@@ -15,7 +15,33 @@ from tqdm import tqdm
 import h5py
 
 def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, t_span, c0, timeout):
-   
+    """
+    Compute for the reaction evolution 
+
+    Parameters
+    ----------
+    energy_profile_all : list
+        A list of energy profiles for each reaction in the network.
+    dgr_all : list
+        A list of free energy changes for each reaction in the network.
+    temperature : float
+        Temperature at which the reaction takes place.
+    coeff_TS_all : list
+        A list of coefficients for the transition state of each reaction in the network.
+    df_network : pandas DataFrame
+        A pandas DataFrame containing the reaction network information.
+    t_span : tuple
+        A tuple containing the start and end times for the simulation.
+    c0 : str
+        The file path for the initial concentrations of the reactants and products.
+    timeout : float
+        The time limit in seconds for the simulation.
+
+    Returns
+    -------
+    numpy.ndarray
+        An array of concentration values for each species over time.
+    """  
     initial_conc = np.loadtxt(c0, dtype=np.float64)
     df_network.fillna(0, inplace=True)
     rxn_network_all = df_network.to_numpy()[:, 1:]
@@ -67,6 +93,7 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
         initial_conc)
     
     # first try BDF + ag with various rtol and atol
+    # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
     # then LSODA + FD if all BDF attempts fail
     # the last resort is a Radau
     # if all fail, return NaN
@@ -108,6 +135,43 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
             continue
 
     if cont:
+        max_step = (t_span[1] - t_span[0]) / 10.0
+        rtol_values = [1e-3, 1e-6, 1e-9, 1e-10 ]
+        atol_values = [1e-6, 1e-6, 1e-9, 1e-10]
+        last_ = [rtol_values[-1], atol_values[-1]]
+        success=False
+        cont=False
+        while success==False:
+            atol = atol_values.pop(0)
+            rtol = rtol_values.pop(0)
+            try:
+                result_solve_ivp = solve_ivp(
+                    dydt,
+                    t_span,
+                    initial_conc,
+                    method="BDF",
+                    dense_output=True,
+                    rtol=rtol,
+                    atol=atol,
+                    max_step=max_step,
+                    timeout=timeout,
+                )
+                #timeout
+                if result_solve_ivp == "Shiki": 
+                    if rtol == last_[0] and atol == last_[1]:
+                        success=True
+                        cont=True
+                    continue
+                else: success=True
+            
+            # should be arraybox failure
+            except Exception as e:
+                if rtol == last_[0] and atol == last_[1]:
+                    success=True
+                    cont=True
+                continue       
+            
+    if cont:
         try:
             result_solve_ivp = solve_ivp(
                 dydt,
@@ -132,13 +196,15 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
                 atol=1e-9,
                 max_step=max_step,
                 jac=dydt.jac,
-                timeout=timeout,
+                timeout=timeout+10,
             )
         
-    try:     
-        idx_target_all = [states.index(i) for i in states if "*" in i]
-        c_target_t = [result_solve_ivp.y[i][-1] for i in idx_target_all]
-        return c_target_t
+    try:    
+        if result_solve_ivp != "shiki":
+            idx_target_all = [states.index(i) for i in states if "*" in i]
+            c_target_t = [result_solve_ivp.y[i][-1] for i in idx_target_all]
+            return c_target_t
+        else: return np.NaN
     except IndexError as e: 
         return np.NaN
 
