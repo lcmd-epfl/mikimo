@@ -4,13 +4,13 @@ from navicat_volcanic.helpers import (arraydump, group_data_points,
 from navicat_volcanic.plotting2d import get_reg_targets, plot_2d
 from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.tof import calc_tof
+from kinetic_solver_v3 import *
 import scipy.stats as stats
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from kinetic_solver_v3 import *
 from tqdm import tqdm
 import h5py
 
@@ -226,49 +226,77 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--Time",
+        "-Tf",
+        "-tf",
+        "--Tf",
+        "--tf",
+        "--time",
+        "-Time",
+        dest="time",
         type=float,
         default=1e5,
-        help="total reaction time (s)")
+        help="Total reaction time (s)",
+    )
 
     parser.add_argument(
         "-v",
         "--v",
+        "--verb",
+        dest="verb",
         type=int,
-        default=1,
-        )
+        default=0,
+        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv output files (default: 1)",
+    )
 
     parser.add_argument(
         "-lm",
         "--lm",
-        type=float,
+        dest="lmargin",
+        type=int,
         default=20,
-        help="left margin"
-        )
-
+        help="Left margin to pad for visualization, in descriptor variable units. (default: 20)",
+    )
+    
     parser.add_argument(
         "-rm",
         "--rm",
-        type=float,
+        dest="rmargin",
+        type=int,
         default=20,
-        help="right margin"
-        )
+        help="Right margin to pad for visualization, in descriptor variable units. (default: 20)",
+    )   
     
     parser.add_argument(
+        "-T",
         "-t",
+        "--T",
         "--t",
+        "--temp",
+        "-temp",
+        dest="temp",
         type=float,
         default=298.15,
-        help="temperature (K) (default = 298.15 K)")
+        help="Temperature in K. (default: 298.15)",
+    )
+
+    parser.add_argument(
+        "-is",
+        "--is",
+        dest="imputer_strat",
+        type=str,
+        default="knn",
+        help="Imputter to refill missing datapoints. Beta version. (default: knn)",
+    )   
     
     #%% loading and processing
     args = parser.parse_args()
     
-    temperature = args.t
-    lmargin=args.lm
-    rmargin=args.rm
-    verb = args.v
+    temperature = args.temp
+    lmargin=args.lmargin
+    rmargin=args.rmargin
+    verb = args.verb
     dir = args.dir
+    imputer_strat = args.imputer_strat
 
     npoints=200 # for volcanic
     xbase = 20
@@ -282,7 +310,7 @@ if __name__ == "__main__":
     filename = f"{dir}reaction_data.xlsx"
     c0 = f"{dir}c0.txt"
     df_network = pd.read_csv(f"{dir}rxn_network.csv")
-    t_span = (0, args.Time)
+    t_span = (0, args.time)
    
     df = pd.read_excel(filename)
     names = df[df.columns[0]].values
@@ -325,6 +353,7 @@ if __name__ == "__main__":
     
     dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
     idx = user_choose_1_dv(dvs, r2s, tags) # choosing descp
+    d, cb, ms = curate_d(d, regress, cb, ms, tags, imputer_strat, nstds=3, verb=verb)
     
     X, tag, tags, d, d2, coeff = get_reg_targets(idx, d, tags, coeff, regress, mode="k")
     descp_idx = np.where(tag == tags)[0][0]
@@ -407,13 +436,13 @@ if __name__ == "__main__":
 
     # dealing with spikes
     is_spike, y_clean, yhat = detect_spikes(descr_all, prod_conc_, z_thresh=2.7, window_size=30, polyorder_1=5, polyorder_2=1)
-    if np.any(np.isnan(is_spike)):
+    if np.any(np.isnan(y_clean)):
         if verb > 1:
             print("""
-                Detected significant spikes in the plot, proceed to smooth the volcano line.
-                Note that the default setting for detect_spikes function might not be suitable for your case.
-                Please do adjust z_thresh, window_size, polyorder_1, and polyorder_2. If the smoothed plot
-                still contains spikes or appears too different from the original one.
+Detected significant spikes in the plot, proceed to smooth the volcano line.
+Note that the default setting for detect_spikes function might not be suitable for your case.
+Please do adjust z_thresh, window_size, polyorder_1, and polyorder_2. If the smoothed plot
+still contains spikes or appears too different from the original one.
                     """
                     )
         prod_conc_sm = yhat
@@ -461,18 +490,6 @@ if __name__ == "__main__":
         if verb > 1:
             print("plotting both smoothened and original volcano plots")
 
-            # create an HDF5 file
-            with h5py.File('data.h5', 'w') as f:
-                # create a group to hold the datasets
-                group = f.create_group('data')
-
-                # save each numpy array as a dataset in the group
-                group.create_dataset('descr_all', data=descr_all)
-                group.create_dataset('prod_conc_sm', data=prod_conc_sm)
-                group.create_dataset('descrp_pt', data=descrp_pt)
-                group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
-                group.create_dataset('cb', data=cb)
-                group.create_dataset('ms', data=ms)
                 
         plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_, \
             xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
@@ -480,3 +497,17 @@ if __name__ == "__main__":
         plot_2d(descr_all, prod_conc_sm, descrp_pt, prod_conc_pt_, \
             xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
                     xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_clean.png")
+    
+    if verb>1:
+        # create an HDF5 file
+        cb = np.array(cb, dtype='S')
+        ms = np.array(ms, dtype='S')
+        with h5py.File('data.h5', 'w') as f:
+            group = f.create_group('data')
+            # save each numpy array as a dataset in the group
+            group.create_dataset('descr_all', data=descr_all)
+            group.create_dataset('prod_conc_sm', data=prod_conc_sm)
+            group.create_dataset('descrp_pt', data=descrp_pt)
+            group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
+            group.create_dataset('cb', data=cb)
+            group.create_dataset('ms', data=ms)
