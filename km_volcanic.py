@@ -14,8 +14,10 @@ from tqdm import tqdm
 from tqdm import tqdm
 import h5py
 import sys
-
+import os
+import subprocess as sp
 from navicat_volcanic.exceptions import InputError
+
 
 def check_km_inp(coeff_TS_all, df_network, c0):
     """Check the validity of the input data for a kinetic model.
@@ -35,7 +37,7 @@ def check_km_inp(coeff_TS_all, df_network, c0):
     """
     clean = True
     warn = False
-    
+
     initial_conc = np.loadtxt(c0, dtype=np.float64)
     df_network.fillna(0, inplace=True)
     rxn_network_all = df_network.to_numpy()[:, 1:]
@@ -57,61 +59,80 @@ def check_km_inp(coeff_TS_all, df_network, c0):
     n_INT_all.append(x)
     n_INT_all = np.array(n_INT_all)
 
-    Rp, _ = pad_network(rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot+nR], n_INT_all, rxn_network)
-    Pp, _ = pad_network(rxn_network_all[:n_INT_tot, n_INT_tot+nR:], n_INT_all, rxn_network)   
+    Rp, _ = pad_network(
+        rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
+    Pp, _ = pad_network(
+        rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
 
     if len(initial_conc) != rxn_network_all.shape[1]:
         tmp = np.zeros(rxn_network_all.shape[1])
         for i, c in enumerate(initial_conc):
-            if i == 0: tmp[0] = initial_conc[0]
-            else: tmp[n_INT_tot + i -1] = c
-        initial_conc = np.array(tmp)   
+            if i == 0:
+                tmp[0] = initial_conc[0]
+            else:
+                tmp[n_INT_tot + i - 1] = c
+        initial_conc = np.array(tmp)
 
     # check initial state
-    if len(initial_conc) != rxn_network_all.shape[1]: 
-                clean = False
-                raise InputError(
-                    f"Number of state in initial condition does not match with that in reaction network."
-                )
+    if len(initial_conc) != rxn_network_all.shape[1]:
+        clean = False
+        raise InputError(
+            f"Number of state in initial condition does not match with that in reaction network."
+        )
 
-    # check number of state          
+    # check number of state
     for coeff_TS in coeff_TS_all:
-        if n_INT_tot != np.sum([len(coeff_TS) - np.count_nonzero(coeff_TS) for coeff_TS in coeff_TS_all]): 
-                    clean = False
-                    raise InputError(
-                        f"Number of INT recognized in the reaction data does not match with that in reaction network."
-                    )
+        if n_INT_tot != np.sum(
+                [len(coeff_TS) - np.count_nonzero(coeff_TS) for coeff_TS in coeff_TS_all]):
+            clean = False
+            raise InputError(
+                f"Number of INT recognized in the reaction data does not match with that in reaction network."
+            )
 
-    # check reaction network                      
+    # check reaction network
     int_tags = [t for t in tags if "TS" not in t and "prod" not in t.lower()]
     for i, nx in enumerate(rxn_network):
-        if 1 in nx and -1 in nx: continue
-        else:  
-            print(f"The coordinate data for {states[i]} looks wrong")   
-            warn = True   
+        if 1 in nx and -1 in nx:
+            continue
+        else:
+            print(f"The coordinate data for {states[i]} looks wrong")
+            warn = True
 
-    for i, nx in enumerate(np.transpose(rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot+nR])):
-        if np.any(nx < 0): continue
-        else:  
-            print(f"The coordinate data for R{i} looks wrong") 
-            warn = True    
+    for i, nx in enumerate(np.transpose(
+            rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR])):
+        if np.any(nx < 0):
+            continue
+        else:
+            print(f"The coordinate data for R{i} looks wrong")
+            warn = True
 
-    for i, nx in enumerate(np.transpose(rxn_network_all[:n_INT_tot, n_INT_tot+nR:])):
-        if np.any(nx > 0): continue
-        else:  
-            print(f"The coordinate data for P{i} looks wrong")   
-            warn = True  
-            
-    if not(np.array_equal(rxn_network, -rxn_network.T)):
+    for i, nx in enumerate(np.transpose(
+            rxn_network_all[:n_INT_tot, n_INT_tot + nR:])):
+        if np.any(nx > 0):
+            continue
+        else:
+            print(f"The coordinate data for P{i} looks wrong")
+            warn = True
+
+    if not (np.array_equal(rxn_network, -rxn_network.T)):
         print("Your reaction network looks wrong for catalytic reaction.")
-        warn = True 
-        
+        warn = True
+
     return clean, warn
-    
-    
-def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, t_span, c0, timeout):
+
+
+def calc_km(
+        energy_profile_all,
+        dgr_all,
+        temperature,
+        coeff_TS_all,
+        df_network,
+        t_span,
+        c0,
+        timeout,
+        report_as_yield):
     """
-    Compute for the reaction evolution 
+    Compute for the reaction evolution
 
     Parameters
     ----------
@@ -131,12 +152,14 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
         The file path for the initial concentrations of the reactants and products.
     timeout : float
         The time limit in seconds for the simulation.
+    percent_y : boolean
+        whether to report the final concentration as %yield.
 
     Returns
     -------
     numpy.ndarray
         An array of concentration values for each species over time.
-    """  
+    """
     initial_conc = np.loadtxt(c0, dtype=np.float64)
     df_network.fillna(0, inplace=True)
     rxn_network_all = df_network.to_numpy()[:, 1:]
@@ -158,17 +181,21 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
     n_INT_all.append(x)
     n_INT_all = np.array(n_INT_all)
 
-    Rp, _ = pad_network(rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot+nR], n_INT_all, rxn_network)
-    Pp, _ = pad_network(rxn_network_all[:n_INT_tot, n_INT_tot+nR:], n_INT_all, rxn_network)   
+    Rp, _ = pad_network(
+        rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
+    Pp, _ = pad_network(
+        rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
 
     # pad initial_conc in case [cat, R] are only specified.
     if len(initial_conc) != rxn_network_all.shape[1]:
         tmp = np.zeros(rxn_network_all.shape[1])
         for i, c in enumerate(initial_conc):
-            if i == 0: tmp[0] = initial_conc[0]
-            else: tmp[n_INT_tot + i -1] = c
+            if i == 0:
+                tmp[0] = initial_conc[0]
+            else:
+                tmp[n_INT_tot + i - 1] = c
         initial_conc = np.array(tmp)
-                
+
     k_forward_all = []
     k_reverse_all = []
 
@@ -186,19 +213,19 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
         Pp,
         n_INT_all,
         initial_conc)
-    
+
     # first try BDF + ag with various rtol and atol
     # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
     # then LSODA + FD if all BDF attempts fail
     # the last resort is a Radau
     # if all fail, return NaN
     max_step = (t_span[1] - t_span[0]) / 10.0
-    rtol_values = [1e-3, 1e-6, 1e-9, 1e-10 ]
+    rtol_values = [1e-3, 1e-6, 1e-9, 1e-10]
     atol_values = [1e-6, 1e-6, 1e-9, 1e-10]
     last_ = [rtol_values[-1], atol_values[-1]]
-    success=False
-    cont=False
-    while success==False:
+    success = False
+    cont = False
+    while success == False:
         atol = atol_values.pop(0)
         rtol = rtol_values.pop(0)
         try:
@@ -214,29 +241,30 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
                 max_step=max_step,
                 timeout=timeout,
             )
-            #timeout
-            if result_solve_ivp == "Shiki": 
+            # timeout
+            if result_solve_ivp == "Shiki":
                 if rtol == last_[0] and atol == last_[1]:
-                    success=True
-                    cont=True
+                    success = True
+                    cont = True
                 continue
-            else: success=True
-        
+            else:
+                success = True
+
         # should be arraybox failure
         except Exception as e:
             if rtol == last_[0] and atol == last_[1]:
-                success=True
-                cont=True
+                success = True
+                cont = True
             continue
 
     if cont:
         max_step = (t_span[1] - t_span[0]) / 10.0
-        rtol_values = [1e-3, 1e-6, 1e-9, 1e-10 ]
+        rtol_values = [1e-3, 1e-6, 1e-9, 1e-10]
         atol_values = [1e-6, 1e-6, 1e-9, 1e-10]
         last_ = [rtol_values[-1], atol_values[-1]]
-        success=False
-        cont=False
-        while success==False:
+        success = False
+        cont = False
+        while success == False:
             atol = atol_values.pop(0)
             rtol = rtol_values.pop(0)
             try:
@@ -251,21 +279,22 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
                     max_step=max_step,
                     timeout=timeout,
                 )
-                #timeout
-                if result_solve_ivp == "Shiki": 
+                # timeout
+                if result_solve_ivp == "Shiki":
                     if rtol == last_[0] and atol == last_[1]:
-                        success=True
-                        cont=True
+                        success = True
+                        cont = True
                     continue
-                else: success=True
-            
+                else:
+                    success = True
+
             # should be arraybox failure
             except Exception as e:
                 if rtol == last_[0] and atol == last_[1]:
-                    success=True
-                    cont=True
-                continue       
-            
+                    success = True
+                    cont = True
+                continue
+
     if cont:
         try:
             result_solve_ivp = solve_ivp(
@@ -291,20 +320,37 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
                 atol=1e-9,
                 max_step=max_step,
                 jac=dydt.jac,
-                timeout=timeout+10,
+                timeout=timeout + 10,
             )
-        
-    try:    
+
+    try:
         if result_solve_ivp != "shiki":
             idx_target_all = [states.index(i) for i in states if "*" in i]
             c_target_t = [result_solve_ivp.y[i][-1] for i in idx_target_all]
-            return c_target_t
-        else: return np.NaN
-    except IndexError as e: 
+
+            if report_as_yield:
+                s_coeff_R = [np.min(np.abs(
+                    np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp]
+                c_target_yield = np.array(
+                    [c_target_t[i] / s_coeff_R[i] * 100 for i in range(len(s_coeff_R))])
+                c_target_yield[c_target_yield > 100] = 100
+                return c_target_yield
+
+            else:
+                return c_target_t
+        else:
+            return np.NaN
+    except IndexError as e:
         return np.NaN
 
 
-def detect_spikes(x, y, z_thresh=3.0, window_size=51, polyorder_1=2, polyorder_2=1):
+def detect_spikes(
+        x,
+        y,
+        z_thresh=3.0,
+        window_size=51,
+        polyorder_1=2,
+        polyorder_2=1):
     """
     Detects spikes in a plot using the difference between the data and a smoothed version of the data.
 
@@ -316,21 +362,30 @@ def detect_spikes(x, y, z_thresh=3.0, window_size=51, polyorder_1=2, polyorder_2
     window_size (int): The size of the sliding window to use for smoothing the data.
     polyorder_1 (int): The order of the polynomial to fit to the sliding window.
     polyorder_2 (int): The order of the polynomial for the smoothed version of the data.
-    
+
     Returns:
     numpy.ndarray: Boolean array indicating whether each observation is a spike.
     numpy.ndarray: Array of y-coordinates with spikes replaced by NaNs.
     numpy.ndarray: Array of y-coordinates with interpolated values for NaNs.
     """
-    y_smooth = savgol_filter(y, window_length=window_size, polyorder=polyorder_1)
+    y_smooth = savgol_filter(
+        y,
+        window_length=window_size,
+        polyorder=polyorder_1)
     y_diff = np.abs(y - y_smooth)
     y_std = np.std(y_diff)
     y_zscore = y_diff / y_std
-    
+
     y_poly = np.polyfit(x, y, polyorder_2)
     y_polyval = np.polyval(y_poly, x)
     is_spike = np.abs(y_zscore) > z_thresh
-    is_spike &= ((y - y_polyval) > 0) & (y_zscore > 0) | ((y - y_polyval) < 0) & (y_zscore < 0)
+    is_spike &= (
+        (y -
+         y_polyval) > 0) & (
+        y_zscore > 0) | (
+            (y -
+             y_polyval) < 0) & (
+        y_zscore < 0)
     y_clean = y.copy()
     y_clean[is_spike] = np.nan
     nan_indices = np.where(np.isnan(y_clean))[0]
@@ -368,6 +423,16 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-p",
+        "--p"
+        "-percent",
+        "--percent",
+        dest="percent",
+        action="store_true",
+        help="Flag to report activity as percent yield. (default: False)",
+    )
+
+    parser.add_argument(
         "-v",
         "--v",
         "--verb",
@@ -385,7 +450,7 @@ if __name__ == "__main__":
         default=20,
         help="Left margin to pad for visualization, in descriptor variable units. (default: 20)",
     )
-    
+
     parser.add_argument(
         "-rm",
         "--rm",
@@ -393,8 +458,8 @@ if __name__ == "__main__":
         type=int,
         default=20,
         help="Right margin to pad for visualization, in descriptor variable units. (default: 20)",
-    )   
-    
+    )
+
     parser.add_argument(
         "-T",
         "-t",
@@ -415,36 +480,37 @@ if __name__ == "__main__":
         type=str,
         default="knn",
         help="Imputter to refill missing datapoints. Beta version. (default: knn)",
-    )   
-    
-    #%% loading and processing
+    )
+
+    # %% loading and processing
     args = parser.parse_args()
-    
+
     temperature = args.temp
-    lmargin=args.lmargin
-    rmargin=args.rmargin
+    lmargin = args.lmargin
+    rmargin = args.rmargin
     verb = args.verb
     dir = args.dir
     imputer_strat = args.imputer_strat
+    report_as_yield = args.percent
 
-    npoints=200 # for volcanic
+    npoints = 200  # for volcanic
     xbase = 20
-    
+
     # for volcano line
     interpolate = True
-    n_point_calc = 100 
+    n_point_calc = 100
     threshold_diff = 1.0
-    timeout = 15 # in seconds
+    timeout = 15  # in seconds
 
     filename = f"{dir}reaction_data.xlsx"
     c0 = f"{dir}c0.txt"
     df_network = pd.read_csv(f"{dir}rxn_network.csv")
     t_span = (0, args.time)
-   
+
     df = pd.read_excel(filename)
     names = df[df.columns[0]].values
     cb, ms = group_data_points(0, 2, names)
-    
+
     tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
     d = np.float32(df.to_numpy()[:, 1:])
 
@@ -462,34 +528,36 @@ if __name__ == "__main__":
                     f"Assuming field {tag} corresponds to a non-energy descriptor variable."
                 )
             start_des = tag.upper().find("DESCRIPTOR")
-            tags[i] = "".join(
-                [i for i in tag[:start_des]] + [i for i in tag[start_des + 10 :]]
-            )
+            tags[i] = "".join([i for i in tag[:start_des]] +
+                              [i for i in tag[start_des + 10:]])
             coeff[i] = False
             regress[i] = False
         elif "PRODUCT" in tag.upper():
             if verb > 0:
-                print(f"Assuming ΔG of the reaction(s) are given in field {tag}.")
+                print(
+                    f"Assuming ΔG of the reaction(s) are given in field {tag}.")
             dgr = d[:, i]
             coeff[i] = False
             regress[i] = True
         else:
             if verb > 0:
-                print(f"Assuming field {tag} corresponds to a non-TS stationary point.")
+                print(
+                    f"Assuming field {tag} corresponds to a non-TS stationary point.")
             coeff[i] = False
             regress[i] = True
-            
-    
+
     dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
-    idx = user_choose_1_dv(dvs, r2s, tags) # choosing descp
-    d, cb, ms = curate_d(d, regress, cb, ms, tags, imputer_strat, nstds=3, verb=verb)
-    
-    X, tag, tags, d, d2, coeff = get_reg_targets(idx, d, tags, coeff, regress, mode="k")
+    idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
+    d, cb, ms = curate_d(d, regress, cb, ms, tags,
+                         imputer_strat, nstds=3, verb=verb)
+
+    X, tag, tags, d, d2, coeff = get_reg_targets(
+        idx, d, tags, coeff, regress, mode="k")
     descp_idx = np.where(tag == tags)[0][0]
     lnsteps = range(d.shape[1])
     xmax = bround(X.max() + rmargin, xbase)
     xmin = bround(X.min() - lmargin, xbase)
-    
+
     if verb > 1:
         print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
     xint = np.linspace(xmin, xmax, npoints)
@@ -506,40 +574,57 @@ if __name__ == "__main__":
         with np.errstate(invalid="ignore"):
             chi2 = np.sum((resid / Y_pred) ** 2)
         s_err = np.sqrt(np.sum(resid**2) / dof)
-        yint = np.polyval(p, xint) # 
+        yint = np.polyval(p, xint)
         dgs[:, i] = yint
     coeff_TS_all = [coeff[:-1].astype(int)]
 
     clean, warn = check_km_inp(coeff_TS_all, df_network, c0)
-    if not(clean): 
+    if not (clean):
         sys.exit("Recheck your reaction network")
     else:
-        if warn: 
+        if warn:
             print("Reaction network appears wrong")
         else:
-            if verb > 1: print("KM input is clear")
-    #%% volcano line
-    if interpolate: 
-        print(f"Performing microkinetics modelling for the volcano line ({n_point_calc})")
-        selected_indices = np.round(np.linspace(0, len(dgs) - 1, n_point_calc)).astype(int)
+            if verb > 1:
+                print("KM input is clear")
+    # %% volcano line
+    if interpolate:
+        print(
+            f"Performing microkinetics modelling for the volcano line ({n_point_calc})")
+        selected_indices = np.round(
+            np.linspace(
+                0,
+                len(dgs) - 1,
+                n_point_calc)).astype(int)
         trun_dgs = []
         for i in range(len(dgs)):
-            if i not in selected_indices: trun_dgs.append([np.nan])
-            else: trun_dgs.append(dgs[i])
-    else: 
+            if i not in selected_indices:
+                trun_dgs.append([np.nan])
+            else:
+                trun_dgs.append(dgs[i])
+    else:
         trun_dgs = dgs
-        print(f"Performing microkinetics modelling for the volcano line ({npoints})")
-    
+        print(
+            f"Performing microkinetics modelling for the volcano line ({npoints})")
+
     prod_conc = []
     prev_profile = None
     prev_result = None
     for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
-        if np.isnan(profile[0]): 
+        if np.isnan(profile[0]):
             prod_conc.append(np.nan)
             continue
         else:
             try:
-                result = calc_km([profile[:-1]], [profile[-1]], temperature, coeff_TS_all, df_network, t_span, c0, timeout=timeout)
+                result = calc_km([profile[:-1]],
+                                 [profile[-1]],
+                                 temperature,
+                                 coeff_TS_all,
+                                 df_network,
+                                 t_span,
+                                 c0,
+                                 timeout,
+                                 report_as_yield)
                 if result[0] is None:
                     prod_conc.append(np.nan)
                     continue
@@ -550,12 +635,12 @@ if __name__ == "__main__":
                     diff = abs(result - prev_result)
                     if diff < threshold_diff:
                         prev_result = result[0]
-                        prod_conc.append(result[0])        
+                        prod_conc.append(result[0])
                     else:
                         print("diff")
                         prod_conc.append(np.nan)
                         continue
-                        
+
             except Exception as e:
                 print(e)
                 prod_conc.append(np.nan)
@@ -566,13 +651,17 @@ if __name__ == "__main__":
     # interpolation
     missing_indices = np.isnan(prod_conc
                                )
-    f = interp1d(descr_all[~missing_indices], prod_conc[~missing_indices], kind='cubic', fill_value="extrapolate")
+    f = interp1d(descr_all[~missing_indices],
+                 prod_conc[~missing_indices],
+                 kind='cubic',
+                 fill_value="extrapolate")
     y_interp = f(descr_all[missing_indices])
     prod_conc_ = prod_conc.copy()
     prod_conc_[missing_indices] = y_interp
 
     # dealing with spikes
-    is_spike, y_clean, yhat = detect_spikes(descr_all, prod_conc_, z_thresh=2.7, window_size=30, polyorder_1=5, polyorder_2=1)
+    is_spike, y_clean, yhat = detect_spikes(
+        descr_all, prod_conc_, z_thresh=2.7, window_size=30, polyorder_1=5, polyorder_2=1)
     if np.any(np.isnan(y_clean)):
         if verb > 1:
             print("""
@@ -581,61 +670,91 @@ Note that the default setting for detect_spikes function might not be suitable f
 Please do adjust z_thresh, window_size, polyorder_1, and polyorder_2. If the smoothed plot
 still contains spikes or appears too different from the original one.
                     """
-                    )
+                  )
         prod_conc_sm = yhat
-    else: prod_conc_sm = prod_conc_
+    else:
+        prod_conc_sm = prod_conc_
 
-    #%% volcano point
-    print(f"Performing microkinetics modelling for the volcano line ({len(d)})")
+    # %% volcano point
+    print(
+        f"Performing microkinetics modelling for the volcano line ({len(d)})")
     prod_conc_pt = []
     for profile in tqdm(d, total=len(d), ncols=80):
-        
+
         try:
-            result = calc_km([profile[:-1]], [profile[-1]], temperature, coeff_TS_all, \
-                df_network, t_span, c0, timeout=timeout)
+            result = calc_km([profile[:-1]],
+                             [profile[-1]],
+                             temperature,
+                             coeff_TS_all,
+                             df_network,
+                             t_span,
+                             c0,
+                             timeout,
+                             report_as_yield)
             if result is None:
                 prod_conc_pt.append(np.nan)
                 continue
-            prod_conc_pt.append(result[0]) 
+            prod_conc_pt.append(result[0])
         except Exception as e:
             prod_conc_pt.append(np.nan)
 
     prod_conc_pt = np.array(prod_conc_pt)
-    descrp_pt = np.array([i[descp_idx] for i in d ])
-    
-    # interpolation    
+    descrp_pt = np.array([i[descp_idx] for i in d])
+
+    # interpolation
     if np.any(np.isnan(prod_conc_pt)):
         missing_indices = np.isnan(prod_conc_pt)
-        f = interp1d(descrp_pt[~missing_indices], prod_conc_pt[~missing_indices], kind='cubic', fill_value="extrapolate")
+        f = interp1d(descrp_pt[~missing_indices],
+                     prod_conc_pt[~missing_indices],
+                     kind='cubic',
+                     fill_value="extrapolate")
         y_interp = f(descrp_pt[missing_indices])
         prod_conc_pt_ = prod_conc_pt.copy()
         prod_conc_pt_[missing_indices] = y_interp
     else:
         prod_conc_pt_ = prod_conc_pt.copy()
-        
-        
-    #%% plotting
-        
+
+    # %% plotting
+
     xlabel = f"{tag} [kcal/mol]"
-    ylabel = "Product concentraion (M)"   
-    
+    ylabel = "Product concentraion (M)"
+
     if np.array_equal(prod_conc_sm, prod_conc_):
-        plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_, \
-            xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
-                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
-    else: 
+        plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_,
+                xmin=xmin, xmax=xmax, ybase=0.1, cb=cb, ms=ms,
+                xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
+    else:
         if verb > 1:
             print("plotting both smoothened and original volcano plots")
 
-                
-        plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_, \
-            xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
-                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_o.png")
-        plot_2d(descr_all, prod_conc_sm, descrp_pt, prod_conc_pt_, \
-            xmin = xmin, xmax = xmax, ybase = 0.1, cb=cb, ms=ms, \
-                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_clean.png")
-    
-    if verb>1:
+        plot_2d(
+            descr_all,
+            prod_conc_,
+            descrp_pt,
+            prod_conc_pt_,
+            xmin=xmin,
+            xmax=xmax,
+            ybase=0.1,
+            cb=cb,
+            ms=ms,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            filename=f"km_volcano_{tag}_o.png")
+        plot_2d(
+            descr_all,
+            prod_conc_sm,
+            descrp_pt,
+            prod_conc_pt_,
+            xmin=xmin,
+            xmax=xmax,
+            ybase=0.1,
+            cb=cb,
+            ms=ms,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            filename=f"km_volcano_{tag}_clean.png")
+
+    if verb > 1:
         # create an HDF5 file
         cb = np.array(cb, dtype='S')
         ms = np.array(ms, dtype='S')
@@ -648,3 +767,16 @@ still contains spikes or appears too different from the original one.
             group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
             group.create_dataset('cb', data=cb)
             group.create_dataset('ms', data=ms)
+
+    out = ['data.h5', "km_volcano*.png"]
+
+    if not os.path.isdir("output"):
+        sp.run(["mkdir", "output"])
+    else:
+        print("The output directort already exists")
+
+    for file in out:
+        sp.run(["mv", file, "output"], capture_output=True)
+
+    if dir:
+        sp.run(["mv", "output", dir])
