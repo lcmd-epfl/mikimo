@@ -13,7 +13,102 @@ import numpy as np
 from tqdm import tqdm
 from tqdm import tqdm
 import h5py
+import sys
 
+from navicat_volcanic.exceptions import InputError
+
+def check_km_inp(coeff_TS_all, df_network, c0):
+    """Check the validity of the input data for a kinetic model.
+
+    Args:
+        coeff_TS_all (list of numpy.ndarray): List of transition state coordinate data.
+        df_network (pandas.DataFrame): Reaction network data as a pandas DataFrame.
+        c0 (str): File path of the initial concentration data.
+
+    Raises:
+        InputError: If the number of states in the initial condition does not match the number of states in the
+            reaction network, or if the number of intermediates in the reaction data does not match the number of
+            intermediates in the reaction network.
+
+    Returns:
+        T/F
+    """
+    clean = True
+    warn = False
+    
+    initial_conc = np.loadtxt(c0, dtype=np.float64)
+    df_network.fillna(0, inplace=True)
+    rxn_network_all = df_network.to_numpy()[:, 1:]
+    rxn_network_all = rxn_network_all.astype(np.int32)
+    states = df_network.columns[1:].tolist()
+    nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
+    nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
+    n_INT_tot = rxn_network_all.shape[1] - nR - nP
+    rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
+
+    n_INT_all = []
+    x = 1
+    for i in range(1, rxn_network.shape[1]):
+        if rxn_network[i, i - 1] == -1:
+            x += 1
+        elif rxn_network[i, i - 1] != -1:
+            n_INT_all.append(x)
+            x = 1
+    n_INT_all.append(x)
+    n_INT_all = np.array(n_INT_all)
+
+    Rp, _ = pad_network(rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot+nR], n_INT_all, rxn_network)
+    Pp, _ = pad_network(rxn_network_all[:n_INT_tot, n_INT_tot+nR:], n_INT_all, rxn_network)   
+
+    if len(initial_conc) != rxn_network_all.shape[1]:
+        tmp = np.zeros(rxn_network_all.shape[1])
+        for i, c in enumerate(initial_conc):
+            if i == 0: tmp[0] = initial_conc[0]
+            else: tmp[n_INT_tot + i -1] = c
+        initial_conc = np.array(tmp)   
+
+    # check initial state
+    if len(initial_conc) != rxn_network_all.shape[1]: 
+                clean = False
+                raise InputError(
+                    f"Number of state in initial condition does not match with that in reaction network."
+                )
+
+    # check number of state          
+    for coeff_TS in coeff_TS_all:
+        if n_INT_tot != np.sum([len(coeff_TS) - np.count_nonzero(coeff_TS) for coeff_TS in coeff_TS_all]): 
+                    clean = False
+                    raise InputError(
+                        f"Number of INT recognized in the reaction data does not match with that in reaction network."
+                    )
+
+    # check reaction network                      
+    int_tags = [t for t in tags if "TS" not in t and "prod" not in t.lower()]
+    for i, nx in enumerate(rxn_network):
+        if 1 in nx and -1 in nx: continue
+        else:  
+            print(f"The coordinate data for {states[i]} looks wrong")   
+            warn = True   
+
+    for i, nx in enumerate(np.transpose(rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot+nR])):
+        if np.any(nx < 0): continue
+        else:  
+            print(f"The coordinate data for R{i} looks wrong") 
+            warn = True    
+
+    for i, nx in enumerate(np.transpose(rxn_network_all[:n_INT_tot, n_INT_tot+nR:])):
+        if np.any(nx > 0): continue
+        else:  
+            print(f"The coordinate data for P{i} looks wrong")   
+            warn = True  
+            
+    if not(np.array_equal(rxn_network, -rxn_network.T)):
+        print("Your reaction network looks wrong for catalytic reaction.")
+        warn = True 
+        
+    return clean, warn
+    
+    
 def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, t_span, c0, timeout):
     """
     Compute for the reaction evolution 
@@ -208,38 +303,6 @@ def calc_km(energy_profile_all, dgr_all, temperature, coeff_TS_all, df_network, 
     except IndexError as e: 
         return np.NaN
 
-
-    """
-    Detects spikes in a plot using the difference between the data and a smoothed version of the data.
-
-    Parameters:
-    x (numpy.ndarray): Array of x-coordinates.
-    y (numpy.ndarray): Array of y-coordinates.
-    z_thresh (float): Threshold for the z-score. Observations with a z-score
-        above this threshold are considered spikes.
-    window_size (int): The size of the sliding window to use for smoothing the data.
-    polyorder (int): The order of the polynomial to fit to the sliding window.
-
-    Returns:
-    numpy.ndarray: Boolean array indicating whether each observation is a spike.
-    numpy.ndarray: Array of y-coordinates with spikes replaced by NaNs.
-    numpy.ndarray: Array of y-coordinates with interpolated values for NaNs.
-    """
-    y_smooth = savgol_filter(y, window_length=window_size, polyorder=polyorder)
-    y_diff = np.abs(y - y_smooth)
-    y_std = np.std(y_diff)
-    y_zscore = y_diff / y_std
-    
-    is_spike = np.abs(y_zscore) > z_thresh
-    is_spike &= y_zscore > 0 
-    y_clean = y.copy()
-    y_clean[is_spike] = np.nan
-    
-    nan_indices = np.where(np.isnan(y_clean))[0]
-    y_interp = y_clean.copy()
-    y_interp[nan_indices] = np.interp(nan_indices, np.where(~np.isnan(y_clean))[0], y_clean[~np.isnan(y_clean)])    
-
-    return is_spike, y_clean, y_interp
 
 def detect_spikes(x, y, z_thresh=3.0, window_size=51, polyorder_1=2, polyorder_2=1):
     """
@@ -447,6 +510,14 @@ if __name__ == "__main__":
         dgs[:, i] = yint
     coeff_TS_all = [coeff[:-1].astype(int)]
 
+    clean, warn = check_km_inp(coeff_TS_all, df_network, c0)
+    if not(clean): 
+        sys.exit("Recheck your reaction network")
+    else:
+        if warn: 
+            print("Reaction network appears wrong")
+        else:
+            if verb > 1: print("KM input is clear")
     #%% volcano line
     if interpolate: 
         print(f"Performing microkinetics modelling for the volcano line ({n_point_calc})")
