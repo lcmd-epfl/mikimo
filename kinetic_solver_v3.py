@@ -1,23 +1,47 @@
 #!/usr/bin/env python
-
+from navicat_volcanic.exceptions import InputError
 import overreact as rx
 from overreact import _constants as constants
-import pandas as pd
 import numpy as np
+import pandas as pd
 from scipy.integrate import solve_ivp
-import matplotlib.pyplot as plt
 import autograd.numpy as anp
 from autograd import jacobian
-import subprocess as sp
 import argparse
-import glob
 import sys
-import os
 import warnings
-from navicat_volcanic.exceptions import InputError
+import matplotlib.pyplot as plt
+import subprocess as sp
+import os
+import glob
 
 warnings.filterwarnings("ignore")
 
+def has_decimal(array_list):
+    for arr in array_list:
+        if np.any(arr - np.floor(arr) != 0):
+            return True
+    return False
+
+def Rp_Pp_corr(X, nX):
+  
+    for cn in range(len(X)):
+        r = X[cn].copy()
+        # loop each R/P(column)
+        for i in range(nX):
+            mask = [True]*r.shape[0]
+            for j, n in enumerate(r[:,i]):
+                if n != 0 and n.is_integer(): mask[j] = False
+                try:
+                    whole_part, decimal_part = str(n).split(".")
+                    decimal_list = [int(d) for d in decimal_part]  
+                    if cn + 1 in decimal_list: mask[j] = False
+                except ValueError as e:
+                    if n !=  0: mask[j] = False
+            r[mask, i] = 0
+        X[cn] = r.astype(np.int32)   
+    
+    return X
 
 def pad_network(X, n_INT_all, rxn_network):
 
@@ -26,7 +50,8 @@ def pad_network(X, n_INT_all, rxn_network):
     insert_idx = []
     for i in range(1, len(n_INT_all)):  # n_profile - 1
         # pitfall
-        if np.all(rxn_network[np.cumsum(n_INT_all)[i - 1]                  :np.cumsum(n_INT_all)[i], 0] == 0):
+        if np.all(rxn_network[np.cumsum(n_INT_all)[i - 1]\
+            :np.cumsum(n_INT_all)[i], 0] == 0):
 
             cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
                 i - 1]:np.cumsum(n_INT_all)[i], :][0] == -1)
@@ -51,6 +76,107 @@ def pad_network(X, n_INT_all, rxn_network):
             insert_idx.append(all_idx)
 
     return X_, insert_idx
+
+def check_km_inp(df_network, species_profile, c0):
+    """Check the validity of the input data for a kinetic model.
+
+    Args:
+        coeff_TS_all (list of numpy.ndarray): List of transition state coordinate data.
+        df_network (pandas.DataFrame): Reaction network data as a pandas DataFrame.
+        c0 (str): File path of the initial concentration data.
+
+    Raises:
+        InputError: If the number of states in the initial condition does not match the number of states in the
+            reaction network, or if the number of intermediates in the reaction data does not match the number of
+            intermediates in the reaction network.
+
+    Returns:
+        T/F
+    """
+    clean = True
+    warn = False
+
+    initial_conc = np.loadtxt(c0, dtype=np.float64)
+    df_network.fillna(0, inplace=True)
+    rxn_network_all = df_network.to_numpy()[:, 1:]
+    rxn_network_all = rxn_network_all.astype(np.int32)
+    states = df_network.columns[1:].tolist()
+    nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
+    nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
+    n_INT_tot = rxn_network_all.shape[1] - nR - nP
+    rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
+
+    n_INT_all = []
+    x = 1
+    for i in range(1, rxn_network.shape[1]):
+        if rxn_network[i, i - 1] == -1:
+            x += 1
+        elif rxn_network[i, i - 1] != -1:
+            n_INT_all.append(x)
+            x = 1
+    n_INT_all.append(x)
+    n_INT_all = np.array(n_INT_all)
+
+    Rp, _ = pad_network(
+        rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
+    Pp, _ = pad_network(
+        rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
+
+    if len(initial_conc) != rxn_network_all.shape[1]:
+        tmp = np.zeros(rxn_network_all.shape[1])
+        for i, c in enumerate(initial_conc):
+            if i == 0:
+                tmp[0] = initial_conc[0]
+            else:
+                tmp[n_INT_tot + i - 1] = c
+        initial_conc = np.array(tmp)
+
+    # check initial state
+    if len(initial_conc) != rxn_network_all.shape[1]:
+        clean = False
+        raise InputError(
+            f"Number of state in initial condition does not match with that in reaction network."
+        )
+
+    # check number of state
+    n_INT_profile = sum("INT" in string.upper() for string in species_profile \
+        if string[0].upper() != "R" and string[0].upper() != "P")
+    if n_INT_profile != n_INT_tot:
+        clean = False
+        raise InputError(
+            f"Number of INT recognized in the reaction data does not match with that in reaction network."
+        )
+
+
+    # check reaction network
+    for i, nx in enumerate(rxn_network):
+        if 1 in nx and -1 in nx:
+            continue
+        else:
+            print(f"The coordinate data for state {i} looks wrong")
+            warn = True
+
+    for i, nx in enumerate(np.transpose(
+            rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR])):
+        if np.any(nx < 0):
+            continue
+        else:
+            print(f"The coordinate data for R{i} looks wrong")
+            warn = True
+
+    for i, nx in enumerate(np.transpose(
+            rxn_network_all[:n_INT_tot, n_INT_tot + nR:])):
+        if np.any(nx > 0):
+            continue
+        else:
+            print(f"The coordinate data for P{i} looks wrong")
+            warn = True
+
+    if not (np.array_equal(rxn_network, -rxn_network.T)):
+        print("Your reaction network looks wrong for catalytic reaction.")
+        warn = True
+
+    return clean, warn
 
 
 def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
@@ -143,14 +269,13 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
 
     return k_forward, k_reverse[::-1]
 
-
 def add_rate(
         y,
         k_forward_all,
         k_reverse_all,
         rxn_network,
-        Rp_,
-        Pp_,
+        Rp,
+        Pp,
         a,
         cn,
         n_INT_all):
@@ -187,72 +312,92 @@ def add_rate(
     tmp = y[:np.sum(n_INT_all)]
     y_INT = np.array_split(tmp, np.cumsum(n_INT_all)[:-1])
     # Rp_ and Pp_ were initially designed to be all positive
-    Rp_ = [np.abs(i) for i in Rp_]
-    Pp_ = [np.abs(i) for i in Pp_]
 
+    mori = np.cumsum(n_INT_all)
     # the first profile is assumed to be full, skipped
     for i in range(1, len(k_forward_all)):  # n_profile - 1
-        # pitfall
-        if np.all(rxn_network[np.cumsum(n_INT_all)[i - 1]                  :np.cumsum(n_INT_all)[i], 0] == 0):
-            cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
-                              i - 1]:np.cumsum(n_INT_all)[i], :][0] == -1)
-            tmp_idx = cp_idx[0][0].copy()
-            all_idx = [tmp_idx]
-            while tmp_idx != 0:
-                tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
-                all_idx.insert(0, tmp_idx)
-            y_INT[i] = np.insert(y_INT[i], 0, tmp[all_idx])
+        # pitfall and last branching
+        if np.all(rxn_network[mori[i - 1]:mori[i], 0] == 0):
+            
+            if mori[i - 1] == mori[i]:
+                y_INT[i] = y_INT[i-1]
+            else:
+                cp_idx = np.where(rxn_network[mori[i - 1]:mori[i], :][0] == -1)
+                tmp_idx = cp_idx[0][0].copy()
+                all_idx = [tmp_idx]
+                while tmp_idx != 0:
+                    tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
+                    all_idx.insert(0, tmp_idx)
+                y_INT[i] = np.insert(y_INT[i], 0, tmp[all_idx])
 
         else:
             for j in range(rxn_network.shape[0]):
-                if j >= np.cumsum(n_INT_all)[
-                        i - 1] and j <= np.cumsum(n_INT_all)[i]:
+                if j >= mori[i - 1] and j <= mori[i]:
                     continue
                 else:
-                    if np.any(rxn_network[np.cumsum(n_INT_all)[
-                              i - 1]:np.cumsum(n_INT_all)[i], j]):
+                    if np.any(rxn_network[mori[i - 1]:mori[i], j]):
                         y_INT[i] = np.insert(y_INT[i], j, tmp[j])
 
-    y_R = np.array(y[np.sum(n_INT_all):np.sum(n_INT_all) + Rp_[0].shape[1]])
-    y_P = np.array(y[np.sum(n_INT_all) + Rp_[0].shape[1]:])
+    y_R = np.array(y[np.sum(n_INT_all):np.sum(n_INT_all) + Rp[0].shape[1]])
+    y_P = np.array(y[np.sum(n_INT_all) + Rp[0].shape[1]:])
+    
     rate = 0
-    idx1 = np.where(Rp_[cn][a - 1] != 0)[0]
-    if idx1.size == 0:
-        sui = 1
-    else:
-        rate_tmp = np.where(Rp_[cn][a - 1] != 0, y_R ** Rp_[cn][a - 1], 0)
+
+    # forward
+    sui_R = 1
+    sui_P = 1
+    if np.any(Rp[cn][a - 1] < 0):
+        rate_tmp = np.where(Rp[cn][a - 1] != 0, y_R ** np.abs(Rp[cn][a - 1]), 0)
         zero_indices = np.where(rate_tmp == 0)[0]
         rate_tmp = np.delete(rate_tmp, zero_indices)
         if len(rate_tmp) == 0:
-            sui = 0
+            sui_R = 0
         else:
-            sui = np.prod(rate_tmp)
-    rate += k_forward_all[cn][a - 1] * y_INT[cn][a - 1] * sui
-
-    idx2 = np.where(Pp_[cn][a - 1] != 0)[0]
-    if idx2.size == 0:
-        sui = 1
-    else:
-        rate_tmp = np.where(Pp_[cn][a - 1] != 0, y_P ** Pp_[cn][a - 1], 0)
+            sui_R = np.prod(rate_tmp)
+    elif np.any(Pp[cn][a - 1] < 0):
+        rate_tmp = np.where(Pp[cn][a - 1] != 0, y_P ** np.abs(Pp[cn][a - 1]), 0)
         zero_indices = np.where(rate_tmp == 0)[0]
         rate_tmp = np.delete(rate_tmp, zero_indices)
         if len(rate_tmp) == 0:
-            sui = 0
+            sui_P = 0
         else:
-            sui = np.prod(rate_tmp)
+            sui_P = np.prod(rate_tmp)
+            
+    rate += k_forward_all[cn][a - 1] * y_INT[cn][a - 1] * sui_R * sui_P
+        
+    # reverse
+    sui_R_2 = 1
+    sui_P_2 = 1
+            
+    if np.any(Rp[cn][a - 1] > 0):
+        rate_tmp = np.where(Rp[cn][a - 1] != 0, y_R ** np.abs(Rp[cn][a - 1]), 0)
+        zero_indices = np.where(rate_tmp == 0)[0]
+        rate_tmp = np.delete(rate_tmp, zero_indices)
+        if len(rate_tmp) == 0:
+            sui_R_2 = 0
+        else:
+            sui_R_2 = np.prod(rate_tmp)
+        
+    elif np.any(Pp[cn][a - 1] > 0):
+        rate_tmp = np.where(Pp[cn][a - 1] != 0, y_P ** np.abs(Pp[cn][a - 1]), 0)
+        zero_indices = np.where(rate_tmp == 0)[0]
+        rate_tmp = np.delete(rate_tmp, zero_indices)
+        if len(rate_tmp) == 0:
+            sui_P_2 = 0
+        else:
+            sui_P_2 = np.prod(rate_tmp)
 
-    rate -= k_reverse_all[cn][a - 1] * y_INT[cn][a] * sui
+    rate -= k_reverse_all[cn][a - 1] * y_INT[cn][a] * sui_R_2 * sui_P_2
 
     return rate
-
 
 def dINTa_dt(
         y,
         k_forward_all,
         k_reverse_all,
         rxn_network,
-        Rp_,
-        Pp_,
+        Rp,
+        Pp,
         a,
         cn,
         n_INT_all):
@@ -306,22 +451,36 @@ def dINTa_dt(
                                    k_forward_all,
                                    k_reverse_all,
                                    rxn_network,
-                                   Rp_,
-                                   Pp_,
+                                   Rp,
+                                   Pp,
                                    a + 1,
                                    cn_,
                                    n_INT_all)
             except IndexError as e:
                 dINTdt -= add_rate(y, k_forward_all, k_reverse_all,
-                                   rxn_network, Rp_, Pp_, 0, cn_, n_INT_all)
+                                   rxn_network, Rp, Pp, 0, cn_, n_INT_all)
         elif rxn_network[i, a_] == 1:
             dINTdt += add_rate(y, k_forward_all, k_reverse_all,
-                               rxn_network, Rp_, Pp_, a, cn_, n_INT_all)
+                               rxn_network, Rp, Pp, a, cn_, n_INT_all)
         elif rxn_network[i, a_] == 0:
             pass
-
+        
+    # branching at the end, the last state of cycle
+    lastb_idx = None
+    try:
+        lastb_idx = np.where(n_INT_all == 0)[0][0]
+        if 0 in n_INT_all:
+            if a == 0:
+                dINTdt += add_rate(y, k_forward_all, k_reverse_all,
+                                rxn_network, Rp, Pp, a, lastb_idx, n_INT_all)
+            elif a == mori[cn] - mori[cn-1]:
+                dINTdt -= add_rate(y, k_forward_all, k_reverse_all,
+                                rxn_network, Rp, Pp, 0, lastb_idx, n_INT_all)
+            else:
+                pass
+    except IndexError as e:
+        pass
     return dINTdt
-
 
 def dRa_dt(
         y,
@@ -337,7 +496,7 @@ def dRa_dt(
     a = index of the reactant [0,1,2,...]
 
     """
-    Rp = np.vstack([Rp_[0]] + Rp_[1:])
+    Rp = np.vstack(Rp_)
 
     dRdt = 0
 
@@ -367,7 +526,6 @@ def dRa_dt(
 
     return dRdt
 
-
 def dPa_dt(
         y,
         k_forward_all,
@@ -382,10 +540,11 @@ def dPa_dt(
     a = index of the product [0,1,2,...]
 
     """
-    Pp = np.vstack([Pp_[0]] + Pp_[1:])
+    Pp = np.vstack(Pp_)
 
     dPdt = 0
 
+    all_rate = []
     for i in range(Pp.shape[0]):
         if Pp[i, a] != 0:
             mori = np.cumsum(np.array([len(k_forward)
@@ -397,7 +556,7 @@ def dPa_dt(
                 a_ = i + 1
 
             try:
-                dPdt += np.sign(Pp[i,
+                rate_a = np.sign(Pp[i,
                                    a]) * add_rate(y,
                                                   k_forward_all,
                                                   k_reverse_all,
@@ -408,7 +567,7 @@ def dPa_dt(
                                                   cn_,
                                                   n_INT_all)
             except IndexError as e:
-                dPdt += np.sign(Pp[i,
+                rate_a = np.sign(Pp[i,
                                    a]) * add_rate(y,
                                                   k_forward_all,
                                                   k_reverse_all,
@@ -418,9 +577,12 @@ def dPa_dt(
                                                   0,
                                                   cn_,
                                                   n_INT_all)
-
+            if rate_a not in all_rate:
+                all_rate.append(rate_a)
+                dPdt +=rate_a
+            else:
+                pass
     return dPdt
-
 
 def system_KE(
         k_forward_all,
@@ -451,36 +613,41 @@ def system_KE(
 
                 dy_dt = func(t, y)
 
-                # if isinstance(y, anp.numpy_boxes.ArrayBox):
-                #     y = y._value
-                #     dy_dt = dy_dt._value
-                # try:
-                for i in range(len(y)):
-                    if y[i] < bounds[i][0]:
-                        dy_dt[i] += (bounds[i][0] - y[i]) / 2
-                        y[i] = bounds[i][0]
-                    elif y[i] > bounds[i][1]:
-                        dy_dt[i] -= (y[i] - bounds[i][1]) / 2
-                        y[i] = bounds[i][1]
-                        dy_dt[i] = 0
-                # except TypeError as e:
+                try:
+                    for i in range(len(y)):
+                        if y[i] < bounds[i][0]:
+                            print(f"{i} violate the bound by {y[i] - bounds[i][0]}, derivative {dy_dt[i]}")
+                            # dy_dt[i] += (bounds[i][0] - y[i])*10
+                            dy_dt[i] = 0
+                            y[i] = bounds[i][0]
+                        elif y[i] > bounds[i][1]:
+                            print(f"{i} violate the bound by {y[i] - bounds[i][0]}, derivative {dy_dt[i]}")
+                            # dy_dt[i] -= (y[i] - bounds[i][1])*10
+                            dy_dt[i] = 0
+                            y[i] = bounds[i][1]
+                    # print("pass", y)
+                except TypeError as e:
+                    # print("Arraybox fuckup", y)
+                    y_ = anp.array(y._value)
+                    dy_dt_ = anp.array(dy_dt._value)
                     # arraybox failure
-                    # y = y._value
-                    # dy_dt = dy_dt._value
-                    # for i in range(len(y)):
-                    #     if y[i] < bounds[i][0]:
-                    #         dy_dt[i] += (bounds[i][0] - y[i])/2
-                    #         y[i] = bounds[i][0]
-                    #     elif y[i] > bounds[i][1]:
-                    #         dy_dt[i] -= (y[i] - bounds[i][1])/2
-                    #         y[i] = bounds[i][1]
-                    #         dy_dt[i] = 0
+                    for i in range(len(y)):
+                        if y_[i] < bounds[i][0]:
+                            dy_dt_[i] += (bounds[i][0] - y_[i]) / 2
+                            y_[i] = bounds[i][0]
+                        elif y[i] > bounds[i][1]:
+                            dy_dt_[i] -= (y_[i] - bounds[i][1]) / 2
+                            y_[i] = bounds[i][1]
 
+                        dy_dt = anp.array(dy_dt_)
+                        y = anp.array(y_)
+                        # print("Arraybox error", y)
                 return dy_dt
+
             return wrapper
         return decorator
 
-    tolerance = 0.01
+    tolerance = 0.1
     boundary = []
     # boundary = [(0, np.sum(initial_conc))]*k
     for i in range(k):
@@ -607,27 +774,26 @@ def system_KE(
 
     return _dydt
 
-
 def load_data(args):
 
     rxn_data = args.i
     c0 = args.c
     initial_conc = np.loadtxt(c0, dtype=np.float64)  # in M
-    t_span = (0.0, args.Time)
+    t_span = (0.0, args.time)
     method = args.de
-    temperature = args.t
+    temperature = args.temp
     df_network = pd.read_csv(args.rn)
     df_network.fillna(0, inplace=True)
 
     # process reaction network
     rxn_network_all = df_network.to_numpy()[:, 1:]
-    rxn_network_all = rxn_network_all.astype(np.int32)
     states = df_network.columns[1:].tolist()
     nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
     nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
 
     n_INT_tot = rxn_network_all.shape[1] - nR - nP
     rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
+    rxn_network = np.array(rxn_network, dtype=int)
 
     n_INT_all = []
     x = 1
@@ -645,6 +811,24 @@ def load_data(args):
     Pp, idx_insert = pad_network(
         rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
 
+    last_idx = 0
+    for i, arr in enumerate(Pp):
+        if np.any(np.sum(arr, axis=1) > 1): last_idx = i
+
+    assert last_idx < len(n_INT_all), "Something wrong with the reaction network"
+    if last_idx > 0:
+        # mori = np.cumsum(n_INT_all)
+        Rp.insert(last_idx+1, Rp[last_idx].copy())
+        Pp.insert(last_idx+1, Pp[last_idx].copy())
+        # idx_insert.insert(last_idx+1, np.arange(mori[last_idx-1],mori[last_idx]))
+        n_INT_all = np.insert(n_INT_all, last_idx+1, 0)
+    
+    if has_decimal(Rp):
+        Rp = Rp_Pp_corr(Rp, nR)
+        Rp = np.array(Rp, dtype=int)
+    if has_decimal(Pp):
+        Pp = Rp_Pp_corr(Pp, nP)   
+        Pp = np.array(Pp, dtype=int)
     # single csv to seperate csv for each profile
     df_all = pd.read_csv(rxn_data)
     species_profile = df_all.columns.values[1:]
@@ -681,6 +865,11 @@ def load_data(args):
         coeff_TS_all.append(np.array(coeff_TS))
         energy_profile_all.append(np.array(energy_profile))
 
+    if last_idx > 0:
+        tbi = energy_profile_all[last_idx][1:-1]
+        energy_profile_all[last_idx + 1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
+        coeff_TS_all[last_idx + 1] = coeff_TS_all[last_idx]
+        
     # pad initial_conc in case [cat, R] are only specified.
     if len(initial_conc) != rxn_network_all.shape[1]:
         tmp = np.zeros(rxn_network_all.shape[1])
@@ -691,7 +880,7 @@ def load_data(args):
                 tmp[n_INT_tot + i - 1] = c
         initial_conc = np.array(tmp)
 
-    clean, warn = check_km_inp(coeff_TS_all, df_network, c0)
+    clean, warn = check_km_inp(df_network, species_profile, c0)
     if not (clean):
         sys.exit("Recheck your reaction network")
     else:
@@ -702,108 +891,6 @@ def load_data(args):
 
     return initial_conc, Rp, Pp, t_span, temperature, method, energy_profile_all,\
         dgr_all, coeff_TS_all, rxn_network, n_INT_all
-
-
-def check_km_inp(coeff_TS_all, df_network, c0):
-    """Check the validity of the input data for a kinetic model.
-
-    Args:
-        coeff_TS_all (list of numpy.ndarray): List of transition state coordinate data.
-        df_network (pandas.DataFrame): Reaction network data as a pandas DataFrame.
-        c0 (str): File path of the initial concentration data.
-
-    Raises:
-        InputError: If the number of states in the initial condition does not match the number of states in the
-            reaction network, or if the number of intermediates in the reaction data does not match the number of
-            intermediates in the reaction network.
-
-    Returns:
-        T/F
-    """
-    clean = True
-    warn = False
-
-    initial_conc = np.loadtxt(c0, dtype=np.float64)
-    df_network.fillna(0, inplace=True)
-    rxn_network_all = df_network.to_numpy()[:, 1:]
-    rxn_network_all = rxn_network_all.astype(np.int32)
-    states = df_network.columns[1:].tolist()
-    nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
-    nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
-    n_INT_tot = rxn_network_all.shape[1] - nR - nP
-    rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
-
-    n_INT_all = []
-    x = 1
-    for i in range(1, rxn_network.shape[1]):
-        if rxn_network[i, i - 1] == -1:
-            x += 1
-        elif rxn_network[i, i - 1] != -1:
-            n_INT_all.append(x)
-            x = 1
-    n_INT_all.append(x)
-    n_INT_all = np.array(n_INT_all)
-
-    Rp, _ = pad_network(
-        rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
-    Pp, _ = pad_network(
-        rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
-
-    if len(initial_conc) != rxn_network_all.shape[1]:
-        tmp = np.zeros(rxn_network_all.shape[1])
-        for i, c in enumerate(initial_conc):
-            if i == 0:
-                tmp[0] = initial_conc[0]
-            else:
-                tmp[n_INT_tot + i - 1] = c
-        initial_conc = np.array(tmp)
-
-    # check initial state
-    if len(initial_conc) != rxn_network_all.shape[1]:
-        clean = False
-        raise InputError(
-            f"Number of state in initial condition does not match with that in reaction network."
-        )
-
-    # check number of state
-    for coeff_TS in coeff_TS_all:
-        if n_INT_tot != np.sum(
-                [len(coeff_TS) - np.count_nonzero(coeff_TS) for coeff_TS in coeff_TS_all]):
-            clean = False
-            raise InputError(
-                f"Number of INT recognized in the reaction data does not match with that in reaction network."
-            )
-
-    # check reaction network
-    for i, nx in enumerate(rxn_network):
-        if 1 in nx and -1 in nx:
-            continue
-        else:
-            print(f"The coordinate data for state {i} looks wrong")
-            warn = True
-
-    for i, nx in enumerate(np.transpose(
-            rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR])):
-        if np.any(nx < 0):
-            continue
-        else:
-            print(f"The coordinate data for R{i} looks wrong")
-            warn = True
-
-    for i, nx in enumerate(np.transpose(
-            rxn_network_all[:n_INT_tot, n_INT_tot + nR:])):
-        if np.any(nx > 0):
-            continue
-        else:
-            print(f"The coordinate data for P{i} looks wrong")
-            warn = True
-
-    if not (np.array_equal(rxn_network, -rxn_network.T)):
-        print("Your reaction network looks wrong for catalytic reaction.")
-        warn = True
-
-    return clean, warn
-
 
 def process_data(
         energy_profile_all,
@@ -902,8 +989,7 @@ def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None):
 
     if dir:
         sp.run(["mv", "output", dir])
-
-
+        
 if __name__ == "__main__":
 
     # Input
@@ -980,8 +1066,8 @@ if __name__ == "__main__":
         args = parser.parse_args(['-i', f"{dir}/reaction_data.csv",
                                   '-c', f"{dir}/c0.txt",
                                   "-rn", f"{dir}/rxn_network.csv",
-                                  "-t", f"{args.t}",
-                                  "--Time", f"{args.Time}",
+                                  "-t", f"{args.temp}",
+                                  "--time", f"{args.time}",
                                   "-de", f"{args.de}",
                                   ])
 
@@ -1002,16 +1088,17 @@ if __name__ == "__main__":
         n_INT_all,
         initial_conc)
 
+    max_step = (t_span[1] - t_span[0]) / 10.0
     result_solve_ivp = solve_ivp(
         dydt,
         t_span,
         initial_conc,
-        method="BDF",
+        method="LSODA",
         dense_output=True,
         # first_step=first_step,
         # max_step=max_step,
         rtol=1e-3,
         atol=1e-6,
-        jac=dydt.jac,
+        # jac=dydt.jac,
     )
     plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir)
