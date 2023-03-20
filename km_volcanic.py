@@ -19,7 +19,7 @@ import subprocess as sp
 from navicat_volcanic.exceptions import InputError
 
 
-def check_km_inp(coeff_TS_all, df_network, c0):
+def check_km_inp(coeff_TS_all, df_network, species_profile, c0):
     """Check the validity of the input data for a kinetic model.
 
     Args:
@@ -81,13 +81,13 @@ def check_km_inp(coeff_TS_all, df_network, c0):
         )
 
     # check number of state
-    for coeff_TS in coeff_TS_all:
-        if n_INT_tot != np.sum(
-                [len(coeff_TS) - np.count_nonzero(coeff_TS) for coeff_TS in coeff_TS_all]):
-            clean = False
-            raise InputError(
-                f"Number of INT recognized in the reaction data does not match with that in reaction network."
-            )
+    n_INT_profile = sum("INT" in string.upper() for string in species_profile \
+        if string[0].upper() != "R" and string[0].upper() != "P")
+    if n_INT_profile != n_INT_tot:
+        clean = False
+        raise InputError(
+            f"Number of INT recognized in the reaction data does not match with that in reaction network."
+        )
 
     # check reaction network
     int_tags = [t for t in tags if "TS" not in t and "prod" not in t.lower()]
@@ -220,8 +220,8 @@ def calc_km(
     # the last resort is a Radau
     # if all fail, return NaN
     max_step = (t_span[1] - t_span[0]) / 10.0
-    rtol_values = [1e-3, 1e-6, 1e-9, 1e-10]
-    atol_values = [1e-6, 1e-6, 1e-9, 1e-10]
+    rtol_values = [1e-6, 1e-9, 1e-10]
+    atol_values = [1e-6, 1e-9, 1e-10]
     last_ = [rtol_values[-1], atol_values[-1]]
     success = False
     cont = False
@@ -499,8 +499,8 @@ if __name__ == "__main__":
     # for volcano line
     interpolate = True
     n_point_calc = 100
-    threshold_diff = 1.0
-    timeout = 15  # in seconds
+    threshold_diff = 0.5
+    timeout = 10  # in seconds
 
     filename = f"{dir}reaction_data.xlsx"
     c0 = f"{dir}c0.txt"
@@ -578,7 +578,9 @@ if __name__ == "__main__":
         dgs[:, i] = yint
     coeff_TS_all = [coeff[:-1].astype(int)]
 
-    clean, warn = check_km_inp(coeff_TS_all, df_network, c0)
+    df_all = pd.read_excel(filename)
+    species_profile = df_all.columns.values[1:]
+    clean, warn = check_km_inp(coeff_TS_all, df_network, species_profile, c0)
     if not (clean):
         sys.exit("Recheck your reaction network")
     else:
@@ -721,7 +723,7 @@ still contains spikes or appears too different from the original one.
 
     if np.array_equal(prod_conc_sm, prod_conc_):
         plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_,
-                xmin=xmin, xmax=xmax, ybase=0.1, cb=cb, ms=ms,
+                xmin=xmin, xmax=xmax, ybase=10, cb=cb, ms=ms,
                 xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
     else:
         if verb > 1:
@@ -753,7 +755,7 @@ still contains spikes or appears too different from the original one.
             xlabel=xlabel,
             ylabel=ylabel,
             filename=f"km_volcano_{tag}_clean.png")
-
+        out = [f"km_volcano_{tag}_clean.png", f"km_volcano_clean.png"]
     if verb > 1:
         # create an HDF5 file
         cb = np.array(cb, dtype='S')
@@ -768,7 +770,7 @@ still contains spikes or appears too different from the original one.
             group.create_dataset('cb', data=cb)
             group.create_dataset('ms', data=ms)
 
-    out = ['data.h5', "km_volcano*.png"]
+        out.append('data.h5')
 
     if not os.path.isdir("output"):
         sp.run(["mkdir", "output"])
