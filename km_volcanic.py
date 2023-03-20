@@ -7,7 +7,7 @@ from navicat_volcanic.tof import calc_tof
 from kinetic_solver_v3 import *
 import scipy.stats as stats
 from scipy.interpolate import interp1d
-from scipy.signal import savgol_filter
+from scipy.signal import savgol_filter, wiener
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -347,27 +347,11 @@ def calc_km(
 def detect_spikes(
         x,
         y,
-        z_thresh=3.0,
-        window_size=51,
-        polyorder_1=2,
+        z_thresh=2.4,
+        window_size=15,
+        polyorder_1=4,
         polyorder_2=1):
-    """
-    Detects spikes in a plot using the difference between the data and a smoothed version of the data.
 
-    Parameters:
-    x (numpy.ndarray): Array of x-coordinates.
-    y (numpy.ndarray): Array of y-coordinates.
-    z_thresh (float): Threshold for the z-score. Observations with a z-score
-        above this threshold are considered spikes.
-    window_size (int): The size of the sliding window to use for smoothing the data.
-    polyorder_1 (int): The order of the polynomial to fit to the sliding window.
-    polyorder_2 (int): The order of the polynomial for the smoothed version of the data.
-
-    Returns:
-    numpy.ndarray: Boolean array indicating whether each observation is a spike.
-    numpy.ndarray: Array of y-coordinates with spikes replaced by NaNs.
-    numpy.ndarray: Array of y-coordinates with interpolated values for NaNs.
-    """
     y_smooth = savgol_filter(
         y,
         window_length=window_size,
@@ -386,15 +370,8 @@ def detect_spikes(
             (y -
              y_polyval) < 0) & (
         y_zscore < 0)
-    y_clean = y.copy()
-    y_clean[is_spike] = np.nan
-    nan_indices = np.where(np.isnan(y_clean))[0]
-    x_interp = x.copy()
-    x_interp = x_interp[~np.isnan(y_clean)]
-    y_interp = y_clean[~np.isnan(y_clean)]
-    f = interp1d(x_interp, y_interp, kind='cubic')
-    y_interp = f(x)
-    return is_spike, y_clean, y_interp
+
+    return is_spike
 
 
 if __name__ == "__main__":
@@ -479,9 +456,18 @@ if __name__ == "__main__":
         dest="imputer_strat",
         type=str,
         default="knn",
-        help="Imputter to refill missing datapoints. Beta version. (default: knn)",
+        help="Imputter to refill missing datapoints. Beta version. (default: knn) (simple, knn, iterative, None)",
     )
 
+    parser.add_argument(
+        "-f",
+        "--f",
+        dest="filter",
+        type=str,
+        default="savgol",
+        help="Filtering method for smoothening the volcano (default: savgol) (savgol, wiener, None)",
+    )
+    
     # %% loading and processing
     args = parser.parse_args()
 
@@ -492,7 +478,7 @@ if __name__ == "__main__":
     dir = args.dir
     imputer_strat = args.imputer_strat
     report_as_yield = args.percent
-
+    filtering_method = args.filter
     npoints = 200  # for volcanic
     xbase = 20
 
@@ -500,6 +486,7 @@ if __name__ == "__main__":
     interpolate = True
     n_point_calc = 100
     threshold_diff = 0.5
+    if report_as_yield: threshold_diff*100
     timeout = 10  # in seconds
 
     filename = f"{dir}reaction_data.xlsx"
@@ -662,18 +649,23 @@ if __name__ == "__main__":
     prod_conc_[missing_indices] = y_interp
 
     # dealing with spikes
-    is_spike, y_clean, yhat = detect_spikes(
-        descr_all, prod_conc_, z_thresh=2.7, window_size=30, polyorder_1=5, polyorder_2=1)
-    if np.any(np.isnan(y_clean)):
+    is_spike = detect_spikes(
+        descr_all, prod_conc_, z_thresh=2.7, window_size=15, polyorder_1=4, polyorder_2=1)
+    if np.any(is_spike):
         if verb > 1:
             print("""
 Detected significant spikes in the plot, proceed to smooth the volcano line.
 Note that the default setting for detect_spikes function might not be suitable for your case.
-Please do adjust z_thresh, window_size, polyorder_1, and polyorder_2. If the smoothed plot
+Please do adjust window_length, polyorder, if the smoothed plot
 still contains spikes or appears too different from the original one.
                     """
                   )
-        prod_conc_sm = yhat
+        if filtering_method == "savgol":
+            prod_conc_sm = savgol_filter(prod_conc_, window_length=15, polyorder=4)
+        elif filtering_method == "wiener":
+            prod_conc_sm = wiener(prod_conc_, mysize=15)
+        elif filtering_method == None:
+            prod_conc_sm = prod_conc_
     else:
         prod_conc_sm = prod_conc_
 
@@ -720,11 +712,26 @@ still contains spikes or appears too different from the original one.
 
     xlabel = f"{tag} [kcal/mol]"
     ylabel = "Product concentraion (M)"
-
+    
+    if report_as_yield: 
+        y_base = 10
+    else: y_base = 0.1
     if np.array_equal(prod_conc_sm, prod_conc_):
         plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_,
-                xmin=xmin, xmax=xmax, ybase=10, cb=cb, ms=ms,
+                xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
                 xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
+        out = [f"km_volcano_{tag}.png"]
+        if verb > 1:
+            with h5py.File('data.h5', 'w') as f:
+                group = f.create_group('data')
+                # save each numpy array as a dataset in the group
+                group.create_dataset('descr_all', data=descr_all)
+                group.create_dataset('prod_conc_', data=prod_conc_)
+                group.create_dataset('descrp_pt', data=descrp_pt)
+                group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
+                group.create_dataset('cb', data=cb)
+                group.create_dataset('ms', data=ms)
+            out.append('data.h5')
     else:
         if verb > 1:
             print("plotting both smoothened and original volcano plots")
@@ -736,12 +743,12 @@ still contains spikes or appears too different from the original one.
             prod_conc_pt_,
             xmin=xmin,
             xmax=xmax,
-            ybase=0.1,
+            ybase=y_base,
             cb=cb,
             ms=ms,
             xlabel=xlabel,
             ylabel=ylabel,
-            filename=f"km_volcano_{tag}_o.png")
+            filename=f"km_volcano_{tag}.png")
         plot_2d(
             descr_all,
             prod_conc_sm,
@@ -749,14 +756,12 @@ still contains spikes or appears too different from the original one.
             prod_conc_pt_,
             xmin=xmin,
             xmax=xmax,
-            ybase=0.1,
+            ybase=y_base,
             cb=cb,
             ms=ms,
             xlabel=xlabel,
             ylabel=ylabel,
             filename=f"km_volcano_{tag}_clean.png")
-        out = [f"km_volcano_{tag}_clean.png", f"km_volcano_clean.png"]
-    if verb > 1:
         # create an HDF5 file
         cb = np.array(cb, dtype='S')
         ms = np.array(ms, dtype='S')
@@ -764,13 +769,13 @@ still contains spikes or appears too different from the original one.
             group = f.create_group('data')
             # save each numpy array as a dataset in the group
             group.create_dataset('descr_all', data=descr_all)
+            group.create_dataset('prod_conc_', data=prod_conc_)
             group.create_dataset('prod_conc_sm', data=prod_conc_sm)
             group.create_dataset('descrp_pt', data=descrp_pt)
             group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
             group.create_dataset('cb', data=cb)
             group.create_dataset('ms', data=ms)
-
-        out.append('data.h5')
+        out = ['data.h5', f"km_volcano_{tag}.png", f"km_volcano_{tag}_clean.png"]
 
     if not os.path.isdir("output"):
         sp.run(["mkdir", "output"])
@@ -778,7 +783,7 @@ still contains spikes or appears too different from the original one.
         print("The output directort already exists")
 
     for file in out:
-        sp.run(["mv", file, "output"], capture_output=True)
+        sp.run(["mv", file, "output"])
 
     if dir:
         sp.run(["mv", "output", dir])
