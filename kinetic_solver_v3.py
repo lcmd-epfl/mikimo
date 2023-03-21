@@ -618,7 +618,8 @@ def system_KE(
         Pp_,
         n_INT_all,
         initial_conc,
-        jac_method="ag"):
+        jac_method="ag",
+        bound_ver=2):
     """"Forming the system of DE for kinetic modelling, inspried by get_dydt from overreact module
 
     Returns
@@ -634,27 +635,70 @@ def system_KE(
     # to enforce boundary condition and the contraint
     # default bound_decorator
     # TODO reassigning dydt and y could have been better somehow
-    def bound_decorator(bounds):
-        def decorator(func):
-            def wrapper(t, y):
+    
+    if bound_ver == 1: 
+        def bound_decorator(bounds):
+            def decorator(func):
+                def wrapper(t, y):
 
-                dy_dt = func(t, y)
+                    dy_dt = func(t, y)
 
-                for i in range(len(y)):
-                    if y[i] < bounds[i][0]:
-                        dy_dt[i] += (bounds[i][0] - y[i]) / 2
-                        y[i] = bounds[i][0]
-                        # dy_dt[i] = 0
-                    elif y[i] > bounds[i][1]:
-                        dy_dt[i] -= (y[i] - bounds[i][1]) / 2
-                        y[i] = bounds[i][1]
-                        # dy_dt[i] = 0
+                    for i in range(len(y)):
+                        if y[i] < bounds[i][0]:
+                            dy_dt[i] += (bounds[i][0] - y[i]) / 2
+                            y[i] = bounds[i][0]
+                            # dy_dt[i] = 0
+                        elif y[i] > bounds[i][1]:
+                            dy_dt[i] -= (y[i] - bounds[i][1]) / 2
+                            y[i] = bounds[i][1]
+                            # dy_dt[i] = 0
 
-                return dy_dt
-            return wrapper
-        return decorator
+                    return dy_dt
+                return wrapper
+            return decorator
+    # avoid crashing the integration due to arraybox error
+    elif bound_ver == 2:   
+        def bound_decorator(bounds):
+            def decorator(func):
+                def wrapper(t, y):
 
-    tolerance = 0.01
+                    dy_dt = func(t, y)
+
+                    try:
+                        for i in range(len(y)):
+                            if y[i] < bounds[i][0]:
+                                # print(f"{i} violate the bound by {y[i] - bounds[i][0]}, derivative {dy_dt[i]}")
+                                dy_dt[i] += (bounds[i][0] - y[i])/2
+                                # dy_dt[i] = 0
+                                y[i] = bounds[i][0]
+                            elif y[i] > bounds[i][1]:
+                                # print(f"{i} violate the bound by {y[i] - bounds[i][0]}, derivative {dy_dt[i]}")
+                                dy_dt[i] -= (y[i] - bounds[i][1])/2
+                                # dy_dt[i] = 0
+                                y[i] = bounds[i][1]
+                        # print("pass", y)
+                    except TypeError as e:
+                        # print("Arraybox fuckup", y)
+                        y_ = anp.array(y._value)
+                        dy_dt_ = anp.array(dy_dt._value)
+                        # arraybox failure
+                        for i in range(len(y)):
+                            if y_[i] < bounds[i][0]:
+                                dy_dt[i] += (bounds[i][0] - y[i])/2
+                                y_[i] = bounds[i][0]
+                            elif y[i] > bounds[i][1]:
+                                dy_dt[i] += (bounds[i][0] - y[i])/2
+                                y_[i] = bounds[i][1]
+
+                            dy_dt = anp.array(dy_dt_)
+                            y = anp.array(y_)
+                            # print("Arraybox error", y)
+                    return dy_dt
+
+                return wrapper
+            return decorator
+
+    tolerance = 0.05
     boundary = []
     # boundary = [(0, np.sum(initial_conc))]*k
     for i in range(k):
@@ -1115,3 +1159,4 @@ if __name__ == "__main__":
         jac=dydt.jac,
     )
     plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir)
+
