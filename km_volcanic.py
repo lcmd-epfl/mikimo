@@ -20,7 +20,7 @@ import subprocess as sp
 from navicat_volcanic.exceptions import InputError
 
 
-def check_km_inp(df_network, species_profile, c0):
+def check_km_inp(df_network, coeff_TS_all, c0):
     """Check the validity of the input data for a kinetic model.
 
     Args:
@@ -77,21 +77,24 @@ def check_km_inp(df_network, species_profile, c0):
         )
 
     # check number of state
-    n_INT_profile = sum("INT" in string.upper() for string in species_profile
-                        if string[0].upper() != "R" and string[0].upper() != "P")
-    if n_INT_profile != n_INT_tot:
-        clean = False
-        raise InputError(
-            f"Number of INT recognized in the reaction data does not match with that in reaction network."
-        )
+    n_INT_tot_profile = np.sum([len(arr) - np.count_nonzero(arr) for arr in coeff_TS_all])
+    y_INT = initial_conc[:n_INT_tot]
+    y_INt_, _ = pad_network(y_INT, n_INT_all, rxn_network)
+    n_INT_tot_nx = np.sum([len(arr) for arr in y_INt_])
+    if n_INT_tot_profile != n_INT_tot_nx:
+        warn = True
+        print("""
+Number of INT recognized in the reaction data does not match with that in reaction network. 
+- Presence of the pitfall or
+- your network/reaction profiles are wrong
+              """)
 
     # check reaction network
-    int_tags = [t for t in tags if "TS" not in t and "prod" not in t.lower()]
     for i, nx in enumerate(rxn_network):
         if 1 in nx and -1 in nx:
             continue
         else:
-            print(f"The coordinate data for {int_tags[i]} looks wrong")
+            print(f"The coordinate data for state {i} looks wrong or it is the pitfall")
             warn = True
 
     for i, nx in enumerate(np.transpose(
@@ -111,7 +114,7 @@ def check_km_inp(df_network, species_profile, c0):
             warn = True
 
     if not (np.array_equal(rxn_network, -rxn_network.T)):
-        print("Your reaction network looks wrong for catalytic reaction.")
+        print("Your reaction network looks wrong for catalytic reaction or you are not working with catalytic reaction.")
         warn = True
 
     return clean, warn
@@ -323,16 +326,19 @@ def calc_km(
         if result_solve_ivp != "shiki":
             idx_target_all = [states.index(i) for i in states if "*" in i]
             c_target_t = [result_solve_ivp.y[i][-1] for i in idx_target_all]
-
+            s_coeff_R = [np.min(np.abs(
+                                np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp]
             if report_as_yield:
-                s_coeff_R = [np.min(np.abs(
-                    np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp]
+                
                 c_target_yield = np.array(
                     [c_target_t[i] / s_coeff_R[i] * 100 for i in range(len(s_coeff_R))])
                 c_target_yield[c_target_yield > 100] = 100
+                c_target_yield[c_target_yield < 0] = 0
                 return c_target_yield
 
             else:
+                c_target_t[c_target_t < 0] = 0
+                c_target_t = np.minimum(c_target_t, s_coeff_R)
                 return c_target_t
         else:
             return np.NaN
@@ -481,9 +487,6 @@ if __name__ == "__main__":
     # for volcano line
     interpolate = True
     n_point_calc = 100
-    threshold_diff = 20000
-    if report_as_yield:
-        threshold_diff = threshold_diff * 100
     timeout = 15  # in seconds
 
     filename = f"{dir}reaction_data.xlsx"
@@ -564,7 +567,7 @@ if __name__ == "__main__":
 
     df_all = pd.read_excel(filename)
     species_profile = df_all.columns.values[1:]
-    clean, warn = check_km_inp(df_network, species_profile, c0)
+    clean, warn = check_km_inp(df_network, coeff_TS_all, c0)
     if not (clean):
         sys.exit("Recheck your reaction network")
     else:
@@ -574,6 +577,7 @@ if __name__ == "__main__":
             if verb > 1:
                 print("KM input is clear")
     # %% volcano line
+    # only applicable to single profile for now
     if interpolate:
         print(
             f"Performing microkinetics modelling for the volcano line ({n_point_calc})")
@@ -594,8 +598,6 @@ if __name__ == "__main__":
             f"Performing microkinetics modelling for the volcano line ({npoints})")
 
     prod_conc = []
-    prev_profile = None
-    prev_result = None
     for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
         if np.isnan(profile[0]):
             prod_conc.append(np.nan)
@@ -611,22 +613,11 @@ if __name__ == "__main__":
                                  c0,
                                  timeout,
                                  report_as_yield)
-                if result[0] is None:
-                    prod_conc.append(np.nan)
-                    continue
-                if prev_result is None:
-                    prev_result = result[0]
-                    prod_conc.append(result[0])
-                else:
-                    diff = abs(result - prev_result)
-                    if diff < threshold_diff:
-                        prev_result = result[0]
-                        prod_conc.append(result[0])
-                    else:
-                        print("diff")
-                        prod_conc.append(np.nan)
-                        continue
+                
+                #***
+                prod_conc.append(result[0])
 
+            # *****              
             except Exception as e:
                 print(e)
                 prod_conc.append(np.nan)
@@ -634,6 +625,7 @@ if __name__ == "__main__":
     descr_all = np.array([i[descp_idx] for i in dgs])
     prod_conc = np.array([i for i in prod_conc])
 
+    # *****  
     # interpolation
     missing_indices = np.isnan(prod_conc
                                )
