@@ -4,7 +4,6 @@ import overreact as rx
 from overreact import _constants as constants
 import numpy as np
 import pandas as pd
-from scipy.integrate import solve_ivp
 import autograd.numpy as anp
 from autograd import jacobian
 import argparse
@@ -13,7 +12,7 @@ import warnings
 import matplotlib.pyplot as plt
 import subprocess as sp
 import os
-import glob
+from scipy.integrate import solve_ivp
 
 warnings.filterwarnings("ignore")
 
@@ -83,7 +82,7 @@ def pad_network(X, n_INT_all, rxn_network):
     return X_, insert_idx
 
 
-def check_km_inp(df_network, species_profile, c0):
+def check_km_inp(df_network, coeff_TS_all, c0):
     """Check the validity of the input data for a kinetic model.
 
     Args:
@@ -140,20 +139,24 @@ def check_km_inp(df_network, species_profile, c0):
         )
 
     # check number of state
-    n_INT_profile = sum("INT" in string.upper() for string in species_profile
-                        if string[0].upper() != "R" and string[0].upper() != "P")
-    if n_INT_profile != n_INT_tot:
-        clean = False
-        raise InputError(
-            f"Number of INT recognized in the reaction data does not match with that in reaction network."
-        )
+    n_INT_tot_profile = np.sum([len(arr) - np.count_nonzero(arr) for arr in coeff_TS_all])
+    y_INT = initial_conc[:n_INT_tot]
+    y_INt_, _ = pad_network(y_INT, n_INT_all, rxn_network)
+    n_INT_tot_nx = np.sum([len(arr) for arr in y_INt_])
+    if n_INT_tot_profile != n_INT_tot_nx:
+        warn = True
+        print("""
+Number of INT recognized in the reaction data does not match with that in reaction network. 
+- Presence of the pitfall or
+- your network/reaction profiles are wrong
+              """)
 
     # check reaction network
     for i, nx in enumerate(rxn_network):
         if 1 in nx and -1 in nx:
             continue
         else:
-            print(f"The coordinate data for state {i} looks wrong")
+            print(f"The coordinate data for state {i} looks wrong or it is the pitfall")
             warn = True
 
     for i, nx in enumerate(np.transpose(
@@ -173,7 +176,7 @@ def check_km_inp(df_network, species_profile, c0):
             warn = True
 
     if not (np.array_equal(rxn_network, -rxn_network.T)):
-        print("Your reaction network looks wrong for catalytic reaction.")
+        print("Your reaction network looks wrong for catalytic reaction or you are not working with catalytic reaction.")
         warn = True
 
     return clean, warn
@@ -888,7 +891,7 @@ def load_data(args):
                 tmp[n_INT_tot + i - 1] = c
         initial_conc = np.array(tmp)
 
-    clean, warn = check_km_inp(df_network, species_profile, c0)
+    clean, warn = check_km_inp(df_network, coeff_TS_all, c0)
     if not (clean):
         sys.exit("Recheck your reaction network")
     else:
@@ -1107,8 +1110,8 @@ if __name__ == "__main__":
         dense_output=True,
         # first_step=first_step,
         max_step=max_step,
-        rtol=1e-3,
-        atol=1e-6,
+        rtol=1e-6,
+        atol=1e-9,
         jac=dydt.jac,
     )
     plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir)
