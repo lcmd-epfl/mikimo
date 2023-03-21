@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from navicat_volcanic.helpers import (arraydump, group_data_points,
                                       processargs, setflags, user_choose_1_dv,
                                       user_choose_2_dv, bround)
@@ -19,7 +20,7 @@ import subprocess as sp
 from navicat_volcanic.exceptions import InputError
 
 
-def check_km_inp(coeff_TS_all, df_network, species_profile, c0):
+def check_km_inp(df_network, species_profile, c0):
     """Check the validity of the input data for a kinetic model.
 
     Args:
@@ -59,11 +60,6 @@ def check_km_inp(coeff_TS_all, df_network, species_profile, c0):
     n_INT_all.append(x)
     n_INT_all = np.array(n_INT_all)
 
-    Rp, _ = pad_network(
-        rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
-    Pp, _ = pad_network(
-        rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
-
     if len(initial_conc) != rxn_network_all.shape[1]:
         tmp = np.zeros(rxn_network_all.shape[1])
         for i, c in enumerate(initial_conc):
@@ -81,8 +77,8 @@ def check_km_inp(coeff_TS_all, df_network, species_profile, c0):
         )
 
     # check number of state
-    n_INT_profile = sum("INT" in string.upper() for string in species_profile \
-        if string[0].upper() != "R" and string[0].upper() != "P")
+    n_INT_profile = sum("INT" in string.upper() for string in species_profile
+                        if string[0].upper() != "R" and string[0].upper() != "P")
     if n_INT_profile != n_INT_tot:
         clean = False
         raise InputError(
@@ -95,7 +91,7 @@ def check_km_inp(coeff_TS_all, df_network, species_profile, c0):
         if 1 in nx and -1 in nx:
             continue
         else:
-            print(f"The coordinate data for {states[i]} looks wrong")
+            print(f"The coordinate data for {int_tags[i]} looks wrong")
             warn = True
 
     for i, nx in enumerate(np.transpose(
@@ -467,7 +463,7 @@ if __name__ == "__main__":
         default="savgol",
         help="Filtering method for smoothening the volcano (default: savgol) (savgol, wiener, None)",
     )
-    
+
     # %% loading and processing
     args = parser.parse_args()
 
@@ -485,9 +481,10 @@ if __name__ == "__main__":
     # for volcano line
     interpolate = True
     n_point_calc = 100
-    threshold_diff = 0.5
-    if report_as_yield: threshold_diff*100
-    timeout = 10  # in seconds
+    threshold_diff = 20000
+    if report_as_yield:
+        threshold_diff = threshold_diff * 100
+    timeout = 15  # in seconds
 
     filename = f"{dir}reaction_data.xlsx"
     c0 = f"{dir}c0.txt"
@@ -567,7 +564,7 @@ if __name__ == "__main__":
 
     df_all = pd.read_excel(filename)
     species_profile = df_all.columns.values[1:]
-    clean, warn = check_km_inp(coeff_TS_all, df_network, species_profile, c0)
+    clean, warn = check_km_inp(df_network, species_profile, c0)
     if not (clean):
         sys.exit("Recheck your reaction network")
     else:
@@ -650,7 +647,12 @@ if __name__ == "__main__":
 
     # dealing with spikes
     is_spike = detect_spikes(
-        descr_all, prod_conc_, z_thresh=2.7, window_size=15, polyorder_1=4, polyorder_2=1)
+        descr_all,
+        prod_conc_,
+        z_thresh=2.7,
+        window_size=15,
+        polyorder_1=4,
+        polyorder_2=1)
     if np.any(is_spike):
         if verb > 1:
             print("""
@@ -661,10 +663,11 @@ still contains spikes or appears too different from the original one.
                     """
                   )
         if filtering_method == "savgol":
-            prod_conc_sm = savgol_filter(prod_conc_, window_length=15, polyorder=4)
+            prod_conc_sm = savgol_filter(
+                prod_conc_, window_length=15, polyorder=4)
         elif filtering_method == "wiener":
             prod_conc_sm = wiener(prod_conc_, mysize=15)
-        elif filtering_method == None:
+        elif filtering_method is None:
             prod_conc_sm = prod_conc_
     else:
         prod_conc_sm = prod_conc_
@@ -712,10 +715,11 @@ still contains spikes or appears too different from the original one.
 
     xlabel = f"{tag} [kcal/mol]"
     ylabel = "Product concentraion (M)"
-    
-    if report_as_yield: 
+
+    if report_as_yield:
         y_base = 10
-    else: y_base = 0.1
+    else:
+        y_base = 0.1
     if np.array_equal(prod_conc_sm, prod_conc_):
         plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_,
                 xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
@@ -775,7 +779,10 @@ still contains spikes or appears too different from the original one.
             group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
             group.create_dataset('cb', data=cb)
             group.create_dataset('ms', data=ms)
-        out = ['data.h5', f"km_volcano_{tag}.png", f"km_volcano_{tag}_clean.png"]
+        out = [
+            'data.h5',
+            f"km_volcano_{tag}.png",
+            f"km_volcano_{tag}_clean.png"]
 
     if not os.path.isdir("output"):
         sp.run(["mkdir", "output"])
