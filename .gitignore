@@ -3,3 +3,8 @@ output/
 model/
 archive/
 test_cases/archive/
+volcanic_test/volcanic
+*Zone.Identifier
+save_tmp.py
+*h5
+
