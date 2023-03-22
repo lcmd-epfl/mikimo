@@ -222,6 +222,18 @@ def calc_km(
     rtol_values = [1e-6, 1e-9, 1e-10]
     atol_values = [1e-6, 1e-9, 1e-10]
     last_ = [rtol_values[-1], atol_values[-1]]
+    first_step = np.min(
+        [
+            1e-14,  # Too small?
+            1 / 27e9,  # Too small?
+            1 / 1.5e10,
+            (t_span[1] - t_span[0]) / 100.0,
+            np.finfo(np.float16).eps,
+            np.finfo(np.float32).eps,
+            np.finfo(np.float64).eps,  # Too small?
+            np.nextafter(np.float16(0), np.float16(1)),
+        ]
+        )
     success = False
     cont = False
     while success == False:
@@ -238,6 +250,7 @@ def calc_km(
                 atol=atol,
                 jac=dydt.jac,
                 max_step=max_step,
+                first_step=first_step,
                 timeout=timeout,
             )
             # timeout
@@ -276,6 +289,7 @@ def calc_km(
                     rtol=rtol,
                     atol=atol,
                     max_step=max_step,
+                    first_step=first_step,
                     timeout=timeout,
                 )
                 # timeout
@@ -305,6 +319,7 @@ def calc_km(
                 rtol=1e-6,
                 atol=1e-9,
                 max_step=max_step,
+                first_step=first_step,
                 timeout=timeout,
             )
         except Exception as e:
@@ -318,32 +333,33 @@ def calc_km(
                 rtol=1e-6,
                 atol=1e-9,
                 max_step=max_step,
+                first_step=first_step,
                 jac=dydt.jac,
                 timeout=timeout + 10,
             )
 
     try:
-        if result_solve_ivp != "shiki":
+        if result_solve_ivp != "Shiki":
             idx_target_all = [states.index(i) for i in states if "*" in i]
-            c_target_t = [result_solve_ivp.y[i][-1] for i in idx_target_all]
-            s_coeff_R = [np.min(np.abs(
-                                np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp]
+            c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
+            s_coeff_R = np.array([np.min(np.abs(
+                                np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp])
             if report_as_yield:
                 
                 c_target_yield = np.array(
                     [c_target_t[i] / s_coeff_R[i] * 100 for i in range(len(s_coeff_R))])
                 c_target_yield[c_target_yield > 100] = 100
                 c_target_yield[c_target_yield < 0] = 0
-                return c_target_yield
+                return c_target_yield, result_solve_ivp
 
             else:
                 c_target_t[c_target_t < 0] = 0
                 c_target_t = np.minimum(c_target_t, s_coeff_R)
-                return c_target_t
+                return c_target_t, result_solve_ivp
         else:
-            return np.NaN
+            return np.NaN, result_solve_ivp
     except IndexError as e:
-        return np.NaN
+        return np.NaN, result_solve_ivp
 
 
 def detect_spikes(
@@ -469,6 +485,17 @@ if __name__ == "__main__":
         default="savgol",
         help="Filtering method for smoothening the volcano (default: savgol) (savgol, wiener, None)",
     )
+    
+    parser.add_argument(
+        "-ev",
+        "--ev"
+        "-evol",
+        "--evol",
+        dest="evol_mode",
+        action="store_true",
+        help="""Flag to disable plotting the volcano
+        Instead plot the evolution of each point. (default: False)""",
+    )
 
     # %% loading and processing
     args = parser.parse_args()
@@ -481,6 +508,7 @@ if __name__ == "__main__":
     imputer_strat = args.imputer_strat
     report_as_yield = args.percent
     filtering_method = args.filter
+    evol_mode = args.evol_mode
     npoints = 200  # for volcanic
     xbase = 20
 
@@ -489,12 +517,16 @@ if __name__ == "__main__":
     n_point_calc = 100
     timeout = 15  # in seconds
 
-    filename = f"{dir}reaction_data.xlsx"
+    filename_xlsx = f"{dir}reaction_data.xlsx"
+    filename_csv = f"{dir}reaction_data.csv"
     c0 = f"{dir}c0.txt"
     df_network = pd.read_csv(f"{dir}rxn_network.csv")
     t_span = (0, args.time)
 
-    df = pd.read_excel(filename)
+    try:
+        df = pd.read_excel(filename_xlsx)
+    except FileNotFoundError as e:
+        df = pd.read_csv(filename_csv)
     names = df[df.columns[0]].values
     cb, ms = group_data_points(0, 2, names)
 
@@ -565,7 +597,10 @@ if __name__ == "__main__":
         dgs[:, i] = yint
     coeff_TS_all = [coeff[:-1].astype(int)]
 
-    df_all = pd.read_excel(filename)
+    try:
+        df_all = pd.read_excel(filename_xlsx)
+    except FileNotFoundError as e:
+        df_all = pd.read_csv(filename_csv)
     species_profile = df_all.columns.values[1:]
     clean, warn = check_km_inp(df_network, coeff_TS_all, c0)
     if not (clean):
@@ -576,213 +611,288 @@ if __name__ == "__main__":
         else:
             if verb > 1:
                 print("KM input is clear")
+    
+    if not(evol_mode):
     # %% volcano line
     # only applicable to single profile for now
-    if interpolate:
-        print(
-            f"Performing microkinetics modelling for the volcano line ({n_point_calc})")
-        selected_indices = np.round(
-            np.linspace(
-                0,
-                len(dgs) - 1,
-                n_point_calc)).astype(int)
-        trun_dgs = []
-        for i in range(len(dgs)):
-            if i not in selected_indices:
-                trun_dgs.append([np.nan])
-            else:
-                trun_dgs.append(dgs[i])
-    else:
-        trun_dgs = dgs
-        print(
-            f"Performing microkinetics modelling for the volcano line ({npoints})")
-
-    prod_conc = []
-    for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
-        if np.isnan(profile[0]):
-            prod_conc.append(np.nan)
-            continue
+        if interpolate:
+            if verb > 1:
+                print(
+                    f"Performing microkinetics modelling for the volcano line ({n_point_calc})")
+            selected_indices = np.round(
+                np.linspace(
+                    0,
+                    len(dgs) - 1,
+                    n_point_calc)).astype(int)
+            trun_dgs = []
+            for i in range(len(dgs)):
+                if i not in selected_indices:
+                    trun_dgs.append([np.nan])
+                else:
+                    trun_dgs.append(dgs[i])
         else:
-            try:
-                result = calc_km([profile[:-1]],
-                                 [profile[-1]],
-                                 temperature,
-                                 coeff_TS_all,
-                                 df_network,
-                                 t_span,
-                                 c0,
-                                 timeout,
-                                 report_as_yield)
-                
-                #***
-                prod_conc.append(result[0])
+            trun_dgs = dgs
+            print(
+                f"Performing microkinetics modelling for the volcano line ({npoints})")
 
-            # *****              
-            except Exception as e:
-                print(e)
+        prod_conc = []
+        for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
+            if np.isnan(profile[0]):
                 prod_conc.append(np.nan)
-
-    descr_all = np.array([i[descp_idx] for i in dgs])
-    prod_conc = np.array([i for i in prod_conc])
-
-    # *****  
-    # interpolation
-    missing_indices = np.isnan(prod_conc
-                               )
-    f = interp1d(descr_all[~missing_indices],
-                 prod_conc[~missing_indices],
-                 kind='cubic',
-                 fill_value="extrapolate")
-    y_interp = f(descr_all[missing_indices])
-    prod_conc_ = prod_conc.copy()
-    prod_conc_[missing_indices] = y_interp
-
-    # dealing with spikes
-    is_spike = detect_spikes(
-        descr_all,
-        prod_conc_,
-        z_thresh=2.7,
-        window_size=15,
-        polyorder_1=4,
-        polyorder_2=1)
-    if np.any(is_spike):
-        if verb > 1:
-            print("""
-Detected significant spikes in the plot, proceed to smooth the volcano line.
-Note that the default setting for detect_spikes function might not be suitable for your case.
-Please do adjust window_length, polyorder, if the smoothed plot
-still contains spikes or appears too different from the original one.
-                    """
-                  )
-        if filtering_method == "savgol":
-            prod_conc_sm = savgol_filter(
-                prod_conc_, window_length=15, polyorder=4)
-        elif filtering_method == "wiener":
-            prod_conc_sm = wiener(prod_conc_, mysize=15)
-        elif filtering_method is None:
-            prod_conc_sm = prod_conc_
-    else:
-        prod_conc_sm = prod_conc_
-
-    # %% volcano point
-    print(
-        f"Performing microkinetics modelling for the volcano line ({len(d)})")
-    prod_conc_pt = []
-    for profile in tqdm(d, total=len(d), ncols=80):
-
-        try:
-            result = calc_km([profile[:-1]],
-                             [profile[-1]],
-                             temperature,
-                             coeff_TS_all,
-                             df_network,
-                             t_span,
-                             c0,
-                             timeout,
-                             report_as_yield)
-            if result is None:
-                prod_conc_pt.append(np.nan)
                 continue
-            prod_conc_pt.append(result[0])
-        except Exception as e:
-            prod_conc_pt.append(np.nan)
+            else:
+                try:
+                    result, _ = calc_km([profile[:-1]],
+                                    [profile[-1]],
+                                    temperature,
+                                    coeff_TS_all,
+                                    df_network,
+                                    t_span,
+                                    c0,
+                                    timeout,
+                                    report_as_yield)
+                    
+                    #***
+                    prod_conc.append(result[0])
 
-    prod_conc_pt = np.array(prod_conc_pt)
-    descrp_pt = np.array([i[descp_idx] for i in d])
+                # *****              
+                except Exception as e:
+                    print(e)
+                    prod_conc.append(np.nan)
 
-    # interpolation
-    if np.any(np.isnan(prod_conc_pt)):
-        missing_indices = np.isnan(prod_conc_pt)
-        f = interp1d(descrp_pt[~missing_indices],
-                     prod_conc_pt[~missing_indices],
-                     kind='cubic',
-                     fill_value="extrapolate")
-        y_interp = f(descrp_pt[missing_indices])
-        prod_conc_pt_ = prod_conc_pt.copy()
-        prod_conc_pt_[missing_indices] = y_interp
-    else:
-        prod_conc_pt_ = prod_conc_pt.copy()
+        descr_all = np.array([i[descp_idx] for i in dgs])
+        prod_conc = np.array([i for i in prod_conc])
 
-    # %% plotting
+        # *****  
+        # interpolation
+        missing_indices = np.isnan(prod_conc
+                                )
+        f = interp1d(descr_all[~missing_indices],
+                    prod_conc[~missing_indices],
+                    kind='cubic',
+                    fill_value="extrapolate")
+        y_interp = f(descr_all[missing_indices])
+        prod_conc_ = prod_conc.copy()
+        prod_conc_[missing_indices] = y_interp
 
-    xlabel = f"{tag} [kcal/mol]"
-    ylabel = "Product concentraion (M)"
+        # dealing with spikes
+        is_spike = detect_spikes(
+            descr_all,
+            prod_conc_,
+            z_thresh=2.7,
+            window_size=15,
+            polyorder_1=4,
+            polyorder_2=1)
+        if np.any(is_spike):
+            if verb > 1:
+                print("""
+    Detected significant spikes in the plot, proceed to smooth the volcano line.
+    Note that the default setting for detect_spikes function might not be suitable for your case.
+    Please do adjust window_length, polyorder, if the smoothed plot
+    still contains spikes or appears too different from the original one.
+                        """
+                    )
+            if filtering_method == "savgol":
+                prod_conc_sm = savgol_filter(
+                    prod_conc_, window_length=15, polyorder=4)
+            elif filtering_method == "wiener":
+                prod_conc_sm = wiener(prod_conc_, mysize=15)
+            elif filtering_method is None:
+                prod_conc_sm = prod_conc_
+        else:
+            prod_conc_sm = prod_conc_
 
-    if report_as_yield:
-        y_base = 10
-    else:
-        y_base = 0.1
-    if np.array_equal(prod_conc_sm, prod_conc_):
-        plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_,
-                xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
-                xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
-        out = [f"km_volcano_{tag}.png"]
-        if verb > 1:
+        # %% volcano point
+        print(
+            f"Performing microkinetics modelling for the volcano line ({len(d)})")
+        prod_conc_pt = []
+        for profile in tqdm(d, total=len(d), ncols=80):
+
+            try:
+                result, _ = calc_km([profile[:-1]],
+                                [profile[-1]],
+                                temperature,
+                                coeff_TS_all,
+                                df_network,
+                                t_span,
+                                c0,
+                                timeout,
+                                report_as_yield)
+                if result is None:
+                    prod_conc_pt.append(np.nan)
+                    continue
+                prod_conc_pt.append(result[0])
+            except Exception as e:
+                prod_conc_pt.append(np.nan)
+
+        prod_conc_pt = np.array(prod_conc_pt)
+        descrp_pt = np.array([i[descp_idx] for i in d])
+
+        # interpolation
+        if np.any(np.isnan(prod_conc_pt)):
+            missing_indices = np.isnan(prod_conc_pt)
+            f = interp1d(descrp_pt[~missing_indices],
+                        prod_conc_pt[~missing_indices],
+                        kind='cubic',
+                        fill_value="extrapolate")
+            y_interp = f(descrp_pt[missing_indices])
+            prod_conc_pt_ = prod_conc_pt.copy()
+            prod_conc_pt_[missing_indices] = y_interp
+        else:
+            prod_conc_pt_ = prod_conc_pt.copy()
+
+        # %% plotting
+
+        xlabel = f"{tag} [kcal/mol]"
+        ylabel = "Product concentraion (M)"
+
+        if report_as_yield:
+            y_base = 10
+        else:
+            y_base = 0.1
+        if np.array_equal(prod_conc_sm, prod_conc_):
+            plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_,
+                    xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
+                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
+            out = [f"km_volcano_{tag}.png"]
+            if verb > 1:
+                with h5py.File('data.h5', 'w') as f:
+                    group = f.create_group('data')
+                    # save each numpy array as a dataset in the group
+                    group.create_dataset('descr_all', data=descr_all)
+                    group.create_dataset('prod_conc_', data=prod_conc_)
+                    group.create_dataset('descrp_pt', data=descrp_pt)
+                    group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
+                    group.create_dataset('cb', data=cb)
+                    group.create_dataset('ms', data=ms)
+                out.append('data.h5')
+        else:
+            if verb > 1:
+                print("plotting both smoothened and original volcano plots")
+
+            plot_2d(
+                descr_all,
+                prod_conc_,
+                descrp_pt,
+                prod_conc_pt_,
+                xmin=xmin,
+                xmax=xmax,
+                ybase=y_base,
+                cb=cb,
+                ms=ms,
+                xlabel=xlabel,
+                ylabel=ylabel,
+                filename=f"km_volcano_{tag}.png")
+            plot_2d(
+                descr_all,
+                prod_conc_sm,
+                descrp_pt,
+                prod_conc_pt_,
+                xmin=xmin,
+                xmax=xmax,
+                ybase=y_base,
+                cb=cb,
+                ms=ms,
+                xlabel=xlabel,
+                ylabel=ylabel,
+                filename=f"km_volcano_{tag}_clean.png")
+            # create an HDF5 file
+            cb = np.array(cb, dtype='S')
+            ms = np.array(ms, dtype='S')
             with h5py.File('data.h5', 'w') as f:
                 group = f.create_group('data')
                 # save each numpy array as a dataset in the group
                 group.create_dataset('descr_all', data=descr_all)
                 group.create_dataset('prod_conc_', data=prod_conc_)
+                group.create_dataset('prod_conc_sm', data=prod_conc_sm)
                 group.create_dataset('descrp_pt', data=descrp_pt)
                 group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
                 group.create_dataset('cb', data=cb)
                 group.create_dataset('ms', data=ms)
-            out.append('data.h5')
+            out = [
+                'data.h5',
+                f"km_volcano_{tag}.png",
+                f"km_volcano_{tag}_clean.png"]
+
+        if not os.path.isdir("output"):
+            sp.run(["mkdir", "output"])
+        else:
+            print("The output directort already exists")
+
+        for file in out:
+            sp.run(["mv", file, "output"])
+
+        if dir:
+            sp.run(["mv", "output", dir])
+
+    # %% evol mode
+    # TODO coeff_TS_all is problematic
     else:
         if verb > 1:
-            print("plotting both smoothened and original volcano plots")
+            print("Evol mode: plotting evolution for all points")
+        df_network.fillna(0, inplace=True)
+        # process reaction network
+        rxn_network_all = df_network.to_numpy()[:, 1:]
+        states = df_network.columns[1:].tolist()
+        nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
+        nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
 
-        plot_2d(
-            descr_all,
-            prod_conc_,
-            descrp_pt,
-            prod_conc_pt_,
-            xmin=xmin,
-            xmax=xmax,
-            ybase=y_base,
-            cb=cb,
-            ms=ms,
-            xlabel=xlabel,
-            ylabel=ylabel,
-            filename=f"km_volcano_{tag}.png")
-        plot_2d(
-            descr_all,
-            prod_conc_sm,
-            descrp_pt,
-            prod_conc_pt_,
-            xmin=xmin,
-            xmax=xmax,
-            ybase=y_base,
-            cb=cb,
-            ms=ms,
-            xlabel=xlabel,
-            ylabel=ylabel,
-            filename=f"km_volcano_{tag}_clean.png")
-        # create an HDF5 file
-        cb = np.array(cb, dtype='S')
-        ms = np.array(ms, dtype='S')
-        with h5py.File('data.h5', 'w') as f:
-            group = f.create_group('data')
-            # save each numpy array as a dataset in the group
-            group.create_dataset('descr_all', data=descr_all)
-            group.create_dataset('prod_conc_', data=prod_conc_)
-            group.create_dataset('prod_conc_sm', data=prod_conc_sm)
-            group.create_dataset('descrp_pt', data=descrp_pt)
-            group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
-            group.create_dataset('cb', data=cb)
-            group.create_dataset('ms', data=ms)
-        out = [
-            'data.h5',
-            f"km_volcano_{tag}.png",
-            f"km_volcano_{tag}_clean.png"]
+        n_INT_tot = rxn_network_all.shape[1] - nR - nP
+        rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
+        rxn_network = np.array(rxn_network, dtype=int)
 
-    if not os.path.isdir("output"):
-        sp.run(["mkdir", "output"])
-    else:
-        print("The output directort already exists")
+        n_INT_all = []
+        x = 1
+        for i in range(1, rxn_network.shape[1]):
+            if rxn_network[i, i - 1] == -1:
+                x += 1
+            elif rxn_network[i, i - 1] != -1:
+                n_INT_all.append(x)
+                x = 1
+        n_INT_all.append(x)
+        n_INT_all = np.array(n_INT_all)
 
-    for file in out:
-        sp.run(["mv", file, "output"])
+        Rp, _ = pad_network(
+            rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
+        Pp, idx_insert = pad_network(
+            rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
 
-    if dir:
-        sp.run(["mv", "output", dir])
+        last_idx = 0
+        for i, arr in enumerate(Pp):
+            if np.any(np.sum(arr, axis=1) > 1):
+                last_idx = i
+
+        assert last_idx < len(
+            n_INT_all), "Something wrong with the reaction network"
+        if last_idx > 0:
+            # mori = np.cumsum(n_INT_all)
+            Rp.insert(last_idx + 1, Rp[last_idx].copy())
+            Pp.insert(last_idx + 1, Pp[last_idx].copy())
+            # idx_insert.insert(last_idx+1, np.arange(mori[last_idx-1],mori[last_idx]))
+            n_INT_all = np.insert(n_INT_all, last_idx + 1, 0)
+
+        if has_decimal(Rp):
+            Rp = Rp_Pp_corr(Rp, nR)
+            Rp = np.array(Rp, dtype=int)
+        if has_decimal(Pp):
+            Pp = Rp_Pp_corr(Pp, nP)
+            Pp = np.array(Pp, dtype=int)
+        print(df_network)
+        sys_name = pd.read_csv(filename_csv, index_col=0).index.to_list()
+        for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
+            try:
+                _, result_ivp = calc_km([profile[:-1]],
+                                [profile[-1]],
+                                temperature,
+                                coeff_TS_all,
+                                df_network,
+                                t_span,
+                                c0,
+                                timeout,
+                                report_as_yield)
+                result_ivp.append(result_ivp)
+                plot_save(result_ivp, rxn_network, Rp, Pp, dir, name=sys_name[i])
+            except Exception as e:
+                print(f"Fail to perform microkinetic modeling for {sys_name[i]}")
+
+        
