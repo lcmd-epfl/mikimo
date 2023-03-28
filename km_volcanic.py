@@ -4,11 +4,11 @@ from navicat_volcanic.helpers import (arraydump, group_data_points,
                                       user_choose_2_dv, bround)
 from navicat_volcanic.plotting2d import get_reg_targets, plot_2d
 from navicat_volcanic.dv1 import curate_d, find_1_dv
-from navicat_volcanic.tof import calc_tof
 from kinetic_solver_v3 import *
 import scipy.stats as stats
 from scipy.interpolate import interp1d
-from scipy.signal import savgol_filter, wiener
+from scipy.signal import savgol_filter
+from scipy.integrate import solve_ivp
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -18,9 +18,12 @@ import sys
 import os
 import subprocess as sp
 from navicat_volcanic.exceptions import InputError
+from plot2d_mod import plot_2d_combo, plot_evo
+import shutil
+import argparse
 
 
-def check_km_inp(df_network, coeff_TS_all, c0):
+def check_km_inp(df_network, initial_conc):
     """Check the validity of the input data for a kinetic model.
 
     Args:
@@ -39,7 +42,6 @@ def check_km_inp(df_network, coeff_TS_all, c0):
     clean = True
     warn = False
 
-    initial_conc = np.loadtxt(c0, dtype=np.float64)
     df_network.fillna(0, inplace=True)
     rxn_network_all = df_network.to_numpy()[:, 1:]
     rxn_network_all = rxn_network_all.astype(np.int32)
@@ -76,19 +78,6 @@ def check_km_inp(df_network, coeff_TS_all, c0):
             f"Number of state in initial condition does not match with that in reaction network."
         )
 
-    # check number of state
-    n_INT_tot_profile = np.sum([len(arr) - np.count_nonzero(arr) for arr in coeff_TS_all])
-    y_INT = initial_conc[:n_INT_tot]
-    y_INt_, _ = pad_network(y_INT, n_INT_all, rxn_network)
-    n_INT_tot_nx = np.sum([len(arr) for arr in y_INt_])
-    if n_INT_tot_profile != n_INT_tot_nx:
-        warn = True
-        print("""
-Number of INT recognized in the reaction data does not match with that in reaction network. 
-- Presence of the pitfall or
-- your network/reaction profiles are wrong
-              """)
-
     # check reaction network
     for i, nx in enumerate(rxn_network):
         if 1 in nx and -1 in nx:
@@ -119,46 +108,8 @@ Number of INT recognized in the reaction data does not match with that in reacti
 
     return clean, warn
 
+def process_data_mkm(dg, initial_conc, df_network, tags):
 
-def calc_km(
-        energy_profile_all,
-        dgr_all,
-        temperature,
-        coeff_TS_all,
-        df_network,
-        t_span,
-        c0,
-        timeout,
-        report_as_yield):
-    """
-    Compute for the reaction evolution
-
-    Parameters
-    ----------
-    energy_profile_all : list
-        A list of energy profiles for each reaction in the network.
-    dgr_all : list
-        A list of free energy changes for each reaction in the network.
-    temperature : float
-        Temperature at which the reaction takes place.
-    coeff_TS_all : list
-        A list of coefficients for the transition state of each reaction in the network.
-    df_network : pandas DataFrame
-        A pandas DataFrame containing the reaction network information.
-    t_span : tuple
-        A tuple containing the start and end times for the simulation.
-    c0 : str
-        The file path for the initial concentrations of the reactants and products.
-    timeout : float
-        The time limit in seconds for the simulation.
-    percent_y : boolean
-        whether to report the final concentration as %yield.
-
-    Returns
-    -------
-    numpy.ndarray
-        An array of concentration values for each species over time.
-    """
     initial_conc = np.loadtxt(c0, dtype=np.float64)
     df_network.fillna(0, inplace=True)
     rxn_network_all = df_network.to_numpy()[:, 1:]
@@ -182,9 +133,71 @@ def calc_km(
 
     Rp, _ = pad_network(
         rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
-    Pp, _ = pad_network(
+    Pp, idx_insert = pad_network(
         rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
 
+    last_idx = 0
+    for i, arr in enumerate(Pp):
+        if np.any(np.sum(arr, axis=1) > 1):
+            last_idx = i
+
+    assert last_idx < len(
+        n_INT_all), "Something wrong with the reaction network"
+    if last_idx > 0:
+        # mori = np.cumsum(n_INT_all)
+        Rp.insert(last_idx + 1, Rp[last_idx].copy())
+        Pp.insert(last_idx + 1, Pp[last_idx].copy())
+        # idx_insert.insert(last_idx+1, np.arange(mori[last_idx-1],mori[last_idx]))
+        n_INT_all = np.insert(n_INT_all, last_idx + 1, 0)
+
+    if has_decimal(Rp):
+        Rp = Rp_Pp_corr(Rp, nR)
+        Rp = np.array(Rp, dtype=int)
+    if has_decimal(Pp):
+        Pp = Rp_Pp_corr(Pp, nP)
+        Pp = np.array(Pp, dtype=int)
+
+
+    df_all = pd.DataFrame([dg], columns=tags) #%%
+    species_profile = tags #%%
+    all_df = []
+    df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
+    for i in range(1, len(species_profile)):
+        if species_profile[i].lower().startswith("p"):
+            df_ = pd.concat([df_, df_all[species_profile[i]]],
+                            ignore_index=False, axis=1)
+            all_df.append(df_)
+            df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
+        else:
+            df_ = pd.concat([df_, df_all[species_profile[i]]],
+                            ignore_index=False, axis=1)
+
+    for i, idx in enumerate(idx_insert):
+        all_state_insert = [states[i] for i in idx]
+        # print(all_state_insert)
+        for j, state in list(enumerate(species_profile[::-1])):
+            if state in all_state_insert and j != len(species_profile) - 1:
+                all_df[i + 1].insert(1, state, df_all[state].values)
+            elif "TS" in state and species_profile[::-1][j - 1] in all_state_insert:
+                all_df[i + 1].insert(1, state, df_all[state].values)
+
+    energy_profile_all = []
+    dgr_all = []
+    coeff_TS_all = []
+    for df in all_df:
+        energy_profile = df.values[0][:-1]
+        rxn_species = df.columns.to_list()[:-1]
+        dgr_all.append(df.values[0][-1])
+        coeff_TS = [1 if "TS" in element else 0 for element in rxn_species]
+        coeff_TS_all.append(np.array(coeff_TS))
+        energy_profile_all.append(np.array(energy_profile))
+
+    if last_idx > 0:
+        tbi = energy_profile_all[last_idx][1:-1]
+        energy_profile_all[last_idx + \
+            1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
+        coeff_TS_all[last_idx + 1] = coeff_TS_all[last_idx]
+        
     # pad initial_conc in case [cat, R] are only specified.
     if len(initial_conc) != rxn_network_all.shape[1]:
         tmp = np.zeros(rxn_network_all.shape[1])
@@ -194,7 +207,28 @@ def calc_km(
             else:
                 tmp[n_INT_tot + i - 1] = c
         initial_conc = np.array(tmp)
+        
+    return initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
+        coeff_TS_all, rxn_network, n_INT_all
+        
+def calc_km(
+        energy_profile_all,
+        dgr_all,
+        temperature,
+        coeff_TS_all,
+        rxn_network,
+        Rp,
+        Pp,
+        n_INT_all,
+        t_span,
+        initial_conc,
+        states,
+        timeout,
+        report_as_yield):
 
+    n_INT_tot = np.sum(n_INT_all)
+    nR = Rp[0].shape[1]
+    
     k_forward_all = []
     k_reverse_all = []
 
@@ -497,7 +531,7 @@ if __name__ == "__main__":
         Instead plot the evolution of each point. (default: False)""",
     )
 
-    # %% loading and processing
+    # %% loading and processing------------------------------------------------------------------------#
     args = parser.parse_args()
 
     temperature = args.temp
@@ -521,6 +555,7 @@ if __name__ == "__main__":
     filename_csv = f"{dir}reaction_data.csv"
     c0 = f"{dir}c0.txt"
     df_network = pd.read_csv(f"{dir}rxn_network.csv")
+    initial_conc = np.loadtxt(c0, dtype=np.float64)
     t_span = (0, args.time)
 
     try:
@@ -595,14 +630,16 @@ if __name__ == "__main__":
         s_err = np.sqrt(np.sum(resid**2) / dof)
         yint = np.polyval(p, xint)
         dgs[:, i] = yint
-    coeff_TS_all = [coeff[:-1].astype(int)]
+        
+    states = df_network.columns[1:].tolist()
+    n_target = len([states.index(i) for i in states if "*" in i])
 
     try:
         df_all = pd.read_excel(filename_xlsx)
     except FileNotFoundError as e:
         df_all = pd.read_csv(filename_csv)
     species_profile = df_all.columns.values[1:]
-    clean, warn = check_km_inp(df_network, coeff_TS_all, c0)
+    clean, warn = check_km_inp(df_network, initial_conc)
     if not (clean):
         sys.exit("Recheck your reaction network")
     else:
@@ -613,7 +650,7 @@ if __name__ == "__main__":
                 print("KM input is clear")
     
     if not(evol_mode):
-    # %% volcano line
+    # %% volcano line------------------------------------------------------------------------------#
     # only applicable to single profile for now
         if interpolate:
             if verb > 1:
@@ -638,110 +675,114 @@ if __name__ == "__main__":
         prod_conc = []
         for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
             if np.isnan(profile[0]):
-                prod_conc.append(np.nan)
+                prod_conc.append(np.array([np.nan]*n_target))
                 continue
             else:
                 try:
-                    result, _ = calc_km([profile[:-1]],
-                                    [profile[-1]],
+                    initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
+                        coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
+                    result, _ = calc_km(
+                                    energy_profile_all,
+                                    dgr_all,
                                     temperature,
                                     coeff_TS_all,
-                                    df_network,
+                                    rxn_network,
+                                    Rp,
+                                    Pp,
+                                    n_INT_all,
                                     t_span,
-                                    c0,
+                                    initial_conc,
+                                    states,
                                     timeout,
                                     report_as_yield)
-                    
-                    #***
-                    prod_conc.append(result[0])
-
-                # *****              
+                    prod_conc.append(result)
+        
                 except Exception as e:
                     print(e)
-                    prod_conc.append(np.nan)
+                    prod_conc.append(np.array([np.nan]*n_target))
 
         descr_all = np.array([i[descp_idx] for i in dgs])
-        prod_conc = np.array([i for i in prod_conc])
-
-        # *****  
+        prod_conc = np.array(prod_conc)
+         
         # interpolation
-        missing_indices = np.isnan(prod_conc
-                                )
-        f = interp1d(descr_all[~missing_indices],
-                    prod_conc[~missing_indices],
-                    kind='cubic',
-                    fill_value="extrapolate")
-        y_interp = f(descr_all[missing_indices])
         prod_conc_ = prod_conc.copy()
-        prod_conc_[missing_indices] = y_interp
-
+        missing_indices = np.isnan(prod_conc[:, 0]
+                                        )
+        for i in range(n_target):
+            
+            f = interp1d(descr_all[~missing_indices],
+                        prod_conc[:, i][~missing_indices],
+                        kind='cubic',
+                        fill_value="extrapolate")
+            y_interp = f(descr_all[missing_indices])
+            prod_conc_[:, i][missing_indices] = y_interp  
+            
         # dealing with spikes
-        is_spike = detect_spikes(
-            descr_all,
-            prod_conc_,
-            z_thresh=2.7,
-            window_size=15,
-            polyorder_1=4,
-            polyorder_2=1)
-        if np.any(is_spike):
-            if verb > 1:
-                print("""
-    Detected significant spikes in the plot, proceed to smooth the volcano line.
-    Note that the default setting for detect_spikes function might not be suitable for your case.
-    Please do adjust window_length, polyorder, if the smoothed plot
-    still contains spikes or appears too different from the original one.
-                        """
-                    )
-            if filtering_method == "savgol":
-                prod_conc_sm = savgol_filter(
-                    prod_conc_, window_length=15, polyorder=4)
-            elif filtering_method == "wiener":
-                prod_conc_sm = wiener(prod_conc_, mysize=15)
-            elif filtering_method is None:
-                prod_conc_sm = prod_conc_
-        else:
-            prod_conc_sm = prod_conc_
+        prod_conc_sm_all = []
+        for i in range(n_target):
+            is_spike = detect_spikes(
+                descr_all,
+                prod_conc_[:, i],
+                z_thresh=2.7,
+                window_size=15,
+                polyorder_1=4,
+                polyorder_2=1)
+            if np.any(is_spike):
+                if verb > 1:
+                    print(f"""
+Detected significant spikes in the plot of profile {i}
+Consider using replot to smoothen the plot.
+                            """
+                        )
 
-        # %% volcano point
+        prod_conc_ = prod_conc_.T
+        # %% volcano point------------------------------------------------------------------------------#
         print(
             f"Performing microkinetics modelling for the volcano line ({len(d)})")
         prod_conc_pt = []
         for profile in tqdm(d, total=len(d), ncols=80):
 
             try:
-                result, _ = calc_km([profile[:-1]],
-                                [profile[-1]],
+                initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
+                    coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
+                result, _ = calc_km(
+                                energy_profile_all,
+                                dgr_all,
                                 temperature,
                                 coeff_TS_all,
-                                df_network,
+                                rxn_network,
+                                Rp,
+                                Pp,
+                                n_INT_all,
                                 t_span,
-                                c0,
+                                initial_conc,
+                                states,
                                 timeout,
                                 report_as_yield)
-                if result is None:
-                    prod_conc_pt.append(np.nan)
-                    continue
-                prod_conc_pt.append(result[0])
+                prod_conc_pt.append(result)
             except Exception as e:
-                prod_conc_pt.append(np.nan)
-
-        prod_conc_pt = np.array(prod_conc_pt)
+                prod_conc_pt.append(np.array([np.nan]*n_target))
+                
         descrp_pt = np.array([i[descp_idx] for i in d])
+        prod_conc_pt = np.array(prod_conc_pt)
 
         # interpolation
-        if np.any(np.isnan(prod_conc_pt)):
-            missing_indices = np.isnan(prod_conc_pt)
-            f = interp1d(descrp_pt[~missing_indices],
-                        prod_conc_pt[~missing_indices],
-                        kind='cubic',
-                        fill_value="extrapolate")
-            y_interp = f(descrp_pt[missing_indices])
-            prod_conc_pt_ = prod_conc_pt.copy()
-            prod_conc_pt_[missing_indices] = y_interp
-        else:
-            prod_conc_pt_ = prod_conc_pt.copy()
+        missing_indices = np.isnan(prod_conc_pt[:,0])
+        prod_conc_pt_ = prod_conc_pt.copy()
+        for i in range(n_target):
+            if np.any(np.isnan(prod_conc_pt)):
+                f = interp1d(descrp_pt[~missing_indices],
+                            prod_conc_pt[:,i][~missing_indices],
+                            kind='cubic',
+                            fill_value="extrapolate")
+                y_interp = f(descrp_pt[missing_indices])
+                prod_conc_pt_[:, i][missing_indices] = y_interp   
+            else:
+                prod_conc_pt_ = prod_conc_pt.copy()
+        
+        prod_conc_pt_ = prod_conc_pt_.T
 
-        # %% plotting
+        # \%% plotting------------------------------------------------------------------------------#
 
         xlabel = f"{tag} [kcal/mol]"
         ylabel = "Product concentraion (M)"
@@ -750,149 +791,117 @@ if __name__ == "__main__":
             y_base = 10
         else:
             y_base = 0.1
-        if np.array_equal(prod_conc_sm, prod_conc_):
-            plot_2d(descr_all, prod_conc_, descrp_pt, prod_conc_pt_,
+           
+        out = []    
+        if prod_conc_.shape[0] > 1:
+            plot_2d_combo(descr_all, prod_conc_,  \
+                xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,\
+                 xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_combo.png")
+            out.append(f"km_volcano_{tag}_combo.png")
+            for i in prod_conc_.shape[0]:
+                plot_2d(descr_all, prod_conc_[i], descrp_pt, prod_conc_pt_[i],
                     xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
-                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
-            out = [f"km_volcano_{tag}.png"]
-            if verb > 1:
-                with h5py.File('data.h5', 'w') as f:
-                    group = f.create_group('data')
-                    # save each numpy array as a dataset in the group
-                    group.create_dataset('descr_all', data=descr_all)
-                    group.create_dataset('prod_conc_', data=prod_conc_)
-                    group.create_dataset('descrp_pt', data=descrp_pt)
-                    group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
-                    group.create_dataset('cb', data=cb)
-                    group.create_dataset('ms', data=ms)
-                out.append('data.h5')
-        else:
-            if verb > 1:
-                print("plotting both smoothened and original volcano plots")
+                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_profile{i}.png")
+                out.append(f"km_volcano_{tag}_profile{i}.png")
+        else:         
+            plot_2d(descr_all, prod_conc_[0], descrp_pt, prod_conc_pt_[0],
+                xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
+                xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
+            out.append(f"km_volcano_{tag}.png")
 
-            plot_2d(
-                descr_all,
-                prod_conc_,
-                descrp_pt,
-                prod_conc_pt_,
-                xmin=xmin,
-                xmax=xmax,
-                ybase=y_base,
-                cb=cb,
-                ms=ms,
-                xlabel=xlabel,
-                ylabel=ylabel,
-                filename=f"km_volcano_{tag}.png")
-            plot_2d(
-                descr_all,
-                prod_conc_sm,
-                descrp_pt,
-                prod_conc_pt_,
-                xmin=xmin,
-                xmax=xmax,
-                ybase=y_base,
-                cb=cb,
-                ms=ms,
-                xlabel=xlabel,
-                ylabel=ylabel,
-                filename=f"km_volcano_{tag}_clean.png")
-            # create an HDF5 file
-            cb = np.array(cb, dtype='S')
-            ms = np.array(ms, dtype='S')
+        if verb > 1:
             with h5py.File('data.h5', 'w') as f:
+                cb = np.array(cb, dtype='S')
+                ms = np.array(ms, dtype='S')
                 group = f.create_group('data')
                 # save each numpy array as a dataset in the group
                 group.create_dataset('descr_all', data=descr_all)
                 group.create_dataset('prod_conc_', data=prod_conc_)
-                group.create_dataset('prod_conc_sm', data=prod_conc_sm)
                 group.create_dataset('descrp_pt', data=descrp_pt)
                 group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
                 group.create_dataset('cb', data=cb)
                 group.create_dataset('ms', data=ms)
-            out = [
-                'data.h5',
-                f"km_volcano_{tag}.png",
-                f"km_volcano_{tag}_clean.png"]
-
+            out.append('data.h5')
+ 
         if not os.path.isdir("output"):
-            sp.run(["mkdir", "output"])
+            os.makedirs("output")
         else:
             print("The output directort already exists")
 
-        for file in out:
-            sp.run(["mv", file, "output"])
+        for file_name in out:
+            source_file = os.path.abspath(file_name)
+            destination_file = os.path.join("output/", os.path.basename(file_name))
+            shutil.move(source_file, destination_file)
 
-        if dir:
-            sp.run(["mv", "output", dir])
-
-    # %% evol mode
-    # TODO coeff_TS_all is problematic
+        if not os.path.isdir(os.path.join(dir, "output/")):
+            shutil.move("output/", os.path.join(dir, "output"))
+        else:
+            print("Output already exist")
+            move_bool = input("Move anyway? (y/n)")
+            if move_bool == "y":
+                shutil.move("output/", os.path.join(dir, "output"))
+            elif move_bool == "n":
+                pass
+            else: move_bool = input(f"{move_bool} is invalid, please try again... (y/n)")
+                 
+    # %% evol mode----------------------------------------------------------------------------------#
     else:
         if verb > 1:
             print("Evol mode: plotting evolution for all points")
-        df_network.fillna(0, inplace=True)
-        # process reaction network
-        rxn_network_all = df_network.to_numpy()[:, 1:]
-        states = df_network.columns[1:].tolist()
-        nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
-        nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
 
-        n_INT_tot = rxn_network_all.shape[1] - nR - nP
-        rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
-        rxn_network = np.array(rxn_network, dtype=int)
-
-        n_INT_all = []
-        x = 1
-        for i in range(1, rxn_network.shape[1]):
-            if rxn_network[i, i - 1] == -1:
-                x += 1
-            elif rxn_network[i, i - 1] != -1:
-                n_INT_all.append(x)
-                x = 1
-        n_INT_all.append(x)
-        n_INT_all = np.array(n_INT_all)
-
-        Rp, _ = pad_network(
-            rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
-        Pp, idx_insert = pad_network(
-            rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
-
-        last_idx = 0
-        for i, arr in enumerate(Pp):
-            if np.any(np.sum(arr, axis=1) > 1):
-                last_idx = i
-
-        assert last_idx < len(
-            n_INT_all), "Something wrong with the reaction network"
-        if last_idx > 0:
-            # mori = np.cumsum(n_INT_all)
-            Rp.insert(last_idx + 1, Rp[last_idx].copy())
-            Pp.insert(last_idx + 1, Pp[last_idx].copy())
-            # idx_insert.insert(last_idx+1, np.arange(mori[last_idx-1],mori[last_idx]))
-            n_INT_all = np.insert(n_INT_all, last_idx + 1, 0)
-
-        if has_decimal(Rp):
-            Rp = Rp_Pp_corr(Rp, nR)
-            Rp = np.array(Rp, dtype=int)
-        if has_decimal(Pp):
-            Pp = Rp_Pp_corr(Pp, nP)
-            Pp = np.array(Pp, dtype=int)
-        print(df_network)
-        sys_name = pd.read_csv(filename_csv, index_col=0).index.to_list()
+        prod_conc_pt = []
+        result_solve_ivp_all = []
+        
+        if not os.path.isdir("output_evo"):
+            os.makedirs("output_evo")
+        else:
+            print("The evolution output directort already exists")
+            
         for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
+
             try:
-                _, result_ivp = calc_km([profile[:-1]],
-                                [profile[-1]],
+                initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
+                    coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
+                result, result_solve_ivp = calc_km(
+                                energy_profile_all,
+                                dgr_all,
                                 temperature,
                                 coeff_TS_all,
-                                df_network,
+                                rxn_network,
+                                Rp,
+                                Pp,
+                                n_INT_all,
                                 t_span,
-                                c0,
+                                initial_conc,
+                                states,
                                 timeout,
                                 report_as_yield)
-                result_ivp.append(result_ivp)
-                plot_save(result_ivp, rxn_network, Rp, Pp, dir, name=sys_name[i])
+                prod_conc_pt.append(result)
+                result_solve_ivp_all.append(result_solve_ivp)
+                plot_evo(result_solve_ivp, rxn_network, Rp, Pp, names[i])
+                
+                source_file = os.path.abspath(f"kinetic_modelling_{names[i]}.png")
+                destination_file = os.path.join("output_evo/", os.path.basename(f"kinetic_modelling_{names[i]}.png"))
+                shutil.move(source_file, destination_file)
             except Exception as e:
-                print(f"Fail to perform microkinetic modeling for {sys_name[i]}")
+                print(e)
+                prod_conc_pt.append(np.array([np.nan]*n_target))
+                result_solve_ivp_all.append("Shiki")
+        
+        # TODO save and print    
+        # TODO beautify the plot   
+        prod_conc_pt = np.array(prod_conc_pt)        
+        prod_conc_pt = prod_conc_pt.T
 
+        if not os.path.isdir(os.path.join(dir, "output_evo/")):
+            shutil.move("output_evo/", os.path.join(dir, "output_evo"))
+        else:
+            print("Output already exist")
+            move_bool = input("Move anyway? (y/n)")
+            if move_bool == "y":
+                shutil.move("output_evo/", os.path.join(dir, "output_evo"))
+            elif move_bool == "n":
+                pass
+            else: move_bool = input(f"{move_bool} is invalid, please try again... (y/n)")        
+        
         
