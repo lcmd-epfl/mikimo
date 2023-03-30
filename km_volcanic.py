@@ -4,7 +4,9 @@ from navicat_volcanic.helpers import (arraydump, group_data_points,
                                       user_choose_2_dv, bround)
 from navicat_volcanic.plotting2d import get_reg_targets, plot_2d
 from navicat_volcanic.dv1 import curate_d, find_1_dv
-from kinetic_solver_v3 import *
+from navicat_volcanic.exceptions import InputError
+from kinetic_solver_v3 import system_KE, get_k, pad_network, has_decimal, Rp_Pp_corr
+from plot2d_mod import plot_2d_combo, plot_evo
 import scipy.stats as stats
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
@@ -12,13 +14,9 @@ from scipy.integrate import solve_ivp
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from tqdm import tqdm
 import h5py
 import sys
 import os
-import subprocess as sp
-from navicat_volcanic.exceptions import InputError
-from plot2d_mod import plot_2d_combo, plot_evo
 import shutil
 import argparse
 
@@ -224,7 +222,8 @@ def calc_km(
         initial_conc,
         states,
         timeout,
-        report_as_yield):
+        report_as_yield,
+        quality):
 
     n_INT_tot = np.sum(n_INT_all)
     nR = Rp[0].shape[1]
@@ -252,22 +251,43 @@ def calc_km(
     # then LSODA + FD if all BDF attempts fail
     # the last resort is a Radau
     # if all fail, return NaN
-    max_step = (t_span[1] - t_span[0]) / 10.0
     rtol_values = [1e-6, 1e-9, 1e-10]
     atol_values = [1e-6, 1e-9, 1e-10]
     last_ = [rtol_values[-1], atol_values[-1]]
-    first_step = np.min(
-        [
-            1e-14,  # Too small?
-            1 / 27e9,  # Too small?
-            1 / 1.5e10,
-            (t_span[1] - t_span[0]) / 100.0,
-            np.finfo(np.float16).eps,
-            np.finfo(np.float32).eps,
-            np.finfo(np.float64).eps,  # Too small?
-            np.nextafter(np.float16(0), np.float16(1)),
-        ]
-        )
+    
+    if quality == 0:
+        max_step = np.nan
+        first_step = None
+    elif quality == 1:
+        max_step = (t_span[1] - t_span[0]) / 10.0
+        first_step = np.min(
+            [
+                1e-14,  
+                1 / 27e9, 
+                1 / 1.5e10,
+                (t_span[1] - t_span[0]) / 100.0,
+                np.finfo(np.float16).eps,
+                np.finfo(np.float32).eps,
+                np.finfo(np.float64).eps,  # Too small?
+                np.nextafter(np.float16(0), np.float16(1)),
+            ]
+            )
+    elif quality > 1:
+        max_step = (t_span[1] - t_span[0]) / 100.0
+        first_step = np.min(
+            [
+                1e-14, 
+                1 / 27e9,  
+                1 / 1.5e10,
+                (t_span[1] - t_span[0]) / 100.0,
+                np.finfo(np.float64).eps,  
+                np.finfo(np.float128).eps,  
+                np.nextafter(np.float64(0), np.float64(1)),
+            ]
+            )     
+        rtol_values.append(1e-12)  
+        atol_values.append(1e-12)  
+
     success = False
     cont = False
     while success == False:
@@ -450,27 +470,20 @@ if __name__ == "__main__":
         default=1e5,
         help="Total reaction time (s)",
     )
-
+    
     parser.add_argument(
-        "-p",
-        "--p"
-        "-percent",
-        "--percent",
-        dest="percent",
-        action="store_true",
-        help="Flag to report activity as percent yield. (default: False)",
+        "-T",
+        "-t",
+        "--T",
+        "--t",
+        "--temp",
+        "-temp",
+        dest="temp",
+        type=float,
+        default=298.15,
+        help="Temperature in K. (default: 298.15)",
     )
-
-    parser.add_argument(
-        "-v",
-        "--v",
-        "--verb",
-        dest="verb",
-        type=int,
-        default=0,
-        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv output files (default: 1)",
-    )
-
+    
     parser.add_argument(
         "-lm",
         "--lm",
@@ -490,16 +503,23 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-T",
-        "-t",
-        "--T",
-        "--t",
-        "--temp",
-        "-temp",
-        dest="temp",
-        type=float,
-        default=298.15,
-        help="Temperature in K. (default: 298.15)",
+        "-p",
+        "--p"
+        "-percent",
+        "--percent",
+        dest="percent",
+        action="store_true",
+        help="Flag to report activity as percent yield. (default: False)",
+    )
+    
+    parser.add_argument(
+        "-v",
+        "--v",
+        "--verb",
+        dest="verb",
+        type=int,
+        default=0,
+        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv output files (default: 1)",
     )
 
     parser.add_argument(
@@ -509,15 +529,6 @@ if __name__ == "__main__":
         type=str,
         default="knn",
         help="Imputter to refill missing datapoints. Beta version. (default: knn) (simple, knn, iterative, None)",
-    )
-
-    parser.add_argument(
-        "-f",
-        "--f",
-        dest="filter",
-        type=str,
-        default="savgol",
-        help="Filtering method for smoothening the volcano (default: savgol) (savgol, wiener, None)",
     )
     
     parser.add_argument(
@@ -531,9 +542,24 @@ if __name__ == "__main__":
         Instead plot the evolution of each point. (default: False)""",
     )
 
+    parser.add_argument(
+        "--timeout",
+        dest="timeout",
+        type=str,
+        default=15,
+        help="""Timeout for each integration run""",
+    )
+
+    parser.add_argument(
+        "-q",
+        "--q",
+        dest="quality",
+        type=int,
+        default=1,
+        help="""integration quality (0-2) (the higher, longer the integratoion, but smoother the plot)""",
+    )
     # %% loading and processing------------------------------------------------------------------------#
     args = parser.parse_args()
-
     temperature = args.temp
     lmargin = args.lmargin
     rmargin = args.rmargin
@@ -541,15 +567,16 @@ if __name__ == "__main__":
     dir = args.dir
     imputer_strat = args.imputer_strat
     report_as_yield = args.percent
-    filtering_method = args.filter
     evol_mode = args.evol_mode
+    timeout =  args.timeout 
+    quality = args.quality
     npoints = 200  # for volcanic
     xbase = 20
 
     # for volcano line
     interpolate = True
     n_point_calc = 100
-    timeout = 15  # in seconds
+    timeout =  args.timeout  # in seconds
 
     filename_xlsx = f"{dir}reaction_data.xlsx"
     filename_csv = f"{dir}reaction_data.csv"
@@ -601,7 +628,10 @@ if __name__ == "__main__":
             regress[i] = True
 
     dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
-    idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
+    if not(evol_mode):
+        idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
+    else:
+        idx = 3
     d, cb, ms = curate_d(d, regress, cb, ms, tags,
                          imputer_strat, nstds=3, verb=verb)
 
@@ -671,7 +701,6 @@ if __name__ == "__main__":
             trun_dgs = dgs
             print(
                 f"Performing microkinetics modelling for the volcano line ({npoints})")
-
         prod_conc = []
         for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
             if np.isnan(profile[0]):
@@ -694,9 +723,12 @@ if __name__ == "__main__":
                                     initial_conc,
                                     states,
                                     timeout,
-                                    report_as_yield)
-                    prod_conc.append(result)
-        
+                                    report_as_yield,
+                                    quality)
+                    if len(result) != n_target: prod_conc.append(np.array([np.nan]*n_target))
+                    else: prod_conc.append(result)
+
+
                 except Exception as e:
                     print(e)
                     prod_conc.append(np.array([np.nan]*n_target))
@@ -758,8 +790,10 @@ Consider using replot to smoothen the plot.
                                 initial_conc,
                                 states,
                                 timeout,
-                                report_as_yield)
-                prod_conc_pt.append(result)
+                                report_as_yield,
+                                quality)
+                if len(result) != n_target: prod_conc_pt.append(np.array([np.nan]*n_target))
+                else: prod_conc_pt.append(result)
             except Exception as e:
                 prod_conc_pt.append(np.array([np.nan]*n_target))
                 
@@ -798,7 +832,7 @@ Consider using replot to smoothen the plot.
                 xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,\
                  xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_combo.png")
             out.append(f"km_volcano_{tag}_combo.png")
-            for i in prod_conc_.shape[0]:
+            for i in range(prod_conc_.shape[0]):
                 plot_2d(descr_all, prod_conc_[i], descrp_pt, prod_conc_pt_[i],
                     xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
                     xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_profile{i}.png")
@@ -837,12 +871,12 @@ Consider using replot to smoothen the plot.
             shutil.move("output/", os.path.join(dir, "output"))
         else:
             print("Output already exist")
-            move_bool = input("Move anyway? (y/n)")
+            move_bool = input("Move anyway? (y/n): ")
             if move_bool == "y":
                 shutil.move("output/", os.path.join(dir, "output"))
             elif move_bool == "n":
                 pass
-            else: move_bool = input(f"{move_bool} is invalid, please try again... (y/n)")
+            else: move_bool = input(f"{move_bool} is invalid, please try again... (y/n): ")
                  
     # %% evol mode----------------------------------------------------------------------------------#
     else:
@@ -875,8 +909,11 @@ Consider using replot to smoothen the plot.
                                 initial_conc,
                                 states,
                                 timeout,
-                                report_as_yield)
-                prod_conc_pt.append(result)
+                                report_as_yield,
+                                quality)
+                if len(result) != n_target: prod_conc_pt.append(np.array([np.nan]*n_target))
+                else: prod_conc_pt.append(result)
+                
                 result_solve_ivp_all.append(result_solve_ivp)
                 plot_evo(result_solve_ivp, rxn_network, Rp, Pp, names[i])
                 
@@ -888,20 +925,27 @@ Consider using replot to smoothen the plot.
                 prod_conc_pt.append(np.array([np.nan]*n_target))
                 result_solve_ivp_all.append("Shiki")
         
-        # TODO save and print    
-        # TODO beautify the plot   
-        prod_conc_pt = np.array(prod_conc_pt)        
-        prod_conc_pt = prod_conc_pt.T
-
+        prod_conc_pt = np.array(prod_conc_pt).T
+        if verb > 1:
+            prod_names = [i.replace("*", "") for i in states if "*" in i]
+            data_dict = dict()
+            data_dict["entry"] = names
+            for i in range(prod_conc_pt.shape[0]):
+                data_dict[prod_names[i]] = prod_conc_pt[i]
+            
+            df = pd.DataFrame(data_dict)
+            df.to_csv('my_data.csv', index=False)  
+            print(df.to_string(index=False))
+        
         if not os.path.isdir(os.path.join(dir, "output_evo/")):
             shutil.move("output_evo/", os.path.join(dir, "output_evo"))
         else:
             print("Output already exist")
-            move_bool = input("Move anyway? (y/n)")
+            move_bool = input("Move anyway? (y/n): ")
             if move_bool == "y":
                 shutil.move("output_evo/", os.path.join(dir, "output_evo"))
             elif move_bool == "n":
                 pass
-            else: move_bool = input(f"{move_bool} is invalid, please try again... (y/n)")        
+            else: move_bool = input(f"{move_bool} is invalid, please try again... (y/n): ")        
         
         
