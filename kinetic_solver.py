@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 from navicat_volcanic.exceptions import InputError
-import overreact as rx
-from overreact import _constants as constants
-import numpy as np
-import pandas as pd
+from scipy.integrate import solve_ivp
+from scipy.constants import R, kilo, calorie, k, h
 import autograd.numpy as anp
 from autograd import jacobian
-import argparse
-import sys
 import warnings
 import matplotlib.pyplot as plt
-import subprocess as sp
+import numpy as np
+import pandas as pd
+import argparse
+import sys
 import os
 import shutil
-from scipy.integrate import solve_ivp
 
 warnings.filterwarnings("ignore")
 
@@ -186,6 +184,10 @@ Number of INT recognized in the reaction data does not match with that in reacti
 
     return clean, warn
 
+def erying(dG_ddag, temperature):
+    R_ = R * (1/calorie) * (1/kilo)
+    kb_h = k/h
+    return kb_h*temperature*np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
 
 def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
     """Compute reaction rates(k) for a reaction profile.
@@ -260,20 +262,8 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
     dG_ddag_reverse = get_dG_ddag(
         energy_profile_reverse, -dgr, coeff_TS_reverse)
 
-    k_forward = rx.rates.eyring(
-        dG_ddag_forward * constants.kcal,
-        # if energies are in kcal/mol: multiply them with `constants.kcal``
-        temperature=temperature,  # K
-        pressure=1,  # atm
-        volume=None,  # molecular volume
-    )
-    k_reverse = rx.rates.eyring(
-        dG_ddag_reverse * constants.kcal,
-        # if energies are in kcal/mol: multiply them with `constants.kcal``
-        temperature=temperature,  # K
-        pressure=1,  # atm
-        volume=None,  # molecular volume
-    )
+    k_forward = erying(dG_ddag_forward, temperature)
+    k_reverse = erying(dG_ddag_reverse, temperature)
 
     return k_forward, k_reverse[::-1]
 
@@ -1015,7 +1005,7 @@ def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None, name=""):
     plt.legend()
     plt.grid(True, linestyle='--', linewidth=0.75)
     plt.tight_layout()
-    fig.savefig(f"kinetic_modelling_{name}.png", dpi=400, transparent=True)
+    fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
 
     np.savetxt(f'cat_{name}.txt', result_solve_ivp.y[0, :])
     np.savetxt(
