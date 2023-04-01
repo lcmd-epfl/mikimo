@@ -9,7 +9,6 @@ from kinetic_solver_v3 import system_KE, get_k, pad_network, has_decimal, Rp_Pp_
 from plot2d_mod import plot_2d_combo, plot_evo
 import scipy.stats as stats
 from scipy.interpolate import interp1d
-from scipy.signal import savgol_filter
 from scipy.integrate import solve_ivp
 import pandas as pd
 import numpy as np
@@ -81,7 +80,8 @@ def check_km_inp(df_network, initial_conc):
         if 1 in nx and -1 in nx:
             continue
         else:
-            print(f"The coordinate data for state {i} looks wrong or it is the pitfall")
+            print(
+                f"The coordinate data for state {i} looks wrong or it is the pitfall")
             warn = True
 
     for i, nx in enumerate(np.transpose(
@@ -106,12 +106,11 @@ def check_km_inp(df_network, initial_conc):
 
     return clean, warn
 
+
 def process_data_mkm(dg, initial_conc, df_network, tags):
 
-    initial_conc = np.loadtxt(c0, dtype=np.float64)
     df_network.fillna(0, inplace=True)
     rxn_network_all = df_network.to_numpy()[:, 1:]
-    rxn_network_all = rxn_network_all.astype(np.int32)
     states = df_network.columns[1:].tolist()
     nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
     nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
@@ -155,9 +154,8 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
         Pp = Rp_Pp_corr(Pp, nP)
         Pp = np.array(Pp, dtype=int)
 
-
-    df_all = pd.DataFrame([dg], columns=tags) #%%
-    species_profile = tags #%%
+    df_all = pd.DataFrame([dg], columns=tags)  # %%
+    species_profile = tags  # %%
     all_df = []
     df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
     for i in range(1, len(species_profile)):
@@ -195,7 +193,7 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
         energy_profile_all[last_idx + \
             1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
         coeff_TS_all[last_idx + 1] = coeff_TS_all[last_idx]
-        
+
     # pad initial_conc in case [cat, R] are only specified.
     if len(initial_conc) != rxn_network_all.shape[1]:
         tmp = np.zeros(rxn_network_all.shape[1])
@@ -205,10 +203,11 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
             else:
                 tmp[n_INT_tot + i - 1] = c
         initial_conc = np.array(tmp)
-        
+
     return initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
         coeff_TS_all, rxn_network, n_INT_all
-        
+
+
 def calc_km(
         energy_profile_all,
         dgr_all,
@@ -227,7 +226,7 @@ def calc_km(
 
     n_INT_tot = np.sum(n_INT_all)
     nR = Rp[0].shape[1]
-    
+
     k_forward_all = []
     k_reverse_all = []
 
@@ -251,10 +250,12 @@ def calc_km(
     # then LSODA + FD if all BDF attempts fail
     # the last resort is a Radau
     # if all fail, return NaN
+    
+    #TODO 1 more quality level and benchmarking
     rtol_values = [1e-6, 1e-9, 1e-10]
     atol_values = [1e-6, 1e-9, 1e-10]
     last_ = [rtol_values[-1], atol_values[-1]]
-    
+
     if quality == 0:
         max_step = np.nan
         first_step = None
@@ -262,31 +263,31 @@ def calc_km(
         max_step = (t_span[1] - t_span[0]) / 10.0
         first_step = np.min(
             [
-                1e-14,  
-                1 / 27e9, 
+                1e-14,
+                1 / 27e9,
                 1 / 1.5e10,
                 (t_span[1] - t_span[0]) / 100.0,
                 np.finfo(np.float16).eps,
                 np.finfo(np.float32).eps,
-                np.finfo(np.float64).eps,  # Too small?
+                np.finfo(np.float64).eps,  
                 np.nextafter(np.float16(0), np.float16(1)),
             ]
-            )
+        )
     elif quality > 1:
         max_step = (t_span[1] - t_span[0]) / 100.0
         first_step = np.min(
             [
-                1e-14, 
-                1 / 27e9,  
+                1e-14,
+                1 / 27e9,
                 1 / 1.5e10,
                 (t_span[1] - t_span[0]) / 100.0,
-                np.finfo(np.float64).eps,  
-                np.finfo(np.float128).eps,  
+                np.finfo(np.float64).eps,
+                np.finfo(np.float128).eps,
                 np.nextafter(np.float64(0), np.float64(1)),
             ]
-            )     
-        rtol_values.append(1e-12)  
-        atol_values.append(1e-12)  
+        )
+        rtol_values.append(1e-12)
+        atol_values.append(1e-12)
 
     success = False
     cont = False
@@ -395,11 +396,12 @@ def calc_km(
     try:
         if result_solve_ivp != "Shiki":
             idx_target_all = [states.index(i) for i in states if "*" in i]
-            c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
+            c_target_t = np.array([result_solve_ivp.y[i][-1]
+                                  for i in idx_target_all])
             s_coeff_R = np.array([np.min(np.abs(
-                                np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp])
+                np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp])
             if report_as_yield:
-                
+
                 c_target_yield = np.array(
                     [c_target_t[i] / s_coeff_R[i] * 100 for i in range(len(s_coeff_R))])
                 c_target_yield[c_target_yield > 100] = 100
@@ -414,36 +416,6 @@ def calc_km(
             return np.NaN, result_solve_ivp
     except IndexError as e:
         return np.NaN, result_solve_ivp
-
-
-def detect_spikes(
-        x,
-        y,
-        z_thresh=2.4,
-        window_size=15,
-        polyorder_1=4,
-        polyorder_2=1):
-
-    y_smooth = savgol_filter(
-        y,
-        window_length=window_size,
-        polyorder=polyorder_1)
-    y_diff = np.abs(y - y_smooth)
-    y_std = np.std(y_diff)
-    y_zscore = y_diff / y_std
-
-    y_poly = np.polyfit(x, y, polyorder_2)
-    y_polyval = np.polyval(y_poly, x)
-    is_spike = np.abs(y_zscore) > z_thresh
-    is_spike &= (
-        (y -
-         y_polyval) > 0) & (
-        y_zscore > 0) | (
-            (y -
-             y_polyval) < 0) & (
-        y_zscore < 0)
-
-    return is_spike
 
 
 if __name__ == "__main__":
@@ -470,7 +442,7 @@ if __name__ == "__main__":
         default=1e5,
         help="Total reaction time (s)",
     )
-    
+
     parser.add_argument(
         "-T",
         "-t",
@@ -483,7 +455,7 @@ if __name__ == "__main__":
         default=298.15,
         help="Temperature in K. (default: 298.15)",
     )
-    
+
     parser.add_argument(
         "-lm",
         "--lm",
@@ -511,7 +483,7 @@ if __name__ == "__main__":
         action="store_true",
         help="Flag to report activity as percent yield. (default: False)",
     )
-    
+
     parser.add_argument(
         "-v",
         "--v",
@@ -530,7 +502,7 @@ if __name__ == "__main__":
         default="knn",
         help="Imputter to refill missing datapoints. Beta version. (default: knn) (simple, knn, iterative, None)",
     )
-    
+
     parser.add_argument(
         "-ev",
         "--ev"
@@ -568,15 +540,14 @@ if __name__ == "__main__":
     imputer_strat = args.imputer_strat
     report_as_yield = args.percent
     evol_mode = args.evol_mode
-    timeout =  args.timeout 
+    timeout = args.timeout
     quality = args.quality
-    npoints = 200  # for volcanic
-    xbase = 20
 
     # for volcano line
     interpolate = True
     n_point_calc = 100
-    timeout =  args.timeout  # in seconds
+    npoints = 200  # for volcanic
+    xbase = 20
 
     filename_xlsx = f"{dir}reaction_data.xlsx"
     filename_csv = f"{dir}reaction_data.csv"
@@ -628,7 +599,7 @@ if __name__ == "__main__":
             regress[i] = True
 
     dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
-    if not(evol_mode):
+    if not (evol_mode):
         idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
     else:
         idx = 3
@@ -660,7 +631,7 @@ if __name__ == "__main__":
         s_err = np.sqrt(np.sum(resid**2) / dof)
         yint = np.polyval(p, xint)
         dgs[:, i] = yint
-        
+
     states = df_network.columns[1:].tolist()
     n_target = len([states.index(i) for i in states if "*" in i])
 
@@ -678,10 +649,10 @@ if __name__ == "__main__":
         else:
             if verb > 1:
                 print("KM input is clear")
-    
-    if not(evol_mode):
-    # %% volcano line------------------------------------------------------------------------------#
-    # only applicable to single profile for now
+
+    if not (evol_mode):
+        # %% volcano line------------------------------------------------------------------------------#
+        # only applicable to single profile for now
         if interpolate:
             if verb > 1:
                 print(
@@ -704,68 +675,51 @@ if __name__ == "__main__":
         prod_conc = []
         for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
             if np.isnan(profile[0]):
-                prod_conc.append(np.array([np.nan]*n_target))
+                prod_conc.append(np.array([np.nan] * n_target))
                 continue
             else:
                 try:
                     initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
                         coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
                     result, _ = calc_km(
-                                    energy_profile_all,
-                                    dgr_all,
-                                    temperature,
-                                    coeff_TS_all,
-                                    rxn_network,
-                                    Rp,
-                                    Pp,
-                                    n_INT_all,
-                                    t_span,
-                                    initial_conc,
-                                    states,
-                                    timeout,
-                                    report_as_yield,
-                                    quality)
-                    if len(result) != n_target: prod_conc.append(np.array([np.nan]*n_target))
-                    else: prod_conc.append(result)
-
+                        energy_profile_all,
+                        dgr_all,
+                        temperature,
+                        coeff_TS_all,
+                        rxn_network,
+                        Rp,
+                        Pp,
+                        n_INT_all,
+                        t_span,
+                        initial_conc,
+                        states,
+                        timeout,
+                        report_as_yield,
+                        quality)
+                    if len(result) != n_target:
+                        prod_conc.append(np.array([np.nan] * n_target))
+                    else:
+                        prod_conc.append(result)
 
                 except Exception as e:
                     print(e)
-                    prod_conc.append(np.array([np.nan]*n_target))
+                    prod_conc.append(np.array([np.nan] * n_target))
 
-        descr_all = np.array([i[descp_idx] for i in dgs])
+        descr_all = dgs[:, descp_idx]
         prod_conc = np.array(prod_conc)
-         
+
         # interpolation
         prod_conc_ = prod_conc.copy()
         missing_indices = np.isnan(prod_conc[:, 0]
-                                        )
+                                   )
         for i in range(n_target):
-            
+
             f = interp1d(descr_all[~missing_indices],
-                        prod_conc[:, i][~missing_indices],
-                        kind='cubic',
-                        fill_value="extrapolate")
+                         prod_conc[:, i][~missing_indices],
+                         kind='cubic',
+                         fill_value="extrapolate")
             y_interp = f(descr_all[missing_indices])
-            prod_conc_[:, i][missing_indices] = y_interp  
-            
-        # dealing with spikes
-        prod_conc_sm_all = []
-        for i in range(n_target):
-            is_spike = detect_spikes(
-                descr_all,
-                prod_conc_[:, i],
-                z_thresh=2.7,
-                window_size=15,
-                polyorder_1=4,
-                polyorder_2=1)
-            if np.any(is_spike):
-                if verb > 1:
-                    print(f"""
-Detected significant spikes in the plot of profile {i}
-Consider using replot to smoothen the plot.
-                            """
-                        )
+            prod_conc_[:, i][missing_indices] = y_interp
 
         prod_conc_ = prod_conc_.T
         # %% volcano point------------------------------------------------------------------------------#
@@ -778,69 +732,99 @@ Consider using replot to smoothen the plot.
                 initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
                     coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
                 result, _ = calc_km(
-                                energy_profile_all,
-                                dgr_all,
-                                temperature,
-                                coeff_TS_all,
-                                rxn_network,
-                                Rp,
-                                Pp,
-                                n_INT_all,
-                                t_span,
-                                initial_conc,
-                                states,
-                                timeout,
-                                report_as_yield,
-                                quality)
-                if len(result) != n_target: prod_conc_pt.append(np.array([np.nan]*n_target))
-                else: prod_conc_pt.append(result)
+                    energy_profile_all,
+                    dgr_all,
+                    temperature,
+                    coeff_TS_all,
+                    rxn_network,
+                    Rp,
+                    Pp,
+                    n_INT_all,
+                    t_span,
+                    initial_conc,
+                    states,
+                    timeout,
+                    report_as_yield,
+                    quality)
+                if len(result) != n_target:
+                    prod_conc_pt.append(np.array([np.nan] * n_target))
+                else:
+                    prod_conc_pt.append(result)
             except Exception as e:
-                prod_conc_pt.append(np.array([np.nan]*n_target))
-                
-        descrp_pt = np.array([i[descp_idx] for i in d])
+                prod_conc_pt.append(np.array([np.nan] * n_target))
+
+        descrp_pt = d[:, descp_idx]
         prod_conc_pt = np.array(prod_conc_pt)
 
         # interpolation
-        missing_indices = np.isnan(prod_conc_pt[:,0])
+        missing_indices = np.isnan(prod_conc_pt[:, 0])
         prod_conc_pt_ = prod_conc_pt.copy()
         for i in range(n_target):
             if np.any(np.isnan(prod_conc_pt)):
                 f = interp1d(descrp_pt[~missing_indices],
-                            prod_conc_pt[:,i][~missing_indices],
-                            kind='cubic',
-                            fill_value="extrapolate")
+                             prod_conc_pt[:, i][~missing_indices],
+                             kind='cubic',
+                             fill_value="extrapolate")
                 y_interp = f(descrp_pt[missing_indices])
-                prod_conc_pt_[:, i][missing_indices] = y_interp   
+                prod_conc_pt_[:, i][missing_indices] = y_interp
             else:
                 prod_conc_pt_ = prod_conc_pt.copy()
-        
+
         prod_conc_pt_ = prod_conc_pt_.T
 
         # \%% plotting------------------------------------------------------------------------------#
 
-        xlabel = f"{tag} [kcal/mol]"
-        ylabel = "Product concentraion (M)"
+        xlabel = "$ΔG_{RRS}$" + f"({tag}) [kcal/mol]"
+        ylabel = "Final product concentraion (M)"
 
         if report_as_yield:
             y_base = 10
         else:
             y_base = 0.1
-           
-        out = []    
+
+        out = []
         if prod_conc_.shape[0] > 1:
-            plot_2d_combo(descr_all, prod_conc_,  \
-                xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,\
-                 xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_combo.png")
+            plot_2d_combo(
+                descr_all,
+                prod_conc_,
+                xmin=xmin,
+                xmax=xmax,
+                ybase=y_base,
+                cb=cb,
+                ms=ms,
+                xlabel=xlabel,
+                ylabel=ylabel,
+                filename=f"km_volcano_{tag}_combo.png")
             out.append(f"km_volcano_{tag}_combo.png")
             for i in range(prod_conc_.shape[0]):
-                plot_2d(descr_all, prod_conc_[i], descrp_pt, prod_conc_pt_[i],
-                    xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
-                    xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}_profile{i}.png")
+                plot_2d(
+                    descr_all,
+                    prod_conc_[i],
+                    descrp_pt,
+                    prod_conc_pt_[i],
+                    xmin=xmin,
+                    xmax=xmax,
+                    ybase=y_base,
+                    cb=cb,
+                    ms=ms,
+                    xlabel=xlabel,
+                    ylabel=ylabel,
+                    filename=f"km_volcano_{tag}_profile{i}.png")
                 out.append(f"km_volcano_{tag}_profile{i}.png")
-        else:         
-            plot_2d(descr_all, prod_conc_[0], descrp_pt, prod_conc_pt_[0],
-                xmin=xmin, xmax=xmax, ybase=y_base, cb=cb, ms=ms,
-                xlabel=xlabel, ylabel=ylabel, filename=f"km_volcano_{tag}.png")
+        else:
+            plot_2d(
+                descr_all,
+                prod_conc_[0],
+                descrp_pt,
+                prod_conc_pt_[0],
+                xmin=xmin,
+                xmax=xmax,
+                ybase=y_base,
+                cb=cb,
+                ms=ms,
+                xlabel=xlabel,
+                ylabel=ylabel,
+                filename=f"km_volcano_{tag}.png")
             out.append(f"km_volcano_{tag}.png")
 
         if verb > 1:
@@ -856,7 +840,7 @@ Consider using replot to smoothen the plot.
                 group.create_dataset('cb', data=cb)
                 group.create_dataset('ms', data=ms)
             out.append('data.h5')
- 
+
         if not os.path.isdir("output"):
             os.makedirs("output")
         else:
@@ -864,7 +848,8 @@ Consider using replot to smoothen the plot.
 
         for file_name in out:
             source_file = os.path.abspath(file_name)
-            destination_file = os.path.join("output/", os.path.basename(file_name))
+            destination_file = os.path.join(
+                "output/", os.path.basename(file_name))
             shutil.move(source_file, destination_file)
 
         if not os.path.isdir(os.path.join(dir, "output/")):
@@ -876,8 +861,10 @@ Consider using replot to smoothen the plot.
                 shutil.move("output/", os.path.join(dir, "output"))
             elif move_bool == "n":
                 pass
-            else: move_bool = input(f"{move_bool} is invalid, please try again... (y/n): ")
-                 
+            else:
+                move_bool = input(
+                    f"{move_bool} is invalid, please try again... (y/n): ")
+
     # %% evol mode----------------------------------------------------------------------------------#
     else:
         if verb > 1:
@@ -885,46 +872,50 @@ Consider using replot to smoothen the plot.
 
         prod_conc_pt = []
         result_solve_ivp_all = []
-        
+
         if not os.path.isdir("output_evo"):
             os.makedirs("output_evo")
         else:
             print("The evolution output directort already exists")
-            
+
         for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
 
             try:
                 initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
                     coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
                 result, result_solve_ivp = calc_km(
-                                energy_profile_all,
-                                dgr_all,
-                                temperature,
-                                coeff_TS_all,
-                                rxn_network,
-                                Rp,
-                                Pp,
-                                n_INT_all,
-                                t_span,
-                                initial_conc,
-                                states,
-                                timeout,
-                                report_as_yield,
-                                quality)
-                if len(result) != n_target: prod_conc_pt.append(np.array([np.nan]*n_target))
-                else: prod_conc_pt.append(result)
-                
+                    energy_profile_all,
+                    dgr_all,
+                    temperature,
+                    coeff_TS_all,
+                    rxn_network,
+                    Rp,
+                    Pp,
+                    n_INT_all,
+                    t_span,
+                    initial_conc,
+                    states,
+                    timeout,
+                    report_as_yield,
+                    quality)
+                if len(result) != n_target:
+                    prod_conc_pt.append(np.array([np.nan] * n_target))
+                else:
+                    prod_conc_pt.append(result)
+
                 result_solve_ivp_all.append(result_solve_ivp)
                 plot_evo(result_solve_ivp, rxn_network, Rp, Pp, names[i])
-                
-                source_file = os.path.abspath(f"kinetic_modelling_{names[i]}.png")
-                destination_file = os.path.join("output_evo/", os.path.basename(f"kinetic_modelling_{names[i]}.png"))
+
+                source_file = os.path.abspath(
+                    f"kinetic_modelling_{names[i]}.png")
+                destination_file = os.path.join(
+                    "output_evo/", os.path.basename(f"kinetic_modelling_{names[i]}.png"))
                 shutil.move(source_file, destination_file)
             except Exception as e:
-                print(e)
-                prod_conc_pt.append(np.array([np.nan]*n_target))
+                print(f"Cannot perform mkm for {names[i]}")
+                prod_conc_pt.append(np.array([np.nan] * n_target))
                 result_solve_ivp_all.append("Shiki")
-        
+
         prod_conc_pt = np.array(prod_conc_pt).T
         if verb > 1:
             prod_names = [i.replace("*", "") for i in states if "*" in i]
@@ -932,11 +923,11 @@ Consider using replot to smoothen the plot.
             data_dict["entry"] = names
             for i in range(prod_conc_pt.shape[0]):
                 data_dict[prod_names[i]] = prod_conc_pt[i]
-            
+
             df = pd.DataFrame(data_dict)
-            df.to_csv('my_data.csv', index=False)  
+            df.to_csv('my_data.csv', index=False)
             print(df.to_string(index=False))
-        
+
         if not os.path.isdir(os.path.join(dir, "output_evo/")):
             shutil.move("output_evo/", os.path.join(dir, "output_evo"))
         else:
@@ -946,6 +937,6 @@ Consider using replot to smoothen the plot.
                 shutil.move("output_evo/", os.path.join(dir, "output_evo"))
             elif move_bool == "n":
                 pass
-            else: move_bool = input(f"{move_bool} is invalid, please try again... (y/n): ")        
-        
-        
+            else:
+                move_bool = input(
+                    f"{move_bool} is invalid, please try again... (y/n): ")

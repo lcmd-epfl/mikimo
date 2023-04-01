@@ -12,6 +12,7 @@ import warnings
 import matplotlib.pyplot as plt
 import subprocess as sp
 import os
+import shutil
 from scipy.integrate import solve_ivp
 
 warnings.filterwarnings("ignore")
@@ -55,7 +56,8 @@ def pad_network(X, n_INT_all, rxn_network):
     insert_idx = []
     for i in range(1, len(n_INT_all)):  # n_profile - 1
         # pitfall
-        if np.all(rxn_network[np.cumsum(n_INT_all)[i - 1]:np.cumsum(n_INT_all)[i], 0] == 0):
+        if np.all(rxn_network[np.cumsum(n_INT_all)[i - 1]                  
+                              :np.cumsum(n_INT_all)[i], 0] == 0):
 
             cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
                 i - 1]:np.cumsum(n_INT_all)[i], :][0] == -1)
@@ -139,15 +141,17 @@ def check_km_inp(df_network, coeff_TS_all, c0):
         )
 
     # check number of state
-    n_INT_tot_profile = np.sum([len(arr) - np.count_nonzero(arr) for arr in coeff_TS_all])
+    n_INT_tot_profile = np.sum(
+        [len(arr) - np.count_nonzero(arr) for arr in coeff_TS_all])
     y_INT = initial_conc[:n_INT_tot]
     y_INt_, _ = pad_network(y_INT, n_INT_all, rxn_network)
     n_INT_tot_nx = np.sum([len(arr) for arr in y_INt_])
     if n_INT_tot_profile != n_INT_tot_nx:
         warn = True
         print("""
-Number of INT recognized in the reaction data does not match with that in reaction network. 
+Number of INT recognized in the reaction data does not match with that in reaction network.
 - Presence of the pitfall or
+- branching at the last state or
 - your network/reaction profiles are wrong
               """)
 
@@ -156,7 +160,8 @@ Number of INT recognized in the reaction data does not match with that in reacti
         if 1 in nx and -1 in nx:
             continue
         else:
-            print(f"The coordinate data for state {i} looks wrong or it is the pitfall")
+            print(
+                f"The coordinate data for state {i} looks wrong or it is the pitfall")
             warn = True
 
     for i, nx in enumerate(np.transpose(
@@ -295,9 +300,9 @@ def add_rate(
         reverse reaction rate constant
     rxn_network : array-like
         reaction network matrix
-    Rp_: array-like
+    Rp: array-like
         reactant reaction coordinate matrix
-    Pp_: array-like
+    Pp: array-like
         product reaction coordinate matrix
     a : int
         index of the elementary step (note that the last step is 0)
@@ -315,7 +320,6 @@ def add_rate(
     y_INT = []
     tmp = y[:np.sum(n_INT_all)]
     y_INT = np.array_split(tmp, np.cumsum(n_INT_all)[:-1])
-    # Rp_ and Pp_ were initially designed to be all positive
 
     mori = np.cumsum(n_INT_all)
     # the first profile is assumed to be full, skipped
@@ -634,9 +638,8 @@ def system_KE(
 
     # to enforce boundary condition and the contraint
     # default bound_decorator
-    # TODO reassigning dydt and y could have been better somehow
-    
-    if bound_ver == 1: 
+
+    if bound_ver == 1:
         def bound_decorator(bounds):
             def decorator(func):
                 def wrapper(t, y):
@@ -647,17 +650,15 @@ def system_KE(
                         if y[i] < bounds[i][0]:
                             dy_dt[i] += (bounds[i][0] - y[i]) / 2
                             y[i] = bounds[i][0]
-                            # dy_dt[i] = 0
                         elif y[i] > bounds[i][1]:
                             dy_dt[i] -= (y[i] - bounds[i][1]) / 2
                             y[i] = bounds[i][1]
-                            # dy_dt[i] = 0
 
                     return dy_dt
                 return wrapper
             return decorator
     # avoid crashing the integration due to arraybox error
-    elif bound_ver == 2:   
+    elif bound_ver == 2:
         def bound_decorator(bounds):
             def decorator(func):
                 def wrapper(t, y):
@@ -667,32 +668,25 @@ def system_KE(
                     try:
                         for i in range(len(y)):
                             if y[i] < bounds[i][0]:
-                                # print(f"{i} violate the bound by {y[i] - bounds[i][0]}, derivative {dy_dt[i]}")
-                                dy_dt[i] += (bounds[i][0] - y[i])/2
-                                # dy_dt[i] = 0
+                                dy_dt[i] += (bounds[i][0] - y[i]) / 2
                                 y[i] = bounds[i][0]
                             elif y[i] > bounds[i][1]:
-                                # print(f"{i} violate the bound by {y[i] - bounds[i][0]}, derivative {dy_dt[i]}")
-                                dy_dt[i] -= (y[i] - bounds[i][1])/2
-                                # dy_dt[i] = 0
+                                dy_dt[i] -= (y[i] - bounds[i][1]) / 2
                                 y[i] = bounds[i][1]
-                        # print("pass", y)
                     except TypeError as e:
-                        # print("Arraybox fuckup", y)
                         y_ = anp.array(y._value)
                         dy_dt_ = anp.array(dy_dt._value)
                         # arraybox failure
                         for i in range(len(y)):
                             if y_[i] < bounds[i][0]:
-                                dy_dt[i] += (bounds[i][0] - y[i])/2
+                                dy_dt[i] += (bounds[i][0] - y[i]) / 2
                                 y_[i] = bounds[i][0]
                             elif y[i] > bounds[i][1]:
-                                dy_dt[i] += (bounds[i][0] - y[i])/2
+                                dy_dt[i] += (bounds[i][0] - y[i]) / 2
                                 y_[i] = bounds[i][1]
 
                             dy_dt = anp.array(dy_dt_)
                             y = anp.array(y_)
-                            # print("Arraybox error", y)
                     return dy_dt
 
                 return wrapper
@@ -700,7 +694,7 @@ def system_KE(
 
     tolerance = 0.05
     boundary = []
-    # boundary = [(0, np.sum(initial_conc))]*k
+
     for i in range(k):
         if i == 0:
             boundary.append((0 - tolerance, initial_conc[0] + tolerance))
@@ -871,10 +865,8 @@ def load_data(args):
     assert last_idx < len(
         n_INT_all), "Something wrong with the reaction network"
     if last_idx > 0:
-        # mori = np.cumsum(n_INT_all)
         Rp.insert(last_idx + 1, Rp[last_idx].copy())
         Pp.insert(last_idx + 1, Pp[last_idx].copy())
-        # idx_insert.insert(last_idx+1, np.arange(mori[last_idx-1],mori[last_idx]))
         n_INT_all = np.insert(n_INT_all, last_idx + 1, 0)
 
     if has_decimal(Rp):
@@ -921,8 +913,8 @@ def load_data(args):
 
     if last_idx > 0:
         tbi = energy_profile_all[last_idx][1:-1]
-        energy_profile_all[last_idx + \
-            1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
+        energy_profile_all[last_idx +
+                           1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
         coeff_TS_all[last_idx + 1] = coeff_TS_all[last_idx]
 
     # pad initial_conc in case [cat, R] are only specified.
@@ -964,12 +956,10 @@ def process_data(
         k_forward_all.append(k_forward)
         k_reverse_all.append(k_reverse)
 
-    lengths = [len(arr) for arr in k_forward_all]
-
     return k_forward_all, k_reverse_all,
 
 
-def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None):
+def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None, name=""):
 
     plt.rc("axes", labelsize=16)
     plt.rc("xtick", labelsize=16)
@@ -1025,26 +1015,42 @@ def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None):
     plt.legend()
     plt.grid(True, linestyle='--', linewidth=0.75)
     plt.tight_layout()
-    fig.savefig("kinetic_modelling.png", dpi=400, transparent=True)
+    fig.savefig(f"kinetic_modelling_{name}.png", dpi=400, transparent=True)
 
-    np.savetxt('cat.txt', result_solve_ivp.y[0, :])
+    np.savetxt(f'cat_{name}.txt', result_solve_ivp.y[0, :])
     np.savetxt(
-        'Rs.txt', result_solve_ivp.y[rxn_network.shape[0]: rxn_network.shape[0] + Rp[0].shape[1], :])
-    np.savetxt('Ps.txt',
+        f'Rs_{name}.txt', result_solve_ivp.y[rxn_network.shape[0]: rxn_network.shape[0] + Rp[0].shape[1], :])
+    np.savetxt(f'Ps_{name}.txt',
                result_solve_ivp.y[rxn_network.shape[0] + Rp[0].shape[1]:])
 
-    out = ['cat.txt', "Rs.txt", "Ps.txt", "kinetic_modelling.png"]
-
-    if not os.path.isdir("output"):
-        sp.run(["mkdir", "output"])
-    else:
-        print("The output directort already exists")
-
-    for file in out:
-        sp.run(["mv", file, "output"], capture_output=True)
-
     if dir:
-        sp.run(["mv", "output", dir])
+        out = [
+            f'cat_{name}.txt',
+            f'Rs_{name}.txt',
+            f'Ps_{name}.txt',
+            f"kinetic_modelling_{name}.png"]
+
+        if not os.path.isdir("output"):
+            os.makedirs("output")
+
+        for file_name in out:
+            source_file = os.path.abspath(file_name)
+            destination_file = os.path.join(
+                "output/", os.path.basename(file_name))
+            shutil.move(source_file, destination_file)
+
+        if not os.path.isdir(os.path.join(dir, "output/")):
+            shutil.move("output/", os.path.join(dir, "output"))
+        else:
+            print("Output already exist")
+            move_bool = input("Move anyway? (y/n): ")
+            if move_bool == "y":
+                shutil.move("output/", os.path.join(dir, "output"))
+            elif move_bool == "n":
+                pass
+            else:
+                move_bool = input(
+                    f"{move_bool} is invalid, please try again... (y/n): ")
 
 
 if __name__ == "__main__":
@@ -1146,17 +1152,29 @@ if __name__ == "__main__":
         initial_conc)
 
     max_step = (t_span[1] - t_span[0]) / 10.0
+    first_step = np.min(
+        [
+            1e-14,
+            1 / 27e9,
+            1 / 1.5e10,
+            (t_span[1] - t_span[0]) / 100.0,
+            np.finfo(np.float16).eps,
+            np.finfo(np.float32).eps,
+            np.finfo(np.float64).eps,  
+            np.nextafter(np.float16(0), np.float16(1)),
+        ]
+    )
+
     result_solve_ivp = solve_ivp(
         dydt,
         t_span,
         initial_conc,
         method=method,
         dense_output=True,
-        # first_step=first_step,
+        first_step=first_step,
         max_step=max_step,
         rtol=1e-6,
         atol=1e-9,
         jac=dydt.jac,
     )
     plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir)
-
