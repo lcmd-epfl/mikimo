@@ -5,7 +5,7 @@ from navicat_volcanic.helpers import (arraydump, group_data_points,
 from navicat_volcanic.plotting2d import get_reg_targets, plot_2d
 from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.exceptions import InputError
-from kinetic_solver_v3 import system_KE, get_k, pad_network, has_decimal, Rp_Pp_corr
+from kinetic_solver import system_KE, get_k, pad_network, has_decimal, Rp_Pp_corr
 from plot2d_mod import plot_2d_combo, plot_evo
 import scipy.stats as stats
 from scipy.interpolate import interp1d
