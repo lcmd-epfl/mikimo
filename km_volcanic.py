@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-from navicat_volcanic.helpers import (arraydump, group_data_points,
-                                      processargs, setflags, user_choose_1_dv,
-                                      user_choose_2_dv, bround)
+from navicat_volcanic.helpers import group_data_points, user_choose_1_dv, bround
 from navicat_volcanic.plotting2d import get_reg_targets, plot_2d
 from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.exceptions import InputError
@@ -493,6 +491,17 @@ if __name__ == "__main__":
         default=0,
         help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv output files (default: 1)",
     )
+    
+    parser.add_argument(
+        "-pm",
+        "--pm",
+        "-plotmode",
+        "--plotmode",
+        dest="plotmode",
+        type=int,
+        default=1,
+        help="Plot mode for volcano and activity map plotting. Higher is more detailed, lower is basic. 3 includes uncertainties. (default: 1)",
+    )
 
     parser.add_argument(
         "-is",
@@ -517,7 +526,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--timeout",
         dest="timeout",
-        type=str,
+        type=int,
         default=15,
         help="""Timeout for each integration run""",
     )
@@ -542,7 +551,8 @@ if __name__ == "__main__":
     evol_mode = args.evol_mode
     timeout = args.timeout
     quality = args.quality
-
+    plotmode = args.plotmode
+    
     # for volcano line
     interpolate = True
     n_point_calc = 100
@@ -787,14 +797,15 @@ if __name__ == "__main__":
             plot_2d_combo(
                 descr_all,
                 prod_conc_,
+                descrp_pt,
+                prod_conc_pt_,
                 xmin=xmin,
                 xmax=xmax,
                 ybase=y_base,
-                cb=cb,
-                ms=ms,
                 xlabel=xlabel,
                 ylabel=ylabel,
-                filename=f"km_volcano_{tag}_combo.png")
+                filename=f"km_volcano_{tag}_combo.png",
+                plotmode=plotmode)
             out.append(f"km_volcano_{tag}_combo.png")
             for i in range(prod_conc_.shape[0]):
                 plot_2d(
@@ -809,7 +820,8 @@ if __name__ == "__main__":
                     ms=ms,
                     xlabel=xlabel,
                     ylabel=ylabel,
-                    filename=f"km_volcano_{tag}_profile{i}.png")
+                    filename=f"km_volcano_{tag}_profile{i}.png",
+                    plotmode=plotmode)
                 out.append(f"km_volcano_{tag}_profile{i}.png")
         else:
             plot_2d(
@@ -824,7 +836,8 @@ if __name__ == "__main__":
                 ms=ms,
                 xlabel=xlabel,
                 ylabel=ylabel,
-                filename=f"km_volcano_{tag}.png")
+                filename=f"km_volcano_{tag}.png",
+                plotmode=plotmode)
             out.append(f"km_volcano_{tag}.png")
 
         if verb > 1:
