@@ -49,21 +49,6 @@ if __name__ == "__main__":
         help="The order of the polynomial used to fit the sample, required if using savgol. polyorder must be less than window_length.",
     )
     parser.add_argument(
-        "-x",
-        "--x",
-        dest="xlabel",
-        type=str,
-        default="descriptor [kcal/mol]",
-        help="label on x-axis (.... [kcal/mol])",
-    )
-    parser.add_argument(
-        "-percent",
-        "--percent",
-        dest="percent",
-        action="store_true",
-        help="Flag to report activity as percent yield. (default: False)",
-    )
-    parser.add_argument(
         "-s",
         "--s",
         dest="save",
@@ -74,11 +59,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     filename = args.i
     filtering_method = args.filter
-    report_as_yield = args.percent
     window_length = args.window_length
     polyorder = args.polyorder
     save = args.save
-    xlabel = args.xlabel
 
     try:
         with h5py.File(filename, 'r') as f:
@@ -94,17 +77,22 @@ if __name__ == "__main__":
             ms = group['ms'][:]
             cb = np.char.decode(cb)
             ms = np.char.decode(ms)
+            tag = group['tag'][:]
+            xlabel = group['xlabel'][:]
+            ylabel = group['ylabel'][:]
     except Exception as e:
         sys.exit(f"Likely wrong h5 file, {e}")
 
-    if xlabel != "descriptor [kcal/mol]":
-        xlabel = f"{xlabel} [kcal/mol]"
-    ylabel = "Product concentraion (M)"
+    xlabel = xlabel[0].decode()
+    ylabel = ylabel[0].decode()
+    tag = tag[0].decode()
 
+    print(f"Detect {prod_conc_.shape[0]} profiles in the input, require {prod_conc_.shape[0]} input for polyorder and window_length")
     if filtering_method == "savgol":
         assert len(polyorder) == len(window_length), "Number of polyorder is not equal to number of window_length"
     assert len(window_length) == prod_conc_.shape[0], "Number of window_length is not equal to number of the plot"
-
+    print("Passed!")
+    
     prod_conc_sm_all = []
     for i, prod_conc in enumerate(prod_conc_):
         if filtering_method == "savgol":
@@ -115,17 +103,37 @@ if __name__ == "__main__":
             sys.exit("Invalid filtering method (savgol, wiener)")
         prod_conc_sm_all.append(prod_conc_sm)
     prod_conc_sm_all = np.array(prod_conc_sm_all)
-
-    if report_as_yield:
+    
+    if np.any(np.max(prod_conc_sm_all)>10):
+        print("Concentration likely reported as %yield, set y_base to 10")
         y_base = 10
     else:
+        print("set y_base to 0.1")
         y_base = 0.1
-        
-    plot_2d_combo(
+    
+    
+    out = []
+    if prod_conc_.shape[0] > 1:  
+        plot_2d_combo(
+                    descr_all,
+                    prod_conc_sm_all,
+                    descrp_pt,
+                    prod_conc_pt_,
+                    xmin=descr_all[0],
+                    xmax=descr_all[-1],
+                    ybase=y_base,
+                    xlabel=xlabel,
+                    ylabel=ylabel,
+                    filename=f"km_volcano_{tag}_combo_polished.png",
+                    plotmode=3)
+        out.append(f"km_volcano_{tag}_combo_polished.png")
+
+        for i in range(prod_conc_sm_all.shape[0]):
+            plot_2d(
                 descr_all,
-                prod_conc_sm_all,
+                prod_conc_sm_all[i],
                 descrp_pt,
-                prod_conc_pt_,
+                prod_conc_pt_[i],
                 xmin=descr_all[0],
                 xmax=descr_all[-1],
                 ybase=y_base,
@@ -133,16 +141,15 @@ if __name__ == "__main__":
                 ms=ms,
                 xlabel=xlabel,
                 ylabel=ylabel,
-                filename=f"km_volcano_{xlabel}_combo_polished.png",
+                filename=f"km_volcano_{tag}_profile{i}.png",
                 plotmode=3)
-    out = [f"km_volcano_{xlabel}_combo_polished.png"]
-
-    for i in range(prod_conc_sm_all.shape[0]):
+            out.append(f"km_volcano_{tag}_profile{i}.png")
+    else:
         plot_2d(
             descr_all,
-            prod_conc_sm_all[i],
+            prod_conc_sm_all[0],
             descrp_pt,
-            prod_conc_pt_[i],
+            prod_conc_pt_[0],
             xmin=descr_all[0],
             xmax=descr_all[-1],
             ybase=y_base,
@@ -150,31 +157,35 @@ if __name__ == "__main__":
             ms=ms,
             xlabel=xlabel,
             ylabel=ylabel,
-            filename=f"km_volcano_{xlabel}_profile{i}.png",
+            filename=f"km_volcano_{tag}_polished.png",
             plotmode=3)
-        out.append(f"km_volcano_{xlabel}_profile{i}.png")
-    if save:
-        # create an HDF5 file
-        cb = np.array(cb, dtype='S')
-        ms = np.array(ms, dtype='S')
-        with h5py.File('data_polished.h5', 'w') as f:
-            group = f.create_group('data')
-            # save each numpy array as a dataset in the group
-            group.create_dataset('descr_all', data=descr_all)
-            group.create_dataset('prod_conc_', data=prod_conc_)
-            group.create_dataset('prod_conc_sm', data=prod_conc_sm)
-            group.create_dataset('descrp_pt', data=descrp_pt)
-            group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
-            group.create_dataset('cb', data=cb)
-            group.create_dataset('ms', data=ms)
-        out.append('data_polished.h5')
+        out.append(f"km_volcano_{tag}_polished.png")
+        
+        if save:
+            # create an HDF5 file
+            cb = np.array(cb, dtype='S')
+            ms = np.array(ms, dtype='S')
+            with h5py.File('data_polished.h5', 'w') as f:
+                group = f.create_group('data')
+                # save each numpy array as a dataset in the group
+
+                group.create_dataset('descr_all', data=descr_all)
+                group.create_dataset('prod_conc_', data=prod_conc_)
+                group.create_dataset('descrp_pt', data=descrp_pt)
+                group.create_dataset('prod_conc_pt_', data=prod_conc_sm_all)
+                group.create_dataset('prod_conc_sm', data=prod_conc_sm)
+                group.create_dataset('cb', data=cb)
+                group.create_dataset('ms', data=ms)
+                group.create_dataset('tag', data=[tag.encode()])
+                group.create_dataset('xlabel', data=[xlabel.encode()])
+                group.create_dataset('ylabel', data=[ylabel.encode()])
+            out.append('data_polished.h5')
 
     aktun = filename.split("/")
     if aktun[0] != filename:
         aktun = "/".join(aktun[:-1])
         for file in out:
-            source_file = os.path.abspath(file)
             destination_file = os.path.join(
-                aktun, os.path.basename(file))
-            shutil.move(source_file, destination_file)
+                aktun, file)
+            shutil.move(file, destination_file)
 

@@ -789,8 +789,10 @@ if __name__ == "__main__":
 
         if report_as_yield:
             y_base = 10
+            ylabel = "%yield"
         else:
             y_base = 0.1
+            ylabel = "Final product concentraion (M)"
 
         out = []
         if prod_conc_.shape[0] > 1:
@@ -841,9 +843,9 @@ if __name__ == "__main__":
             out.append(f"km_volcano_{tag}.png")
 
         if verb > 1:
+            cb = np.array(cb, dtype='S')
+            ms = np.array(ms, dtype='S')
             with h5py.File('data.h5', 'w') as f:
-                cb = np.array(cb, dtype='S')
-                ms = np.array(ms, dtype='S')
                 group = f.create_group('data')
                 # save each numpy array as a dataset in the group
                 group.create_dataset('descr_all', data=descr_all)
@@ -852,6 +854,9 @@ if __name__ == "__main__":
                 group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
                 group.create_dataset('cb', data=cb)
                 group.create_dataset('ms', data=ms)
+                group.create_dataset('tag', data=[tag.encode()])
+                group.create_dataset('xlabel', data=[xlabel.encode()])
+                group.create_dataset('ylabel', data=[ylabel.encode()])
             out.append('data.h5')
 
         if not os.path.isdir("output"):
