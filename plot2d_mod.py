@@ -1,9 +1,10 @@
 
+import numpy as np
+import matplotlib.pyplot as plt
 from navicat_volcanic.helpers import bround
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
+
 
 def plot_ci(ci, x2, y2, ax=None):
     if ax is None:
@@ -14,7 +15,8 @@ def plot_ci(ci, x2, y2, ax=None):
 
     ax.fill_between(x2, y2 + ci, y2 - ci, color="#b9cfe7", alpha=0.6)
 
-    return 
+    return
+
 
 def plotpoints(ax, px, py, cb, ms, plotmode):
     if plotmode == 1:
@@ -34,6 +36,24 @@ def plotpoints(ax, px, py, cb, ms, plotmode):
             edgecolors="black",
             zorder=2,
         )
+    
+def plotpoints_(ax, px, py, c, m, plotmode):
+    if plotmode == 1:
+        s = 30
+        lw = 0.3
+    else:
+        s = 15
+        lw = 0.25
+    ax.scatter(
+        px,
+        py,
+        s=s,
+        c=c,
+        marker=m,
+        linewidths=lw,
+        edgecolors="black",
+        zorder=2,
+        )
 
 def beautify_ax(ax):
     # Border
@@ -47,9 +67,12 @@ def beautify_ax(ax):
     ax.yaxis.tick_left()
     return ax
 
+
 def plot_2d_combo(
     x,
     y,
+    px,
+    py,
     ci=None,
     xmin=0,
     xmax=100,
@@ -60,12 +83,25 @@ def plot_2d_combo(
     filename="plot.png",
     rid=None,
     rb=None,
-    cb="white",
-    ms="o",
     plotmode=1,
 ):
 
-    color = ["midnightblue", "royalblue", "steelblue", "teal", "seagreen", "olivedrab"]
+    color = [
+        "midnightblue",
+        "royalblue",
+        "steelblue",
+        "teal",
+        "seagreen",
+        "olivedrab"]
+    
+    marker = [
+        "o",
+        "^",
+        "s",
+        "P",
+        "*",
+        "X"
+    ]
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True,
     )
@@ -75,9 +111,16 @@ def plot_2d_combo(
     plt.xlim(xmin, xmax)
     plt.xticks(np.arange(xmin, xmax + 0.1, xbase))
     if plotmode == 0:
-        
+
         for i in range(y.shape[0]):
-            ax.plot(x, y[i], "-", linewidth=1.5, color=color[i], alpha=0.95, label=f"profile {i}")
+            ax.plot(
+                x,
+                y[i],
+                "-",
+                linewidth=1.5,
+                color=color[i],
+                alpha=0.95,
+                label=f"profile {i}")
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
                 avgs = []
@@ -91,11 +134,19 @@ def plot_2d_combo(
                         color="black",
                         linewidth=0.75,
                         alpha=0.75,
-                )
+                    )
     elif plotmode == 1:
-        
+
         for i in range(y.shape[0]):
-            ax.plot(x, y[i], "-", linewidth=1.5, color=color[i], alpha=0.95, zorder=1, label=f"profile {i}")
+            ax.plot(
+                x,
+                y[i],
+                "-",
+                linewidth=1.5,
+                color=color[i],
+                alpha=0.95,
+                zorder=1,
+                label=f"profile {i}")
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
                 avgs = []
@@ -113,7 +164,15 @@ def plot_2d_combo(
                     )
     elif plotmode == 2:
         for i in range(y.shape[0]):
-            ax.plot(x, y[i], "-", linewidth=1.5, color=color[i], alpha=0.95, zorder=1, label=f"profile {i}")
+            ax.plot(
+                x,
+                y[i],
+                "-",
+                linewidth=1.5,
+                color=color[i],
+                alpha=0.95,
+                zorder=1,
+                label=f"profile {i}")
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
                 avgs = []
@@ -141,9 +200,18 @@ def plot_2d_combo(
                         rotation="vertical",
                         zorder=4,
                     )
+            plotpoints_(ax, px, py[i], color[i], marker[i], plotmode)
     elif plotmode == 3:
         for i in range(y.shape[0]):
-            ax.plot(x, y[i], "-", linewidth=1.5, color=color[i], alpha=0.95, zorder=1, label=f"profile {i}")
+            ax.plot(
+                x,
+                y[i],
+                "-",
+                linewidth=1.5,
+                color=color[i],
+                alpha=0.95,
+                zorder=1,
+                label=f"profile {i}")
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
                 avgs = []
@@ -161,16 +229,17 @@ def plot_2d_combo(
                     )
             if ci is not None:
                 plot_ci(ci, x, y[i], ax=ax)
+            plotpoints_(ax, px, py[i], color[i], marker[i], plotmode)
     ax.legend(loc="upper right", frameon=False)
     ymin, ymax = ax.get_ylim()
     ymax = bround(ymax, ybase, type="max")
     ymin = bround(ymin, ybase, type="min")
-    plt.ylim(ymin, ymax)
+    plt.ylim(ymin,  ymax)
     plt.yticks(np.arange(ymin, ymax + 0.1, ybase))
     plt.savefig(filename)
-    
 
-def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name):
+
+def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name, states, more_species_mkm=None):
 
     plt.rc("axes", labelsize=16)
     plt.rc("xtick", labelsize=16)
@@ -179,13 +248,15 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name):
 
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(1, 1, 1)
+    
+    # Catalyst---------
     ax.plot(np.log10(result_solve_ivp.t),
             result_solve_ivp.y[0, :],
             c="#797979",
             linewidth=2,
             alpha=0.85,
             zorder=1,
-            label='cat')
+            label=states[0])
 
     color_R = [
         "#008F73",
@@ -194,6 +265,8 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name):
         "#7FFA35",
         "#8FD810",
         "#ACBD0A"]
+    
+    # Product---------
     for i in range(Rp[0].shape[1]):
         ax.plot(np.log10(result_solve_ivp.t),
                 result_solve_ivp.y[rxn_network.shape[0] + i, :],
@@ -202,7 +275,7 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name):
                 linewidth=2,
                 alpha=0.85,
                 zorder=1,
-                label=f'R{i+1}')
+                label=states[rxn_network.shape[0] + i])
 
     color_P = [
         "#D80828",
@@ -211,6 +284,7 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name):
         "#F34DD8",
         "#C5A806",
         "#602AFC"]
+    
     for i in range(Pp[0].shape[1]):
         ax.plot(np.log10(result_solve_ivp.t),
                 result_solve_ivp.y[rxn_network.shape[0] + Rp[0].shape[1] + i, :],
@@ -219,7 +293,27 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name):
                 linewidth=2,
                 alpha=0.85,
                 zorder=1,
-                label=f'P{i+1}')
+                label=states[rxn_network.shape[0] + Rp[0].shape[1] + i])
+    
+    # additional INT-----------------
+    color_INT = [
+        "#4251B3",
+        "#3977BD",
+        "#2F7794",
+        "#7159EA",
+        "#15AE9B",
+        "#147F58"]
+    if more_species_mkm != None:
+        for i in more_species_mkm:
+            ax.plot(np.log10(result_solve_ivp.t),
+                    result_solve_ivp.y[i, :],
+                    linestyle="dashdot",
+                    c=color_INT[i],
+                    linewidth=2,
+                    alpha=0.85,
+                    zorder=1,
+                    label=states[i])
+            
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible
     plt.xlabel('log(time, s)')
@@ -227,12 +321,12 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name):
     plt.legend(frameon=False)
     plt.grid(True, linestyle='--', linewidth=0.75)
     plt.tight_layout()
-    ybase = 0.1
+    
     ymin, ymax = ax.get_ylim()
+    ybase = np.ceil(ymax)/10
     ymax = bround(ymax, ybase, type="max")
     ymin = bround(ymin, ybase, type="min")
     plt.ylim(ymin, ymax)
     plt.yticks(np.arange(ymin, ymax + 0.1, ybase))
 
     fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
-    

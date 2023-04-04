@@ -4,7 +4,8 @@ from scipy.integrate import solve_ivp
 from scipy.constants import R, kilo, calorie, k, h
 import autograd.numpy as anp
 from autograd import jacobian
-import warnings
+from joblib import Parallel, delayed
+import multiprocessing
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -12,6 +13,7 @@ import argparse
 import sys
 import os
 import shutil
+import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -809,6 +811,21 @@ def system_KE(
 
     return _dydt
 
+def _solve_ivp(dydt, t_span, initial_conc, method, first_step, max_step, rtol, atol, jac):
+
+    result_solve_ivp = solve_ivp(
+        dydt,
+        t_span,
+        initial_conc,
+        method=method,
+        dense_output=True,
+        first_step=first_step,
+        max_step=max_step,
+        rtol=rtol,
+        atol=atol,
+        jac=jac,
+    ) 
+    return result_solve_ivp
 
 def load_data(args):
 
@@ -927,7 +944,7 @@ def load_data(args):
             print("KM input is clear")
 
     return initial_conc, Rp, Pp, t_span, temperature, method, energy_profile_all,\
-        dgr_all, coeff_TS_all, rxn_network, n_INT_all
+        dgr_all, coeff_TS_all, rxn_network, n_INT_all, states
 
 
 def process_data(
@@ -949,7 +966,7 @@ def process_data(
     return k_forward_all, k_reverse_all,
 
 
-def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None, name=""):
+def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir, name, states, more_species_mkm):
 
     plt.rc("axes", labelsize=16)
     plt.rc("xtick", labelsize=16)
@@ -958,13 +975,14 @@ def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None, name=""):
 
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(1, 1, 1)
+    # Catalyst---------
     ax.plot(np.log10(result_solve_ivp.t),
             result_solve_ivp.y[0, :],
             c="#797979",
             linewidth=2,
             alpha=0.85,
             zorder=1,
-            label='cat')
+            label=states[0])
 
     color_R = [
         "#008F73",
@@ -973,6 +991,8 @@ def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None, name=""):
         "#7FFA35",
         "#8FD810",
         "#ACBD0A"]
+    
+    # Product---------
     for i in range(Rp[0].shape[1]):
         ax.plot(np.log10(result_solve_ivp.t),
                 result_solve_ivp.y[rxn_network.shape[0] + i, :],
@@ -981,7 +1001,7 @@ def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None, name=""):
                 linewidth=2,
                 alpha=0.85,
                 zorder=1,
-                label=f'R{i+1}')
+                label=states[rxn_network.shape[0] + i])
 
     color_P = [
         "#D80828",
@@ -990,6 +1010,7 @@ def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None, name=""):
         "#F34DD8",
         "#C5A806",
         "#602AFC"]
+    
     for i in range(Pp[0].shape[1]):
         ax.plot(np.log10(result_solve_ivp.t),
                 result_solve_ivp.y[rxn_network.shape[0] + Rp[0].shape[1] + i, :],
@@ -998,8 +1019,27 @@ def plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir=None, name=""):
                 linewidth=2,
                 alpha=0.85,
                 zorder=1,
-                label=f'P{i+1}')
-
+                label=states[rxn_network.shape[0] + Rp[0].shape[1] + i])
+    
+    # additional INT-----------------
+    color_INT = [
+        "#4251B3",
+        "#3977BD",
+        "#2F7794",
+        "#7159EA",
+        "#15AE9B",
+        "#147F58"]
+    if more_species_mkm != None:
+        for i in more_species_mkm:
+            ax.plot(np.log10(result_solve_ivp.t),
+                    result_solve_ivp.y[i, :],
+                    linestyle="dashdot",
+                    c=color_INT[i],
+                    linewidth=2,
+                    alpha=0.85,
+                    zorder=1,
+                    label=states[i])
+            
     plt.xlabel('log(time, s)')
     plt.ylabel('Concentration (mol/l)')
     plt.legend()
@@ -1060,10 +1100,6 @@ if __name__ == "__main__":
         help="directory containing all required input files (profile, reaction network, initial conc)"
     )
 
-    parser.add_argument("-a",
-                        help="manually add an input reaction profile in csv",
-                        action="append")
-
     parser.add_argument(
         "-c",
         "--c",
@@ -1105,6 +1141,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-njob",
+        "--njob",
+        dest="njob",
+        type=int,
+        default=1,
+        help="number of processors you want to use",
+    )
+
+    parser.add_argument(
         "-de",
         "--de",
         type=str,
@@ -1113,7 +1158,17 @@ if __name__ == "__main__":
             Default=BDF.\
             LSODA may fail to converge sometimes, try Radau(slower), BDF")
 
+    parser.add_argument(
+        "-a",
+        "--a",
+        dest="addition",
+        type=int,
+        nargs='+',
+        help="Index of additional species to be included in the mkm plot",
+    )
+    
     args = parser.parse_args()
+    n_processors = args.njob
     dir = args.dir
     if dir:
         args = parser.parse_args(['-i', f"{dir}/reaction_data.csv",
@@ -1122,11 +1177,13 @@ if __name__ == "__main__":
                                   "-t", f"{args.temp}",
                                   "--time", f"{args.time}",
                                   "-de", f"{args.de}",
+                                  "-njob", f"{args.njob}",
+                                  "-a", f"{args.addition}",
                                   ])
-
+    more_species_mkm = args.addition
     # load and process data
     initial_conc, Rp, Pp, t_span, temperature, method, energy_profile_all,\
-        dgr_all, coeff_TS_all, rxn_network, n_INT_all = load_data(args)
+        dgr_all, coeff_TS_all, rxn_network, n_INT_all, states = load_data(args)
 
     k_forward_all, k_reverse_all = process_data(
         energy_profile_all, dgr_all, coeff_TS_all, temperature)
@@ -1154,17 +1211,10 @@ if __name__ == "__main__":
             np.nextafter(np.float16(0), np.float16(1)),
         ]
     )
-
-    result_solve_ivp = solve_ivp(
-        dydt,
-        t_span,
-        initial_conc,
-        method=method,
-        dense_output=True,
-        first_step=first_step,
-        max_step=max_step,
-        rtol=1e-6,
-        atol=1e-9,
-        jac=dydt.jac,
-    )
-    plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir)
+    rtol = 1e-6
+    atol = 1e-9
+    jac = dydt.jac
+    n_runs = 1
+    result_solve_ivp = Parallel(n_jobs=n_processors)(delayed(_solve_ivp)(dydt, t_span, \
+        initial_conc, method, first_step, max_step, rtol, atol, jac) for i in range(n_runs))[0]
+    plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir, states, more_species_mkm)

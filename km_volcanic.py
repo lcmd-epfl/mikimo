@@ -539,6 +539,16 @@ if __name__ == "__main__":
         default=1,
         help="""integration quality (0-2) (the higher, longer the integratoion, but smoother the plot)""",
     )
+    
+    parser.add_argument(
+        "-a",
+        "--a",
+        dest="addition",
+        type=int,
+        nargs='+',
+        help="Index of additional species to be included in the mkm plot",
+    )
+    
     # %% loading and processing------------------------------------------------------------------------#
     args = parser.parse_args()
     temperature = args.temp
@@ -552,6 +562,7 @@ if __name__ == "__main__":
     timeout = args.timeout
     quality = args.quality
     plotmode = args.plotmode
+    more_species_mkm = args.addition
     
     # for volcano line
     interpolate = True
@@ -922,8 +933,9 @@ if __name__ == "__main__":
                     prod_conc_pt.append(result)
 
                 result_solve_ivp_all.append(result_solve_ivp)
-                plot_evo(result_solve_ivp, rxn_network, Rp, Pp, names[i])
-
+                
+                states_ = [s.replace("*", "") for s in states] 
+                plot_evo(result_solve_ivp, rxn_network, Rp, Pp, names[i], states_, more_species_mkm)
                 source_file = os.path.abspath(
                     f"kinetic_modelling_{names[i]}.png")
                 destination_file = os.path.join(
