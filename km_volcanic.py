@@ -249,15 +249,25 @@ def calc_km(
     # the last resort is a Radau
     # if all fail, return NaN
     
-    #TODO 1 more quality level and benchmarking
     rtol_values = [1e-6, 1e-9, 1e-10]
     atol_values = [1e-6, 1e-9, 1e-10]
     last_ = [rtol_values[-1], atol_values[-1]]
-
+    
     if quality == 0:
-        max_step = np.nan
-        first_step = None
+            max_step = np.nan
+            first_step = None
     elif quality == 1:
+        max_step = np.nan
+        first_step = np.min(
+            [
+                1e-14,
+                1 / 27e9,
+                np.finfo(np.float16).eps,
+                np.finfo(np.float32).eps,
+                np.nextafter(np.float16(0), np.float16(1)),
+            ]
+        )
+    elif quality == 2:
         max_step = (t_span[1] - t_span[0]) / 10.0
         first_step = np.min(
             [
@@ -267,25 +277,23 @@ def calc_km(
                 (t_span[1] - t_span[0]) / 100.0,
                 np.finfo(np.float16).eps,
                 np.finfo(np.float32).eps,
-                np.finfo(np.float64).eps,  
+                np.finfo(np.float64).eps,
                 np.nextafter(np.float16(0), np.float16(1)),
             ]
         )
-    elif quality > 1:
-        max_step = (t_span[1] - t_span[0]) / 100.0
+    elif quality > 2:
+        max_step = (t_span[1] - t_span[0]) / 50.0
         first_step = np.min(
             [
                 1e-14,
                 1 / 27e9,
                 1 / 1.5e10,
-                (t_span[1] - t_span[0]) / 100.0,
+                (t_span[1] - t_span[0]) / 1000.0,
                 np.finfo(np.float64).eps,
                 np.finfo(np.float128).eps,
                 np.nextafter(np.float64(0), np.float64(1)),
             ]
         )
-        rtol_values.append(1e-12)
-        atol_values.append(1e-12)
 
     success = False
     cont = False
@@ -323,7 +331,6 @@ def calc_km(
             continue
 
     if cont:
-        max_step = (t_span[1] - t_span[0]) / 10.0
         rtol_values = [1e-3, 1e-6, 1e-9, 1e-10]
         atol_values = [1e-6, 1e-6, 1e-9, 1e-10]
         last_ = [rtol_values[-1], atol_values[-1]]
@@ -396,8 +403,13 @@ def calc_km(
             idx_target_all = [states.index(i) for i in states if "*" in i]
             c_target_t = np.array([result_solve_ivp.y[i][-1]
                                   for i in idx_target_all])
+
             s_coeff_R = np.array([np.min(np.abs(
                 np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp])
+            # TODO still sloppy  ช่างแม่งสัส
+            if np.any(s_coeff_R==0):
+                s_coeff_R[np.where(s_coeff_R==0)] = max(filter(lambda x: x != 0, s_coeff_R))
+
             if report_as_yield:
 
                 c_target_yield = np.array(
@@ -527,8 +539,8 @@ if __name__ == "__main__":
         "--timeout",
         dest="timeout",
         type=int,
-        default=15,
-        help="""Timeout for each integration run""",
+        default=60,
+        help="""Timeout for each integration run (default = 60 s). Increase timeout if your mechanism seems complicated or multiple chemical species involved in your mechanism""",
     )
 
     parser.add_argument(
@@ -908,7 +920,6 @@ if __name__ == "__main__":
             print("The evolution output directort already exists")
 
         for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
-
             try:
                 initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
                     coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
@@ -946,6 +957,7 @@ if __name__ == "__main__":
                 prod_conc_pt.append(np.array([np.nan] * n_target))
                 result_solve_ivp_all.append("Shiki")
 
+        print(prod_conc_pt)
         prod_conc_pt = np.array(prod_conc_pt).T
         if verb > 1:
             prod_names = [i.replace("*", "") for i in states if "*" in i]
