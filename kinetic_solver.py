@@ -1168,6 +1168,7 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args()
+    more_species_mkm = args.addition
     n_processors = args.njob
     dir = args.dir
     if dir:
@@ -1178,9 +1179,8 @@ if __name__ == "__main__":
                                   "--time", f"{args.time}",
                                   "-de", f"{args.de}",
                                   "-njob", f"{args.njob}",
-                                  "-a", f"{args.addition}",
                                   ])
-    more_species_mkm = args.addition
+ 
     # load and process data
     initial_conc, Rp, Pp, t_span, temperature, method, energy_profile_all,\
         dgr_all, coeff_TS_all, rxn_network, n_INT_all, states = load_data(args)
@@ -1217,4 +1217,4 @@ if __name__ == "__main__":
     n_runs = 1
     result_solve_ivp = Parallel(n_jobs=n_processors)(delayed(_solve_ivp)(dydt, t_span, \
         initial_conc, method, first_step, max_step, rtol, atol, jac) for i in range(n_runs))[0]
-    plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir, states, more_species_mkm)
+    plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir, "", states, more_species_mkm)
