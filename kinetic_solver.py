@@ -48,7 +48,15 @@ def Rp_Pp_corr(X, nX):
 
     return X
 
+def find_missing_numbers(arr, max_value):
+    start = arr[0]
+    end = arr[-1]
+    full_range = np.arange(start, end + 1)
+    missing_numbers = list(set(full_range) - set(arr))
+    missing_numbers = [num for num in missing_numbers if num <= max_value]
+    return missing_numbers
 
+#TODO still might malfunction
 def pad_network(X, n_INT_all, rxn_network):
 
     X_ = np.array_split(X, np.cumsum(n_INT_all)[:-1])
@@ -57,7 +65,7 @@ def pad_network(X, n_INT_all, rxn_network):
     for i in range(1, len(n_INT_all)):  # n_profile - 1
         # pitfall
         if np.all(rxn_network[np.cumsum(n_INT_all)[i - 1]                  
-                              :np.cumsum(n_INT_all)[i], 0] == 0):
+                                :np.cumsum(n_INT_all)[i], 0] == 0):
 
             cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
                 i - 1]:np.cumsum(n_INT_all)[i], :][0] == -1)
@@ -72,15 +80,23 @@ def pad_network(X, n_INT_all, rxn_network):
         else:
             all_idx = []
             for j in range(rxn_network.shape[0]):
+                # to ignore the network of the profile
                 if j >= np.cumsum(n_INT_all)[
                         i - 1] and j <= np.cumsum(n_INT_all)[i]:
                     continue
+                
                 elif np.any(rxn_network[np.cumsum(n_INT_all)[i - 1]:
                                         np.cumsum(n_INT_all)[i], j]):
-                    X_[i] = np.insert(X_[i], j, X[j], axis=0)
+                    
                     all_idx.append(j)
             insert_idx.append(all_idx)
-
+            idxs = np.arange(all_idx[0], all_idx[-1]+1)
+            X_[i] = np.insert(X_[i], 0, X[idxs], axis=0)
+    
+    for i, idx_ in enumerate(insert_idx):
+        idxs = np.arange(idx_[0], idx_[-1]+1)
+        insert_idx[i] = idxs
+        
     return X_, insert_idx
 
 
@@ -315,6 +331,7 @@ def add_rate(
 
     mori = np.cumsum(n_INT_all)
     # the first profile is assumed to be full, skipped
+    insert_idx = []
     for i in range(1, len(k_forward_all)):  # n_profile - 1
         # pitfall and last branching
         if np.all(rxn_network[mori[i - 1]:mori[i], 0] == 0):
@@ -329,15 +346,20 @@ def add_rate(
                     tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
                     all_idx.insert(0, tmp_idx)
                 y_INT[i] = np.insert(y_INT[i], 0, tmp[all_idx])
+                insert_idx.append(all_idx)
 
         else:
+            all_idx = []
             for j in range(rxn_network.shape[0]):
                 if j >= mori[i - 1] and j <= mori[i]:
                     continue
-                else:
-                    if np.any(rxn_network[mori[i - 1]:mori[i], j]):
-                        y_INT[i] = np.insert(y_INT[i], j, tmp[j])
-
+                elif np.any(rxn_network[mori[i - 1]:mori[i], j]):
+                    all_idx.append(j)
+            insert_idx.append(all_idx)
+            insert_idx.append(all_idx)
+            idxs = np.arange(all_idx[0], all_idx[-1]+1)
+            y_INT[i] = np.insert(y_INT[i], 0, tmp[idxs], axis=0)   
+                               
     y_R = np.array(y[np.sum(n_INT_all):np.sum(n_INT_all) + Rp[0].shape[1]])
     y_P = np.array(y[np.sum(n_INT_all) + Rp[0].shape[1]:])
 
@@ -651,31 +673,37 @@ def system_KE(
             return decorator
     # avoid crashing the integration due to arraybox error
     elif bound_ver == 2:
-        def bound_decorator(bounds):
+        
+        def bound_decorator(bounds, tolerance):
             def decorator(func):
                 def wrapper(t, y):
 
                     dy_dt = func(t, y)
-
                     try:
                         for i in range(len(y)):
                             if y[i] < bounds[i][0]:
+                                print(f"Violated at {i} by {bounds[i][0] - y[i]}")
                                 dy_dt[i] += (bounds[i][0] - y[i]) / 2
-                                y[i] = bounds[i][0]
+                                y[i] = bounds[i][0] + tolerance
+     
                             elif y[i] > bounds[i][1]:
+                                print(f"Violated at {i} by {y[i] - bounds[i][1]}")
                                 dy_dt[i] -= (y[i] - bounds[i][1]) / 2
-                                y[i] = bounds[i][1]
+                                y[i] = bounds[i][1] - tolerance
+        
                     except TypeError as e:
-                        y_ = anp.array(y._value)
-                        dy_dt_ = anp.array(dy_dt._value)
+                        y_ = np.array(y._value)
+                        dy_dt_ = np.array(dy_dt._value)
                         # arraybox failure
                         for i in range(len(y)):
                             if y_[i] < bounds[i][0]:
-                                dy_dt[i] += (bounds[i][0] - y[i]) / 2
-                                y_[i] = bounds[i][0]
+                                print(f"Violated at {i} by {bounds[i][0] - y_[i]}")
+                                dy_dt_[i] += (bounds[i][0] - y_[i]) / 2 
+                                y_[i] = bounds[i][0] + tolerance
                             elif y[i] > bounds[i][1]:
-                                dy_dt[i] += (bounds[i][0] - y[i]) / 2
-                                y_[i] = bounds[i][1]
+                                print(f"Violated at {i} by {bounds[i][1] - y_[i]}")
+                                dy_dt_[i] += (bounds[i][1] - y_[i]) / 2
+                                y_[i] = bounds[i][1] - tolerance
 
                             dy_dt = anp.array(dy_dt_)
                             y = anp.array(y_)
@@ -684,7 +712,7 @@ def system_KE(
                 return wrapper
             return decorator
 
-    tolerance = 0.05
+    tolerance = 0.01
     boundary = []
 
     for i in range(k):
@@ -693,9 +721,9 @@ def system_KE(
         elif i >= rxn_network.shape[0] and i < rxn_network.shape[0] + Rp_[0].shape[1]:
             boundary.append((0 - tolerance, initial_conc[i] + tolerance))
         else:
-            boundary.append((0 - tolerance, np.sum(initial_conc) + tolerance))
+            boundary.append((0 - tolerance, np.max(initial_conc) + tolerance))
 
-    @bound_decorator(boundary)
+    @bound_decorator(boundary, tolerance)
     def _dydt(t, y):
 
         try:
@@ -754,7 +782,7 @@ def system_KE(
                 a_,
                 cn_,
                 n_INT_all)
-
+            
         for i in range(Rp_[0].shape[1]):
             dydt[i + rxn_network.shape[0]] = dRa_dt(y,
                                                     k_forward_all,
@@ -1180,11 +1208,11 @@ if __name__ == "__main__":
                                   "-de", f"{args.de}",
                                   "-njob", f"{args.njob}",
                                   ])
- 
+    
     # load and process data
     initial_conc, Rp, Pp, t_span, temperature, method, energy_profile_all,\
         dgr_all, coeff_TS_all, rxn_network, n_INT_all, states = load_data(args)
-
+    
     k_forward_all, k_reverse_all = process_data(
         energy_profile_all, dgr_all, coeff_TS_all, temperature)
 
@@ -1216,5 +1244,5 @@ if __name__ == "__main__":
     jac = dydt.jac
     n_runs = 1
     result_solve_ivp = Parallel(n_jobs=n_processors)(delayed(_solve_ivp)(dydt, t_span, \
-        initial_conc, method, first_step, max_step, rtol, atol, jac) for i in range(n_runs))[0]
+        initial_conc, method, first_step, max_step, rtol, atol, None) for i in range(n_runs))[0]
     plot_save(result_solve_ivp, rxn_network, Rp, Pp, dir, "", states, more_species_mkm)
