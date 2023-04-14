@@ -354,52 +354,56 @@ def add_rate(
 
     
     # TODO, this fuck up
-    tmp = y[:np.sum(n_INT_all)]
-    y_INT = np.array_split(tmp, np.cumsum(n_INT_all)[:-1])
-    last_idx = [i for i, arr in enumerate(y_INT) if len(arr)==0]
-    mori = np.cumsum(n_INT_all)
+    # tmp = y[:np.sum(n_INT_all)]
+    # y_INT = np.array_split(tmp, np.cumsum(n_INT_all)[:-1])
+    # last_idx = [i for i, arr in enumerate(y_INT) if len(arr)==0]
+    # mori = np.cumsum(n_INT_all)
 
 
-    # the first profile is assumed to be full, skipped
-    insert_idx = []
-    for i in range(1, len(n_INT_all)):  # n_profile - 1
-        # pitfall and last branching
-        if np.all(rxn_network[mori[i - 1]:\
-            mori[i], 0] == [0]) and mori[i] != mori[i-1]:
-            cp_idx = np.where(rxn_network[mori[i - 1]:mori[i], :][0] == -1)
-            tmp_idx = cp_idx[0][0].copy()
-            all_idx = [tmp_idx]
-            while tmp_idx != 0:
-                tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
-                all_idx.insert(0, tmp_idx)
-            y_INT[i] = np.insert(y_INT[i], 0, tmp[all_idx], axis=0)
-            insert_idx.append(all_idx)
+    # # the first profile is assumed to be full, skipped
+    # insert_idx = []
+    # for i in range(1, len(n_INT_all)):  # n_profile - 1
+    #     # pitfall and last branching
+    #     if np.all(rxn_network[mori[i - 1]:\
+    #         mori[i], 0] == [0]) and mori[i] != mori[i-1]:
+    #         cp_idx = np.where(rxn_network[mori[i - 1]:mori[i], :][0] == -1)
+    #         tmp_idx = cp_idx[0][0].copy()
+    #         all_idx = [tmp_idx]
+    #         while tmp_idx != 0:
+    #             tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
+    #             all_idx.insert(0, tmp_idx)
+    #         y_INT[i] = np.insert(y_INT[i], 0, tmp[all_idx], axis=0)
+    #         insert_idx.append(all_idx)
 
-        else:
-            all_idx = []
-            for j in range(rxn_network.shape[0]):
-                if j >= mori[i - 1] and j <= mori[i]:
-                    continue
-                elif np.any(rxn_network[mori[i - 1]:mori[i], j]):
-                    all_idx.append(j)
-            insert_idx.append(all_idx)
+    #     else:
+    #         all_idx = []
+    #         for j in range(rxn_network.shape[0]):
+    #             if j >= mori[i - 1] and j <= mori[i]:
+    #                 continue
+    #             elif np.any(rxn_network[mori[i - 1]:mori[i], j]):
+    #                 all_idx.append(j)
+    #         insert_idx.append(all_idx)
 
-    for i, idx_ in enumerate(insert_idx):
-        loc = [np.searchsorted(np.cumsum(n_INT_all), i, side='right') for i in idx_ if i != 0]
-        idxs = [0]
-        if loc:
-            for i in loc:
-                if i == 0: idxs.extend(np.arange(mori[0])[1:])
-                else: idxs.extend(np.arange(mori[i-1], mori[i]))
-        y_INT[i+1] = np.insert(y_INT[i+1], 0, tmp[idxs], axis=0)
-        insert_idx[i] = idxs
+    # for i, idx_ in enumerate(insert_idx):
+    #     loc = [np.searchsorted(np.cumsum(n_INT_all), i, side='right') for i in idx_ if i != 0]
+    #     idxs = [0]
+    #     if loc:
+    #         for i in loc:
+    #             if i == 0: idxs.extend(np.arange(mori[0])[1:])
+    #             else: idxs.extend(np.arange(mori[i-1], mori[i]))
+    #     y_INT[i+1] = np.insert(y_INT[i+1], 0, tmp[idxs], axis=0)
+    #     insert_idx[i] = idxs
 
-    if last_idx:
-        y_INT[last_idx[0]] = y_INT[last_idx[0]-1]
-            
+    non_zero_indices = np.nonzero(n_INT_all)
+    n_INT_all_ = n_INT_all[non_zero_indices]
+    y_INT, _ = pad_network(y[:np.sum(n_INT_all)], n_INT_all_, rxn_network)
     y_R = np.array(y[np.sum(n_INT_all):np.sum(n_INT_all) + Rp[0].shape[1]])
     y_P = np.array(y[np.sum(n_INT_all) + Rp[0].shape[1]:])
-
+    
+    if 0 in n_INT_all:
+        last_idx = np.where(n_INT_all==0)[0][0]
+        y_INT.insert(last_idx, y_INT[last_idx-1])
+        
     rate = 0
 
     # forward
@@ -425,7 +429,6 @@ def add_rate(
             sui_P = np.prod(rate_tmp)
 
     rate += k_forward_all[cn][a - 1] * y_INT[cn][a - 1] * sui_R * sui_P
-
     # reverse
     sui_R_2 = 1
     sui_P_2 = 1
@@ -822,7 +825,7 @@ def system_KE(
         for i in range(Pp[0].shape[1]):
             dydt[i + rxn_network.shape[0] + Rp[0].shape[1]] = dPa_dt(
                 y, k_forward_all, k_reverse_all, rxn_network, Rp, Pp, i, n_INT_all)
-        # print(y[-1], y[-2], y[-3])
+        # print(dydt[-1], dydt[-2], dydt[-3], dydt[-4])
         dydt = anp.array(dydt)
         return dydt
 
@@ -917,6 +920,7 @@ def load_data(args):
     Pp, idx_insert = pad_network(
         rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
 
+    # TODO; would also mistake the INT that give out 2 P while branching to 2 sep pathways
     last_idx = 0
     for i, arr in enumerate(Pp):
         if np.any(np.count_nonzero(arr, axis=1) > 1):
@@ -1264,8 +1268,8 @@ if __name__ == "__main__":
             np.nextafter(np.float16(0), np.float16(1)),
         ]
     )
-    rtol = 1e-3
-    atol = 1e-6
+    rtol = 1e-6
+    atol = 1e-9
     jac = dydt.jac
     n_runs = 1
     result_solve_ivp = Parallel(n_jobs=n_processors)(delayed(_solve_ivp)(dydt, t_span, \
