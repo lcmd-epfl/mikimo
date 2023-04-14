@@ -58,7 +58,7 @@ def find_missing_numbers(arr, max_value):
 
 #TODO still might malfunction
 def pad_network(X, n_INT_all, rxn_network):
-
+    
     X_ = np.array_split(X, np.cumsum(n_INT_all)[:-1])
     # the first profile is assumed to be full, skipped
     insert_idx = []
@@ -66,7 +66,6 @@ def pad_network(X, n_INT_all, rxn_network):
         # pitfall
         if np.all(rxn_network[np.cumsum(n_INT_all)[i - 1]                  
                                 :np.cumsum(n_INT_all)[i], 0] == 0):
-
             cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
                 i - 1]:np.cumsum(n_INT_all)[i], :][0] == -1)
             tmp_idx = cp_idx[0][0].copy()
@@ -86,17 +85,45 @@ def pad_network(X, n_INT_all, rxn_network):
                     continue
                 
                 elif np.any(rxn_network[np.cumsum(n_INT_all)[i - 1]:
-                                        np.cumsum(n_INT_all)[i], j]):
-                    
+                                        np.cumsum(n_INT_all)[i], j]):     
                     all_idx.append(j)
             insert_idx.append(all_idx)
-            idxs = np.arange(all_idx[0], all_idx[-1]+1)
-            X_[i] = np.insert(X_[i], 0, X[idxs], axis=0)
-    
-    for i, idx_ in enumerate(insert_idx):
-        idxs = np.arange(idx_[0], idx_[-1]+1)
-        insert_idx[i] = idxs
+
+    # TODO *Caution*: the branch reenter the cycle AT THE RS, and only 2 connecting points
+    # TODO, we will make use of adj matrix and edge weight to do this
+    miko = np.cumsum(n_INT_all)
+    miko_ = np.insert(miko, 0 , 0)
+    idxs_ = None
+    if insert_idx:
+        for i, idx_ in enumerate(insert_idx):
+            loc = np.array([np.searchsorted(np.cumsum(n_INT_all), i, side='right') for i in idx_])\
+            # in the first profile only
+            if len(idx_) == 1:
+                idxs = idx_
+            
+            elif len(idx_) > 1 & np.all(loc == 0): 
+                mask = idx_ != 0
+                cp = np.min(idx_[mask])
+                idxs = np.arange(0, cp+1)
+                if 0 not in idx_: idxs_ = np.arange(idx_[1], miko_[1])
         
+            elif np.count_nonzero(loc) == 1: 
+                
+                # might not be the most optimal path, just adjacant profile, but is it really an issue?
+                # assume connecting back to RS
+                idxs = insert_idx[loc[1]-1]
+                idxs.extend(np.arange(0+miko_[loc[1]], idx_[1]+1+miko_[loc[1]]))
+                if 0 not in idx_: idxs_ = np.arange(idx_[1]+miko_[loc[1]], miko_[loc[1]+1])
+                
+            # in other profiles, fuck this
+            # else:
+            #     idxs = insert_idx[loc[0]-1]
+            #     idxs.extend(np.arange(0+miko_[1], idx_[1]+miko_[1]))
+                
+            X_[i+1] = np.insert(X_[i+1], 0, X[idxs], axis=0)
+            if idxs_: X_[i+1] = np.insert(X_[i+1], 1, X[idxs_], axis=0)
+            insert_idx[i] = idxs
+            
     return X_, insert_idx
 
 
@@ -325,28 +352,28 @@ def add_rate(
         reaction rate at step a, cycle n
     """
 
-    y_INT = []
+    
+    # TODO, this fuck up
     tmp = y[:np.sum(n_INT_all)]
     y_INT = np.array_split(tmp, np.cumsum(n_INT_all)[:-1])
-
+    last_idx = [i for i, arr in enumerate(y_INT) if len(arr)==0]
     mori = np.cumsum(n_INT_all)
+
+
     # the first profile is assumed to be full, skipped
     insert_idx = []
-    for i in range(1, len(k_forward_all)):  # n_profile - 1
+    for i in range(1, len(n_INT_all)):  # n_profile - 1
         # pitfall and last branching
-        if np.all(rxn_network[mori[i - 1]:mori[i], 0] == 0):
-
-            if mori[i - 1] == mori[i]:
-                y_INT[i] = y_INT[i - 1]
-            else:
-                cp_idx = np.where(rxn_network[mori[i - 1]:mori[i], :][0] == -1)
-                tmp_idx = cp_idx[0][0].copy()
-                all_idx = [tmp_idx]
-                while tmp_idx != 0:
-                    tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
-                    all_idx.insert(0, tmp_idx)
-                y_INT[i] = np.insert(y_INT[i], 0, tmp[all_idx])
-                insert_idx.append(all_idx)
+        if np.all(rxn_network[mori[i - 1]:\
+            mori[i], 0] == [0]) and mori[i] != mori[i-1]:
+            cp_idx = np.where(rxn_network[mori[i - 1]:mori[i], :][0] == -1)
+            tmp_idx = cp_idx[0][0].copy()
+            all_idx = [tmp_idx]
+            while tmp_idx != 0:
+                tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
+                all_idx.insert(0, tmp_idx)
+            y_INT[i] = np.insert(y_INT[i], 0, tmp[all_idx], axis=0)
+            insert_idx.append(all_idx)
 
         else:
             all_idx = []
@@ -356,10 +383,20 @@ def add_rate(
                 elif np.any(rxn_network[mori[i - 1]:mori[i], j]):
                     all_idx.append(j)
             insert_idx.append(all_idx)
-            insert_idx.append(all_idx)
-            idxs = np.arange(all_idx[0], all_idx[-1]+1)
-            y_INT[i] = np.insert(y_INT[i], 0, tmp[idxs], axis=0)   
-                               
+
+    for i, idx_ in enumerate(insert_idx):
+        loc = [np.searchsorted(np.cumsum(n_INT_all), i, side='right') for i in idx_ if i != 0]
+        idxs = [0]
+        if loc:
+            for i in loc:
+                if i == 0: idxs.extend(np.arange(mori[0])[1:])
+                else: idxs.extend(np.arange(mori[i-1], mori[i]))
+        y_INT[i+1] = np.insert(y_INT[i+1], 0, tmp[idxs], axis=0)
+        insert_idx[i] = idxs
+
+    if last_idx:
+        y_INT[last_idx[0]] = y_INT[last_idx[0]-1]
+            
     y_R = np.array(y[np.sum(n_INT_all):np.sum(n_INT_all) + Rp[0].shape[1]])
     y_P = np.array(y[np.sum(n_INT_all) + Rp[0].shape[1]:])
 
@@ -436,35 +473,34 @@ def dINTa_dt(
     """
 
     dINTdt = 0
-    for i in range(rxn_network.shape[0]):
-
-        # finding a right column
-        mori = np.cumsum(n_INT_all)
-        a_ = a
+    # finding a right column
+    mori = np.cumsum(n_INT_all)
+    a_ = a
+    incr = 0
+    if cn > 0:
         incr = 0
-        if cn > 0:
-            incr = 0
-            if np.all(rxn_network[np.cumsum(n_INT_all)[
-                      cn - 1]:np.cumsum(n_INT_all)[cn], 0] == 0):
-                cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
-                                  cn - 1]:np.cumsum(n_INT_all)[cn], :][0] == -1)
-                tmp_idx = cp_idx[0][0].copy()
+        if np.all(rxn_network[np.cumsum(n_INT_all)[
+                    cn - 1]:np.cumsum(n_INT_all)[cn], 0] == 0):
+            cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
+                                cn - 1]:np.cumsum(n_INT_all)[cn], :][0] == -1)
+            tmp_idx = cp_idx[0][0].copy()
+            incr += 1
+            while tmp_idx != 0:
+                tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
                 incr += 1
-                while tmp_idx != 0:
-                    tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
-                    incr += 1
 
-            else:
-                for j in range(rxn_network.shape[0]):
-                    if j >= np.cumsum(n_INT_all)[
-                            cn - 1] and j <= np.cumsum(n_INT_all)[cn]:
-                        continue
-                    else:
-                        if np.any(rxn_network[np.cumsum(n_INT_all)[
-                                  cn - 1]:np.cumsum(n_INT_all)[cn], j]):
-                            incr += 1
-            a_ = a + mori[cn - 1] - incr
+        else:
+            for j in range(rxn_network.shape[0]):
+                if j >= np.cumsum(n_INT_all)[
+                        cn - 1] and j <= np.cumsum(n_INT_all)[cn]:
+                    continue
+                else:
+                    if np.any(rxn_network[np.cumsum(n_INT_all)[
+                                cn - 1]:np.cumsum(n_INT_all)[cn], j]):
+                        incr += 1
+        a_ = a + mori[cn - 1] - incr
 
+    for i in range(rxn_network.shape[0]):
         # assigning cn
         aki = [
             np.searchsorted(
@@ -529,8 +565,8 @@ def dRa_dt(
         k_forward_all,
         k_reverse_all,
         rxn_network,
-        Rp_,
-        Pp_,
+        Rp,
+        Pp,
         a,
         n_INT_all):
     """
@@ -538,33 +574,28 @@ def dRa_dt(
     a = index of the reactant [0,1,2,...]
 
     """
-    Rp = np.vstack(Rp_)
-
+    Rp_ = np.vstack(Rp)
+    loc_ = np.cumsum([arr.shape[0] for arr in Rp])
     dRdt = 0
-
     all_rate = []
-    for i in range(Rp.shape[0]):
-
-        if Rp[i, a] != 0:
-            mori = np.cumsum(np.array([len(k_forward)
-                             for k_forward in k_forward_all]))
-            cn_ = np.searchsorted(mori, i, side='right')
+    for i, arr in enumerate(Rp_):
+        if arr[a] != 0:
+            cn_ = np.searchsorted(loc_, i, side='right')
             if cn_ > 0:
-                a_ = i + 1 - mori[cn_ - 1]
+                a_ = i + 1 - loc_[cn_ - 1]
             elif cn_ == 0:
                 a_ = i + 1
-
             try:
                 rate_a = add_rate(y, k_forward_all, k_reverse_all,
-                                  rxn_network, Rp_, Pp_, a_, cn_, n_INT_all)
+                                    rxn_network, Rp, Pp, a_, cn_, n_INT_all)
+                p = k_forward_all[cn_][a_-1]/k_reverse_all[cn_][a_-1]
             except IndexError as e:
                 rate_a = add_rate(y, k_forward_all, k_reverse_all,
-                                  rxn_network, Rp_, Pp_, 0, cn_, n_INT_all)
-            if rate_a not in all_rate:
-                all_rate.append(rate_a)
-                dRdt += np.sign(Rp[i, a]) * rate_a
-            else:
-                pass
+                                    rxn_network, Rp, Pp, 0, cn_, n_INT_all)
+                p = k_forward_all[cn_][-1]/k_reverse_all[cn_][-1]
+            if rate_a + p not in all_rate:
+                all_rate.append(rate_a + p)
+                dRdt += np.sign(arr[a]) * rate_a
 
     return dRdt
 
@@ -574,8 +605,8 @@ def dPa_dt(
         k_forward_all,
         k_reverse_all,
         rxn_network,
-        Rp_,
-        Pp_,
+        Rp,
+        Pp,
         a,
         n_INT_all):
     """
@@ -583,48 +614,44 @@ def dPa_dt(
     a = index of the product [0,1,2,...]
 
     """
-    Pp = np.vstack(Pp_)
-
+    
+    Pp_ = np.vstack(Pp)
+    loc_ = np.cumsum([arr.shape[0] for arr in Pp])
     dPdt = 0
 
     all_rate = []
-    for i in range(Pp.shape[0]):
-        if Pp[i, a] != 0:
-            mori = np.cumsum(np.array([len(k_forward)
-                             for k_forward in k_forward_all]))
-            cn_ = np.searchsorted(mori, i, side='right')
+    for i, arr in enumerate(Pp_):
+        if arr[a] != 0:
+            cn_ = np.searchsorted(loc_, i, side='right')
             if cn_ > 0:
-                a_ = i + 1 - mori[cn_ - 1]
+                a_ = i + 1 - loc_[cn_ - 1]
             elif cn_ == 0:
                 a_ = i + 1
-
             try:
-                rate_a = np.sign(Pp[i,
-                                    a]) * add_rate(y,
+                rate_a = np.sign(arr[a]) * add_rate(y,
                                                    k_forward_all,
                                                    k_reverse_all,
                                                    rxn_network,
-                                                   Rp_,
-                                                   Pp_,
+                                                   Rp,
+                                                   Pp,
                                                    a_,
                                                    cn_,
                                                    n_INT_all)
+                p = k_forward_all[cn_][a_-1]/k_reverse_all[cn_][a_-1]
             except IndexError as e:
-                rate_a = np.sign(Pp[i,
-                                    a]) * add_rate(y,
+                rate_a = np.sign(arr[a]) * add_rate(y,
                                                    k_forward_all,
                                                    k_reverse_all,
                                                    rxn_network,
-                                                   Rp_,
-                                                   Pp_,
+                                                   Rp,
+                                                   Pp,
                                                    0,
                                                    cn_,
                                                    n_INT_all)
-            if rate_a not in all_rate:
-                all_rate.append(rate_a)
+                p = k_forward_all[cn_][-1]/k_reverse_all[cn_][-1]
+            if rate_a + p not in all_rate:
+                all_rate.append(rate_a + p)
                 dPdt += rate_a
-            else:
-                pass
     return dPdt
 
 
@@ -632,8 +659,8 @@ def system_KE(
         k_forward_all,
         k_reverse_all,
         rxn_network,
-        Rp_,
-        Pp_,
+        Rp,
+        Pp,
         n_INT_all,
         initial_conc,
         jac_method="ag",
@@ -648,7 +675,7 @@ def system_KE(
         available, the attribute `jac` will hold the Jacobian function of
         `dydt`
     """
-    k = rxn_network.shape[0] + Rp_[0].shape[1] + Pp_[0].shape[1]
+    k = rxn_network.shape[0] + Rp[0].shape[1] + Pp[0].shape[1]
 
     # to enforce boundary condition and the contraint
     # default bound_decorator
@@ -682,12 +709,12 @@ def system_KE(
                     try:
                         for i in range(len(y)):
                             if y[i] < bounds[i][0]:
-                                print(f"Violated at {i} by {bounds[i][0] - y[i]}")
+                                #print(f"Violated at {i} by {bounds[i][0] - y[i]}")
                                 dy_dt[i] += (bounds[i][0] - y[i]) / 2
                                 y[i] = bounds[i][0] + tolerance
      
                             elif y[i] > bounds[i][1]:
-                                print(f"Violated at {i} by {y[i] - bounds[i][1]}")
+                                #print(f"Violated at {i} by {y[i] - bounds[i][1]}")
                                 dy_dt[i] -= (y[i] - bounds[i][1]) / 2
                                 y[i] = bounds[i][1] - tolerance
         
@@ -697,11 +724,11 @@ def system_KE(
                         # arraybox failure
                         for i in range(len(y)):
                             if y_[i] < bounds[i][0]:
-                                print(f"Violated at {i} by {bounds[i][0] - y_[i]}")
+                                #print(f"Violated at {i} by {bounds[i][0] - y_[i]}")
                                 dy_dt_[i] += (bounds[i][0] - y_[i]) / 2 
                                 y_[i] = bounds[i][0] + tolerance
                             elif y[i] > bounds[i][1]:
-                                print(f"Violated at {i} by {bounds[i][1] - y_[i]}")
+                                #print(f"Violated at {i} by {bounds[i][1] - y_[i]}")
                                 dy_dt_[i] += (bounds[i][1] - y_[i]) / 2
                                 y_[i] = bounds[i][1] - tolerance
 
@@ -718,17 +745,17 @@ def system_KE(
     for i in range(k):
         if i == 0:
             boundary.append((0 - tolerance, initial_conc[0] + tolerance))
-        elif i >= rxn_network.shape[0] and i < rxn_network.shape[0] + Rp_[0].shape[1]:
+        elif i >= rxn_network.shape[0] and i < rxn_network.shape[0] + Rp[0].shape[1]:
             boundary.append((0 - tolerance, initial_conc[i] + tolerance))
         else:
             boundary.append((0 - tolerance, np.max(initial_conc) + tolerance))
 
     @bound_decorator(boundary, tolerance)
     def _dydt(t, y):
-
+        #print(y)
         try:
-            assert len(y) == Rp_[0].shape[1] + \
-                Pp_[0].shape[1] + rxn_network.shape[0]
+            assert len(y) == Rp[0].shape[1] + \
+                Pp[0].shape[1] + rxn_network.shape[0]
         except AssertionError:
             print(
                 "WARNING: The species number does not seem to match the sizes of network matrix."
@@ -777,28 +804,26 @@ def system_KE(
                 k_forward_all,
                 k_reverse_all,
                 rxn_network,
-                Rp_,
-                Pp_,
+                Rp,
+                Pp,
                 a_,
                 cn_,
                 n_INT_all)
             
-        for i in range(Rp_[0].shape[1]):
+        for i in range(Rp[0].shape[1]):
             dydt[i + rxn_network.shape[0]] = dRa_dt(y,
                                                     k_forward_all,
                                                     k_reverse_all,
                                                     rxn_network,
-                                                    Rp_,
-                                                    Pp_,
+                                                    Rp,
+                                                    Pp,
                                                     i,
                                                     n_INT_all)
-
-        for i in range(Pp_[0].shape[1]):
-            dydt[i + rxn_network.shape[0] + Rp_[0].shape[1]] = dPa_dt(
-                y, k_forward_all, k_reverse_all, rxn_network, Rp_, Pp_, i, n_INT_all)
-
+        for i in range(Pp[0].shape[1]):
+            dydt[i + rxn_network.shape[0] + Rp[0].shape[1]] = dPa_dt(
+                y, k_forward_all, k_reverse_all, rxn_network, Rp, Pp, i, n_INT_all)
+        # print(y[-1], y[-2], y[-3])
         dydt = anp.array(dydt)
-
         return dydt
 
     def jacobian_cd(t, y):
@@ -879,9 +904,9 @@ def load_data(args):
     n_INT_all = []
     x = 1
     for i in range(1, rxn_network.shape[1]):
-        if rxn_network[i, i - 1] == -1:
+        if (rxn_network[i, i - 1] == -1) and not(np.any(rxn_network[:i, i - 1] == -1)):
             x += 1
-        elif rxn_network[i, i - 1] != -1:
+        else:
             n_INT_all.append(x)
             x = 1
     n_INT_all.append(x)
@@ -894,7 +919,7 @@ def load_data(args):
 
     last_idx = 0
     for i, arr in enumerate(Pp):
-        if np.any(np.sum(arr, axis=1) > 1):
+        if np.any(np.count_nonzero(arr, axis=1) > 1):
             last_idx = i
 
     assert last_idx < len(
@@ -906,10 +931,10 @@ def load_data(args):
 
     if has_decimal(Rp):
         Rp = Rp_Pp_corr(Rp, nR)
-        Rp = np.array(Rp, dtype=int)
     if has_decimal(Pp):
         Pp = Rp_Pp_corr(Pp, nP)
-        Pp = np.array(Pp, dtype=int)
+    # Rp = np.array(Rp, dtype=int)
+    # Pp = np.array(Pp, dtype=int)
     # single csv to seperate csv for each profile
     df_all = pd.read_csv(rxn_data)
     species_profile = df_all.columns.values[1:]
@@ -1239,8 +1264,8 @@ if __name__ == "__main__":
             np.nextafter(np.float16(0), np.float16(1)),
         ]
     )
-    rtol = 1e-6
-    atol = 1e-9
+    rtol = 1e-3
+    atol = 1e-6
     jac = dydt.jac
     n_runs = 1
     result_solve_ivp = Parallel(n_jobs=n_processors)(delayed(_solve_ivp)(dydt, t_span, \

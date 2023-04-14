@@ -16,6 +16,7 @@ import sys
 import os
 import shutil
 import argparse
+import matplotlib.pyplot as plt
 
 
 def check_km_inp(df_network, initial_conc):
@@ -104,7 +105,7 @@ def check_km_inp(df_network, initial_conc):
 
     return clean, warn
 
-
+# TODO fix this according to the load_data
 def process_data_mkm(dg, initial_conc, df_network, tags):
 
     df_network.fillna(0, inplace=True)
@@ -118,9 +119,9 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
     n_INT_all = []
     x = 1
     for i in range(1, rxn_network.shape[1]):
-        if rxn_network[i, i - 1] == -1:
+        if (rxn_network[i, i - 1] == -1) and not(np.any(rxn_network[:i, i - 1] == -1)):
             x += 1
-        elif rxn_network[i, i - 1] != -1:
+        else:
             n_INT_all.append(x)
             x = 1
     n_INT_all.append(x)
@@ -130,10 +131,11 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
         rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
     Pp, idx_insert = pad_network(
         rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
-
+ 
+    # find n_cycle where last branching occurs
     last_idx = 0
     for i, arr in enumerate(Pp):
-        if np.any(np.sum(arr, axis=1) > 1):
+        if np.any(np.count_nonzero(arr, axis=1) > 1):
             last_idx = i
 
     assert last_idx < len(
@@ -147,11 +149,12 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
 
     if has_decimal(Rp):
         Rp = Rp_Pp_corr(Rp, nR)
-        Rp = np.array(Rp, dtype=int)
     if has_decimal(Pp):
         Pp = Rp_Pp_corr(Pp, nP)
-        Pp = np.array(Pp, dtype=int)
+    Rp = np.array(Rp, dtype=object)  
+    Pp = np.array(Pp, dtype=object)
 
+    # energy data-------------------------------------------
     df_all = pd.DataFrame([dg], columns=tags)  # %%
     species_profile = tags  # %%
     all_df = []
@@ -186,10 +189,10 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
         coeff_TS_all.append(np.array(coeff_TS))
         energy_profile_all.append(np.array(energy_profile))
 
-    if last_idx > 0:
+    if last_idx > 0 and last_idx < len(n_INT_all):
         tbi = energy_profile_all[last_idx][1:-1]
-        energy_profile_all[last_idx + \
-            1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
+        energy_profile_all[last_idx +
+                            1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
         coeff_TS_all[last_idx + 1] = coeff_TS_all[last_idx]
 
     # pad initial_conc in case [cat, R] are only specified.
@@ -735,7 +738,7 @@ if __name__ == "__main__":
                         prod_conc.append(result)
 
                 except Exception as e:
-                    print(e)
+                    print("Fail hereee")
                     prod_conc.append(np.array([np.nan] * n_target))
 
         descr_all = dgs[:, descp_idx]
@@ -819,18 +822,21 @@ if __name__ == "__main__":
 
         out = []
         if prod_conc_.shape[0] > 1:
+            prod_names = [i.replace("*", "") for i in states if "*" in i]
             plot_2d_combo(
                 descr_all,
                 prod_conc_,
                 descrp_pt,
                 prod_conc_pt_,
+                ms=ms,
                 xmin=xmin,
                 xmax=xmax,
                 ybase=y_base,
                 xlabel=xlabel,
                 ylabel=ylabel,
                 filename=f"km_volcano_{tag}_combo.png",
-                plotmode=plotmode)
+                plotmode=plotmode,
+                labels=prod_names)
             out.append(f"km_volcano_{tag}_combo.png")
             for i in range(prod_conc_.shape[0]):
                 plot_2d(
@@ -848,6 +854,7 @@ if __name__ == "__main__":
                     filename=f"km_volcano_{tag}_profile{i}.png",
                     plotmode=plotmode)
                 out.append(f"km_volcano_{tag}_profile{i}.png")
+                plt.clf()
         else:
             plot_2d(
                 descr_all,
@@ -957,7 +964,6 @@ if __name__ == "__main__":
                 prod_conc_pt.append(np.array([np.nan] * n_target))
                 result_solve_ivp_all.append("Shiki")
 
-        print(prod_conc_pt)
         prod_conc_pt = np.array(prod_conc_pt).T
         if verb > 1:
             prod_names = [i.replace("*", "") for i in states if "*" in i]
