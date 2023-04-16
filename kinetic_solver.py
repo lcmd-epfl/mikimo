@@ -91,40 +91,39 @@ def pad_network(X, n_INT_all, rxn_network):
 
     # TODO *Caution*: the branch reenter the cycle AT THE RS, and only 2 connecting points
     # TODO, we will make use of adj matrix and edge weight to do this
+    insert_idx_ = []
     miko = np.cumsum(n_INT_all)
     miko_ = np.insert(miko, 0 , 0)
     idxs_ = None
     if insert_idx:
         for i, idx_ in enumerate(insert_idx):
-            loc = np.array([np.searchsorted(np.cumsum(n_INT_all), i, side='right') for i in idx_])\
+            loc = np.array([np.searchsorted(np.cumsum(n_INT_all), i, side='right') for i in idx_])
             # in the first profile only
             if len(idx_) == 1:
                 idxs = idx_
-            
-            elif len(idx_) > 1 & np.all(loc == 0): 
+            elif len(idx_) > 1 & np.count_nonzero(loc) == 0: 
                 mask = idx_ != 0
                 cp = np.min(idx_[mask])
                 idxs = np.arange(0, cp+1)
                 if 0 not in idx_: idxs_ = np.arange(idx_[1], miko_[1])
         
             elif np.count_nonzero(loc) == 1: 
-                
                 # might not be the most optimal path, just adjacant profile, but is it really an issue?
                 # assume connecting back to RS
                 idxs = insert_idx[loc[1]-1]
-                idxs.extend(np.arange(0+miko_[loc[1]], idx_[1]+1+miko_[loc[1]]))
-                if 0 not in idx_: idxs_ = np.arange(idx_[1]+miko_[loc[1]], miko_[loc[1]+1])
+                # print(miko_[loc[1]], idx_[1]+1)
+                idxs.extend(np.arange(0+miko_[loc[1]], idx_[1]+1))
+                if 0 not in idx_: idxs_ = np.arange(idx_[1], miko_[loc[1]+1])
                 
             # in other profiles, fuck this
             # else:
             #     idxs = insert_idx[loc[0]-1]
             #     idxs.extend(np.arange(0+miko_[1], idx_[1]+miko_[1]))
-                
+            insert_idx_.append(np.array(idxs))
             X_[i+1] = np.insert(X_[i+1], 0, X[idxs], axis=0)
             if idxs_: X_[i+1] = np.insert(X_[i+1], 1, X[idxs_], axis=0)
-            insert_idx[i] = idxs
             
-    return X_, insert_idx
+    return X_, insert_idx_
 
 
 def check_km_inp(df_network, coeff_TS_all, c0):
@@ -457,7 +456,6 @@ def add_rate(
 
     return rate
 
-
 def dINTa_dt(
         y,
         k_forward_all,
@@ -482,26 +480,18 @@ def dINTa_dt(
     incr = 0
     if cn > 0:
         incr = 0
-        if np.all(rxn_network[np.cumsum(n_INT_all)[
-                    cn - 1]:np.cumsum(n_INT_all)[cn], 0] == 0):
-            cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
-                                cn - 1]:np.cumsum(n_INT_all)[cn], :][0] == -1)
+        if np.all(rxn_network[mori[cn - 1]:mori[cn], 0] == 0):
+            cp_idx = np.where(rxn_network[mori[cn - 1]:mori[cn], :][0] == -1)
             tmp_idx = cp_idx[0][0].copy()
             incr += 1
             while tmp_idx != 0:
                 tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
                 incr += 1
-
         else:
-            for j in range(rxn_network.shape[0]):
-                if j >= np.cumsum(n_INT_all)[
-                        cn - 1] and j <= np.cumsum(n_INT_all)[cn]:
-                    continue
-                else:
-                    if np.any(rxn_network[np.cumsum(n_INT_all)[
-                                cn - 1]:np.cumsum(n_INT_all)[cn], j]):
-                        incr += 1
-        a_ = a + mori[cn - 1] - incr
+            incr = np.where(rxn_network[:, mori[cn - 1]] == 1)[0][0] + 1
+            yor = np.searchsorted(mori, incr-1, side='right')
+            if yor>0: incr -= (mori[yor-1] - 1)
+        a_ += (mori[cn - 1] - incr)   
 
     for i in range(rxn_network.shape[0]):
         # assigning cn
@@ -753,6 +743,7 @@ def system_KE(
         else:
             boundary.append((0 - tolerance, np.max(initial_conc) + tolerance))
 
+    #TODO , cn_ and a_ for INTa are wrong
     @bound_decorator(boundary, tolerance)
     def _dydt(t, y):
         #print(y)
@@ -766,19 +757,15 @@ def system_KE(
             sys.exit("check your input")
 
         dydt = [None for _ in range(k)]
+        mori = np.cumsum(n_INT_all)
+        cn_prev = 0
+        incr = 0
         for i in range(np.sum(n_INT_all)):
-
-            mori = np.cumsum(n_INT_all)
-            cn_ = np.searchsorted(mori, i, side='right')
-
-        for i in range(np.sum(n_INT_all)):
-            mori = np.cumsum(n_INT_all)
             cn_ = np.searchsorted(mori, i, side='right')
             a_ = i
             if cn_ > 0:
-                incr = 0
-                if np.all(rxn_network[np.cumsum(n_INT_all)[
-                        cn_ - 1]:np.cumsum(n_INT_all)[cn_], 0] == 0):
+                if np.all(rxn_network[mori[cn_ - 1]:mori[cn_], 0] == 0):
+                    incr = 0
                     cp_idx = np.where(rxn_network[np.cumsum(n_INT_all)[
                         cn_ - 1]:np.cumsum(n_INT_all)[cn_], :][0] == -1)
                     tmp_idx = cp_idx[0][0].copy()
@@ -787,20 +774,14 @@ def system_KE(
                         tmp_idx = np.where(
                             (rxn_network[tmp_idx, :] == -1))[0][0]
                         incr += 1
-
                 else:
-                    for j in range(rxn_network.shape[0]):
-                        if j >= np.cumsum(n_INT_all)[
-                                cn_ - 1] and j <= np.cumsum(n_INT_all)[cn_]:
-                            continue
-                        else:
-                            if np.any(rxn_network[np.cumsum(n_INT_all)[
-                                    cn_ - 1]:np.cumsum(n_INT_all)[cn_], j]):
-                                incr += 1
-            if cn_ >= 1:
-                a_ -= mori[cn_ - 1] - incr
-            elif cn_ > 0:
-                a_ -= incr
+                    if cn_ != cn_prev:
+                        incr = np.where(rxn_network[:, i] == 1)[0][0] + 1
+                        yor = np.searchsorted(mori, incr-1, side='right')
+                        if yor > 0:
+                            incr -= (mori[yor-1] - 1)
+                        cn_prev = cn_
+                a_ -= (mori[cn_ - 1] - incr)   
 
             dydt[i] = dINTa_dt(
                 y,
@@ -1255,7 +1236,7 @@ if __name__ == "__main__":
         n_INT_all,
         initial_conc)
 
-    max_step = (t_span[1] - t_span[0]) / 10.0
+    max_step = (t_span[1] - t_span[0]) /10
     first_step = np.min(
         [
             1e-14,
