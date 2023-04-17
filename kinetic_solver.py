@@ -73,7 +73,7 @@ def pad_network(X, n_INT_all, rxn_network):
             while tmp_idx != 0:
                 tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
                 all_idx.insert(0, tmp_idx)
-            X_[i] = np.insert(X_[i], 0, X[all_idx], axis=0)
+            # X_[i] = np.insert(X_[i], 0, X[all_idx], axis=0)
             insert_idx.append(all_idx)
 
         else:
@@ -351,54 +351,75 @@ def add_rate(
         reaction rate at step a, cycle n
     """
 
-    
-    # TODO, this fuck up
-    # tmp = y[:np.sum(n_INT_all)]
-    # y_INT = np.array_split(tmp, np.cumsum(n_INT_all)[:-1])
-    # last_idx = [i for i, arr in enumerate(y_INT) if len(arr)==0]
-    # mori = np.cumsum(n_INT_all)
+    n_INT_all_ = n_INT_all[np.where(n_INT_all!=0)]
+    tmp = y[:np.sum(n_INT_all)]
+    y_INT = np.array_split(tmp, np.cumsum(n_INT_all_)[:-1])
+    # the first profile is assumed to be full, skipped
+    insert_idx = []
+    for i in range(1, len(n_INT_all_)):  # n_profile - 1
+        # pitfall
+        if np.all(rxn_network[np.cumsum(n_INT_all_)[i - 1]                  
+                                :np.cumsum(n_INT_all_)[i], 0] == 0):
+            cp_idx = np.where(rxn_network[np.cumsum(n_INT_all_)[
+                i - 1]:np.cumsum(n_INT_all_)[i], :][0] == -1)
+            tmp_idx = cp_idx[0][0].copy()
+            all_idx = [tmp_idx]
+            while tmp_idx != 0:
+                tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
+                all_idx.insert(0, tmp_idx)
+            # X_[i] = np.insert(X_[i], 0, X[all_idx], axis=0)
+            insert_idx.append(all_idx)
 
+        else:
+            all_idx = []
+            for j in range(rxn_network.shape[0]):
+                # to ignore the network of the profile
+                if j >= np.cumsum(n_INT_all_)[
+                        i - 1] and j <= np.cumsum(n_INT_all_)[i]:
+                    continue
+                
+                elif np.any(rxn_network[np.cumsum(n_INT_all_)[i - 1]:
+                                        np.cumsum(n_INT_all_)[i], j]):     
+                    all_idx.append(j)
+            insert_idx.append(all_idx)
 
-    # # the first profile is assumed to be full, skipped
-    # insert_idx = []
-    # for i in range(1, len(n_INT_all)):  # n_profile - 1
-    #     # pitfall and last branching
-    #     if np.all(rxn_network[mori[i - 1]:\
-    #         mori[i], 0] == [0]) and mori[i] != mori[i-1]:
-    #         cp_idx = np.where(rxn_network[mori[i - 1]:mori[i], :][0] == -1)
-    #         tmp_idx = cp_idx[0][0].copy()
-    #         all_idx = [tmp_idx]
-    #         while tmp_idx != 0:
-    #             tmp_idx = np.where((rxn_network[tmp_idx, :] == -1))[0][0]
-    #             all_idx.insert(0, tmp_idx)
-    #         y_INT[i] = np.insert(y_INT[i], 0, tmp[all_idx], axis=0)
-    #         insert_idx.append(all_idx)
-
-    #     else:
-    #         all_idx = []
-    #         for j in range(rxn_network.shape[0]):
-    #             if j >= mori[i - 1] and j <= mori[i]:
-    #                 continue
-    #             elif np.any(rxn_network[mori[i - 1]:mori[i], j]):
-    #                 all_idx.append(j)
-    #         insert_idx.append(all_idx)
-
-    # for i, idx_ in enumerate(insert_idx):
-    #     loc = [np.searchsorted(np.cumsum(n_INT_all), i, side='right') for i in idx_ if i != 0]
-    #     idxs = [0]
-    #     if loc:
-    #         for i in loc:
-    #             if i == 0: idxs.extend(np.arange(mori[0])[1:])
-    #             else: idxs.extend(np.arange(mori[i-1], mori[i]))
-    #     y_INT[i+1] = np.insert(y_INT[i+1], 0, tmp[idxs], axis=0)
-    #     insert_idx[i] = idxs
-
-    non_zero_indices = np.nonzero(n_INT_all)
-    n_INT_all_ = n_INT_all[non_zero_indices]
-    y_INT, _ = pad_network(y[:np.sum(n_INT_all)], n_INT_all_, rxn_network)
+    # TODO *Caution*: the branch reenter the cycle AT THE RS, and only 2 connecting points
+    # TODO, we will make use of adj matrix and edge weight to do this
+    insert_idx_ = []
+    miko = np.cumsum(n_INT_all_)
+    miko_ = np.insert(miko, 0 , 0)
+    idxs_ = None
+    if insert_idx:
+        for i, idx_ in enumerate(insert_idx):
+            loc = np.array([np.searchsorted(np.cumsum(n_INT_all_), i, side='right') for i in idx_])
+            # in the first profile only
+            if len(idx_) == 1:
+                idxs = idx_
+            elif len(idx_) > 1 & np.count_nonzero(loc) == 0: 
+                mask = idx_ != 0
+                cp = np.min(idx_[mask])
+                idxs = np.arange(0, cp+1)
+                if 0 not in idx_: idxs_ = np.arange(idx_[1], miko_[1])
+        
+            elif np.count_nonzero(loc) == 1: 
+                # might not be the most optimal path, just adjacant profile, but is it really an issue?
+                # assume connecting back to RS
+                idxs = insert_idx[loc[1]-1]
+                # print(miko_[loc[1]], idx_[1]+1)
+                idxs.extend(np.arange(0+miko_[loc[1]], idx_[1]+1))
+                if 0 not in idx_: idxs_ = np.arange(idx_[1], miko_[loc[1]+1])
+                
+            # in other profiles, fuck this
+            # else:
+            #     idxs = insert_idx[loc[0]-1]
+            #     idxs.extend(np.arange(0+miko_[1], idx_[1]+miko_[1]))
+            insert_idx_.append(np.array(idxs))
+            y_INT[i+1] = np.insert(y_INT[i+1], 0, tmp[idxs], axis=0)
+            if idxs_: y_INT[i+1] = np.insert(y_INT[i+1], 1, y[idxs_], axis=0)
+            
     y_R = np.array(y[np.sum(n_INT_all):np.sum(n_INT_all) + Rp[0].shape[1]])
     y_P = np.array(y[np.sum(n_INT_all) + Rp[0].shape[1]:])
-    
+        
     if 0 in n_INT_all:
         last_idx = np.where(n_INT_all==0)[0][0]
         y_INT.insert(last_idx, y_INT[last_idx-1])
@@ -697,9 +718,8 @@ def system_KE(
         def bound_decorator(bounds, tolerance):
             def decorator(func):
                 def wrapper(t, y):
-
                     dy_dt = func(t, y)
-                    try:
+                    try:                      
                         for i in range(len(y)):
                             if y[i] < bounds[i][0]:
                                 #print(f"Violated at {i} by {bounds[i][0] - y[i]}")
@@ -806,7 +826,7 @@ def system_KE(
         for i in range(Pp[0].shape[1]):
             dydt[i + rxn_network.shape[0] + Rp[0].shape[1]] = dPa_dt(
                 y, k_forward_all, k_reverse_all, rxn_network, Rp, Pp, i, n_INT_all)
-        # print(dydt[-1], dydt[-2], dydt[-3], dydt[-4])
+        print(y[-1], y[-2], y[-3])
         dydt = anp.array(dydt)
         return dydt
 
@@ -1236,7 +1256,7 @@ if __name__ == "__main__":
         n_INT_all,
         initial_conc)
 
-    max_step = (t_span[1] - t_span[0]) /10
+    max_step = (t_span[1] - t_span[0]) /1
     first_step = np.min(
         [
             1e-14,
@@ -1249,9 +1269,11 @@ if __name__ == "__main__":
             np.nextafter(np.float16(0), np.float16(1)),
         ]
     )
+
     rtol = 1e-6
     atol = 1e-9
-    jac = dydt.jac
+    jac = None
+    method = "LSODA"
     n_runs = 1
     result_solve_ivp = Parallel(n_jobs=n_processors)(delayed(_solve_ivp)(dydt, t_span, \
         initial_conc, method, first_step, max_step, rtol, atol, None) for i in range(n_runs))[0]
