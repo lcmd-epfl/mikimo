@@ -421,8 +421,9 @@ def add_rate(
     y_P = np.array(y[np.sum(n_INT_all) + Rp[0].shape[1]:])
         
     if 0 in n_INT_all:
-        last_idx = np.where(n_INT_all==0)[0][0]
-        y_INT.insert(last_idx, y_INT[last_idx-1])
+        last_idxs = np.where(n_INT_all==0)[0]
+        for last_idx in last_idxs:
+            y_INT.insert(last_idx, y_INT[last_idx-1])
         
     rate = 0
 
@@ -922,17 +923,16 @@ def load_data(args):
         rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
 
     # TODO; would also mistake the INT that give out 2 P while branching to 2 sep pathways
-    last_idx = 0
+    last_idxs = []
     for i, arr in enumerate(Pp):
-        if np.any(np.count_nonzero(arr, axis=1) > 1):
-            last_idx = i
+        if np.any(np.count_nonzero(arr[-1]) > 1):
+            last_idxs.append(i)
 
-    assert last_idx < len(
-        n_INT_all), "Something wrong with the reaction network"
-    if last_idx > 0:
-        Rp.insert(last_idx + 1, Rp[last_idx].copy())
-        Pp.insert(last_idx + 1, Pp[last_idx].copy())
-        n_INT_all = np.insert(n_INT_all, last_idx + 1, 0)
+    if last_idxs:
+        for last_idx in last_idxs:
+            Rp.insert(last_idx + 1, Rp[last_idx].copy())
+            Pp.insert(last_idx + 1, Pp[last_idx].copy())
+            n_INT_all = np.insert(n_INT_all, last_idx + 1, 0)
 
     if has_decimal(Rp):
         Rp = Rp_Pp_corr(Rp, nR)
@@ -976,11 +976,12 @@ def load_data(args):
         coeff_TS_all.append(np.array(coeff_TS))
         energy_profile_all.append(np.array(energy_profile))
 
-    if last_idx > 0:
-        tbi = energy_profile_all[last_idx][1:-1]
-        energy_profile_all[last_idx +
-                           1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
-        coeff_TS_all[last_idx + 1] = coeff_TS_all[last_idx]
+    if last_idxs:
+        for last_idx in last_idxs:
+            tbi = energy_profile_all[last_idx][1:-1]
+            energy_profile_all[last_idx +
+                            1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
+            coeff_TS_all[last_idx + 1] = coeff_TS_all[last_idx]
 
     # pad initial_conc in case [cat, R] are only specified.
     if len(initial_conc) != rxn_network_all.shape[1]:
