@@ -156,7 +156,7 @@ def plot_2d_combo(
                 linewidth=1.5,
                 color=color[i],
                 alpha=0.95,
-                label=f"profile {i}")
+                label=labels[i])
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
                 avgs = []
@@ -281,7 +281,10 @@ def plot_2d_combo(
     plt.savefig(filename)
     
 
-def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name, states, more_species_mkm=None):
+def plot_evo(result_solve_ivp, name, states, more_species_mkm=None):
+
+    r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+    p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
 
     plt.rc("axes", labelsize=18)
     plt.rc("xtick", labelsize=18)
@@ -299,7 +302,8 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name, states, more_species_m
             alpha=0.85,
             zorder=1,
             label=states[0])
-
+    
+    # Reactant--------------------------
     color_R = [
         "#008F73",
         "#1AC182",
@@ -308,17 +312,17 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name, states, more_species_m
         "#8FD810",
         "#ACBD0A"]
     
-    # Product---------
-    for i in range(Rp[0].shape[1]):
+    for n, i in enumerate(r_indices):
         ax.plot(np.log10(result_solve_ivp.t),
-                result_solve_ivp.y[rxn_network.shape[0] + i, :],
+                result_solve_ivp.y[i, :],
                 linestyle="--",
-                c=color_R[i],
+                c=color_R[n],
                 linewidth=2,
                 alpha=0.85,
                 zorder=1,
-                label=states[rxn_network.shape[0] + i])
+                label=states[i])
 
+    # Product--------------------------
     color_P = [
         "#D80828",
         "#F57D13",
@@ -327,16 +331,16 @@ def plot_evo(result_solve_ivp, rxn_network, Rp, Pp, name, states, more_species_m
         "#C5A806",
         "#602AFC"]
     
-    for i in range(Pp[0].shape[1]):
+    for n, i in enumerate(p_indices):
         ax.plot(np.log10(result_solve_ivp.t),
-                result_solve_ivp.y[rxn_network.shape[0] + Rp[0].shape[1] + i, :],
+                result_solve_ivp.y[i, :],
                 linestyle="dashdot",
-                c=color_P[i],
+                c=color_P[n],
                 linewidth=2,
                 alpha=0.85,
                 zorder=1,
-                label=states[rxn_network.shape[0] + Rp[0].shape[1] + i])
-    
+                label=states[i])
+        
     # additional INT-----------------
     color_INT = [
         "#4251B3",

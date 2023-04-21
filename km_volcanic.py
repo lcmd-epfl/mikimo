@@ -3,7 +3,7 @@ from navicat_volcanic.helpers import group_data_points, user_choose_1_dv, bround
 from navicat_volcanic.plotting2d import get_reg_targets, plot_2d
 from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.exceptions import InputError
-from kinetic_solver import system_KE, get_k, pad_network, has_decimal, Rp_Pp_corr
+from kinetic_solver import system_KE_DE, calc_k
 from plot2d_mod import plot_2d_combo, plot_evo
 import scipy.stats as stats
 from scipy.interpolate import interp1d
@@ -105,54 +105,20 @@ def check_km_inp(df_network, initial_conc):
 
     return clean, warn
 
-# TODO fix this according to the load_data
-def process_data_mkm(dg, initial_conc, df_network, tags):
+def process_data_mkm(dg, initial_conc_, df_network, tags):
 
     df_network.fillna(0, inplace=True)
     rxn_network_all = df_network.to_numpy()[:, 1:]
-    states = df_network.columns[1:].tolist()
-    nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
-    nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
-    n_INT_tot = rxn_network_all.shape[1] - nR - nP
-    rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
 
-    n_INT_all = []
-    x = 1
-    for i in range(1, rxn_network.shape[1]):
-        if (rxn_network[i, i - 1] == -1) and not(np.any(rxn_network[:i, i - 1] == -1)):
-            x += 1
-        else:
-            n_INT_all.append(x)
-            x = 1
-    n_INT_all.append(x)
-    n_INT_all = np.array(n_INT_all)
-
-    Rp, _ = pad_network(
-        rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR], n_INT_all, rxn_network)
-    Pp, idx_insert = pad_network(
-        rxn_network_all[:n_INT_tot, n_INT_tot + nR:], n_INT_all, rxn_network)
- 
-    # find n_cycle where last branching occurs
-    last_idx = 0
-    for i, arr in enumerate(Pp):
-        if np.any(np.count_nonzero(arr, axis=1) > 1):
-            last_idx = i
-
-    assert last_idx < len(
-        n_INT_all), "Something wrong with the reaction network"
-    if last_idx > 0:
-        # mori = np.cumsum(n_INT_all)
-        Rp.insert(last_idx + 1, Rp[last_idx].copy())
-        Pp.insert(last_idx + 1, Pp[last_idx].copy())
-        # idx_insert.insert(last_idx+1, np.arange(mori[last_idx-1],mori[last_idx]))
-        n_INT_all = np.insert(n_INT_all, last_idx + 1, 0)
-
-    if has_decimal(Rp):
-        Rp = Rp_Pp_corr(Rp, nR)
-    if has_decimal(Pp):
-        Pp = Rp_Pp_corr(Pp, nP)
-    Rp = np.array(Rp, dtype=object)  
-    Pp = np.array(Pp, dtype=object)
+    initial_conc = np.zeros(rxn_network_all.shape[1])
+    indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+    if len(initial_conc_) != rxn_network_all.shape[1]:
+        indices = [i for i, s in enumerate(
+            states) if s.lower().startswith("r")]
+        initial_conc[0] = initial_conc_[0]
+        initial_conc[indices] = initial_conc_[1:]
+    else:
+        initial_conc = initial_conc_
 
     # energy data-------------------------------------------
     df_all = pd.DataFrame([dg], columns=tags)  # %%
@@ -168,15 +134,28 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
         else:
             df_ = pd.concat([df_, df_all[species_profile[i]]],
                             ignore_index=False, axis=1)
+            
+    for i in range(len(all_df)-1):
+        try:
+            # step where branching is (the first 1)
+            branch_step = np.where(
+                df_network[all_df[i+1].columns[1]].to_numpy() == 1)[0][0]
+        except KeyError as e:
+            # due to TS as the first column of the profile
+            branch_step = np.where(
+                df_network[all_df[i+1].columns[2]].to_numpy() == 1)[0][0]
+        # int to which new cycle is connected (the first -1)
 
-    for i, idx in enumerate(idx_insert):
-        all_state_insert = [states[i] for i in idx]
-        # print(all_state_insert)
-        for j, state in list(enumerate(species_profile[::-1])):
-            if state in all_state_insert and j != len(species_profile) - 1:
-                all_df[i + 1].insert(1, state, df_all[state].values)
-            elif "TS" in state and species_profile[::-1][j - 1] in all_state_insert:
-                all_df[i + 1].insert(1, state, df_all[state].values)
+        if df_network.columns.to_list()[branch_step+1].lower().startswith('p'):
+            # conneting profiles
+            cp_idx = branch_step
+        else:
+            # int to which new cycle is connected (the first -1)
+            cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
+
+        state_insert = states[cp_idx]
+        all_df[i + 1]["R"] = df_all[state_insert].values
+        all_df[i + 1].rename(columns={'R': state_insert}, inplace=True)
 
     energy_profile_all = []
     dgr_all = []
@@ -189,24 +168,9 @@ def process_data_mkm(dg, initial_conc, df_network, tags):
         coeff_TS_all.append(np.array(coeff_TS))
         energy_profile_all.append(np.array(energy_profile))
 
-    if last_idx > 0 and last_idx < len(n_INT_all):
-        tbi = energy_profile_all[last_idx][1:-1]
-        energy_profile_all[last_idx +
-                            1] = np.insert(energy_profile_all[last_idx + 1], 1, tbi)
-        coeff_TS_all[last_idx + 1] = coeff_TS_all[last_idx]
 
-    # pad initial_conc in case [cat, R] are only specified.
-    if len(initial_conc) != rxn_network_all.shape[1]:
-        tmp = np.zeros(rxn_network_all.shape[1])
-        for i, c in enumerate(initial_conc):
-            if i == 0:
-                tmp[0] = initial_conc[0]
-            else:
-                tmp[n_INT_tot + i - 1] = c
-        initial_conc = np.array(tmp)
-
-    return initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
-        coeff_TS_all, rxn_network, n_INT_all
+    return initial_conc, energy_profile_all, dgr_all, \
+        coeff_TS_all, rxn_network_all
 
 
 def calc_km(
@@ -214,46 +178,31 @@ def calc_km(
         dgr_all,
         temperature,
         coeff_TS_all,
-        rxn_network,
-        Rp,
-        Pp,
-        n_INT_all,
+        rxn_network_all,
         t_span,
         initial_conc,
         states,
         timeout,
         report_as_yield,
         quality):
+    
+    nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
+    n_INT_tot = len([s for s in states if "INT" in s.upper()])
 
-    n_INT_tot = np.sum(n_INT_all)
-    nR = Rp[0].shape[1]
-
-    k_forward_all = []
-    k_reverse_all = []
-
-    for i in range(len(energy_profile_all)):
-        k_forward, k_reverse = get_k(
-            energy_profile_all[i], dgr_all[i], coeff_TS_all[i], temperature=temperature)
-        k_forward_all.append(k_forward)
-        k_reverse_all.append(k_reverse)
-
-    dydt = system_KE(
-        k_forward_all,
-        k_reverse_all,
-        rxn_network,
-        Rp,
-        Pp,
-        n_INT_all,
-        initial_conc)
-
+    k_forward_all, k_reverse_all = calc_k(
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            temperature)
+    dydt = system_KE_DE(k_forward_all, k_reverse_all,
+                        rxn_network_all, initial_conc)
     # first try BDF + ag with various rtol and atol
     # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
     # then LSODA + FD if all BDF attempts fail
     # the last resort is a Radau
     # if all fail, return NaN
-    
-    rtol_values = [1e-6, 1e-9, 1e-10]
-    atol_values = [1e-6, 1e-9, 1e-10]
+    rtol_values = [1e-3, 1e-6, 1e-9]
+    atol_values = [1e-6, 1e-9, 1e-9]
     last_ = [rtol_values[-1], atol_values[-1]]
     
     if quality == 0:
@@ -284,6 +233,9 @@ def calc_km(
                 np.nextafter(np.float16(0), np.float16(1)),
             ]
         )
+        rtol_values = [1e-6, 1e-9, 1e-10]
+        atol_values = [1e-9, 1e-9, 1e-10]
+        last_ = [rtol_values[-1], atol_values[-1]]
     elif quality > 2:
         max_step = (t_span[1] - t_span[0]) / 50.0
         first_step = np.min(
@@ -297,7 +249,9 @@ def calc_km(
                 np.nextafter(np.float64(0), np.float64(1)),
             ]
         )
-
+        rtol_values = [1e-8, 1e-9, 1e-10]
+        atol_values = [1e-9, 1e-9, 1e-10]
+        last_ = [rtol_values[-1], atol_values[-1]]
     success = False
     cont = False
     while success == False:
@@ -406,30 +360,34 @@ def calc_km(
             idx_target_all = [states.index(i) for i in states if "*" in i]
             c_target_t = np.array([result_solve_ivp.y[i][-1]
                                   for i in idx_target_all])
+            
+            R_idx = [i for i, s in enumerate(states) if s.lower().startswith('r') and 'INT' not in s]
+            Rp = rxn_network_all[:, R_idx]
+            Rp_ = []
+            for col in range(Rp.shape[1]):
+                non_zero_values = Rp[:, col][Rp[:, col] != 0]
+                Rp_.append(non_zero_values)
+            Rp_ = np.abs([r[0] for r in Rp_])
 
-            s_coeff_R = np.array([np.min(np.abs(
-                np.min(arr, axis=0)) * initial_conc[n_INT_tot: n_INT_tot + nR]) for arr in Rp])
-            # TODO still sloppy  ช่างแม่งสัส
-            if np.any(s_coeff_R==0):
-                s_coeff_R[np.where(s_coeff_R==0)] = max(filter(lambda x: x != 0, s_coeff_R))
+            # TODO: higest conc P can be, should be refined in the future
+            upper = np.min(initial_conc[R_idx]*Rp_)
 
             if report_as_yield:
 
-                c_target_yield = np.array(
-                    [c_target_t[i] / s_coeff_R[i] * 100 for i in range(len(s_coeff_R))])
+                c_target_yield = c_target_t/upper*100
                 c_target_yield[c_target_yield > 100] = 100
                 c_target_yield[c_target_yield < 0] = 0
                 return c_target_yield, result_solve_ivp
 
             else:
                 c_target_t[c_target_t < 0] = 0
-                c_target_t = np.minimum(c_target_t, s_coeff_R)
+                c_target_t = np.minimum(c_target_t, upper)
                 return c_target_t, result_solve_ivp
+            
         else:
             return np.NaN, result_solve_ivp
     except IndexError as e:
         return np.NaN, result_solve_ivp
-
 
 if __name__ == "__main__":
 
@@ -686,6 +644,8 @@ if __name__ == "__main__":
             if verb > 1:
                 print("KM input is clear")
 
+    initial_conc_ = np.loadtxt(c0, dtype=np.float64)  # in M
+    
     if not (evol_mode):
         # %% volcano line------------------------------------------------------------------------------#
         # only applicable to single profile for now
@@ -715,17 +675,14 @@ if __name__ == "__main__":
                 continue
             else:
                 try:
-                    initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
-                        coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
+                    initial_conc, energy_profile_all, dgr_all, \
+                        coeff_TS_all, rxn_network = process_data_mkm(profile, initial_conc_, df_network, tags)
                     result, _ = calc_km(
                         energy_profile_all,
                         dgr_all,
                         temperature,
                         coeff_TS_all,
                         rxn_network,
-                        Rp,
-                        Pp,
-                        n_INT_all,
                         t_span,
                         initial_conc,
                         states,
@@ -738,6 +695,7 @@ if __name__ == "__main__":
                         prod_conc.append(result)
 
                 except Exception as e:
+                    print(e)
                     print("Fail hereee")
                     prod_conc.append(np.array([np.nan] * n_target))
 
@@ -765,17 +723,14 @@ if __name__ == "__main__":
         for profile in tqdm(d, total=len(d), ncols=80):
 
             try:
-                initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
-                    coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
+                initial_conc, energy_profile_all, dgr_all, \
+                        coeff_TS_all, rxn_network = process_data_mkm(profile, initial_conc_, df_network, tags)
                 result, _ = calc_km(
                     energy_profile_all,
                     dgr_all,
                     temperature,
                     coeff_TS_all,
                     rxn_network,
-                    Rp,
-                    Pp,
-                    n_INT_all,
                     t_span,
                     initial_conc,
                     states,
@@ -928,17 +883,14 @@ if __name__ == "__main__":
 
         for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
             try:
-                initial_conc, Rp, Pp, energy_profile_all, dgr_all, \
-                    coeff_TS_all, rxn_network, n_INT_all = process_data_mkm(profile, initial_conc, df_network, tags)
+                initial_conc, energy_profile_all, dgr_all, \
+                        coeff_TS_all, rxn_network = process_data_mkm(profile, initial_conc_, df_network, tags)
                 result, result_solve_ivp = calc_km(
                     energy_profile_all,
                     dgr_all,
                     temperature,
                     coeff_TS_all,
                     rxn_network,
-                    Rp,
-                    Pp,
-                    n_INT_all,
                     t_span,
                     initial_conc,
                     states,
@@ -953,7 +905,7 @@ if __name__ == "__main__":
                 result_solve_ivp_all.append(result_solve_ivp)
                 
                 states_ = [s.replace("*", "") for s in states] 
-                plot_evo(result_solve_ivp, rxn_network, Rp, Pp, names[i], states_, more_species_mkm)
+                plot_evo(result_solve_ivp, names[i], states_, more_species_mkm)
                 source_file = os.path.abspath(
                     f"kinetic_modelling_{names[i]}.png")
                 destination_file = os.path.join(
