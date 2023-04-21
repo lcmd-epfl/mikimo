@@ -210,7 +210,7 @@ def add_rate(
                                      ** np.abs(rxn_network_all[a, left_species])[0])
     rate -= k_reverse_all[a]*np.prod(y[right_species]
                                      ** np.abs(rxn_network_all[a, right_species])[0])
-
+          
     return rate
 
 
@@ -224,15 +224,58 @@ def calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a):
     return dX_dt
 
 
-def system_KE_DE(k_forward_all, k_reverse_all, rxn_network_all, initial_conc):
+def system_KE_DE(k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states):
 
+    boundary = np.zeros((initial_conc.shape[0], 2))
+    tolerance = 0.01
+    R_idx = [i for i, s in enumerate(states) if s.lower().startswith('r') and 'INT' not in s]
+    P_idx = [i for i, s in enumerate(states) if s.lower().startswith('p') and 'INT' not in s]
+    INT_idx = [i for i in range(1, initial_conc.shape[0]) if i not in R_idx and i not in P_idx ]
+    
+    boundary[0] = [0-tolerance, initial_conc[0]+tolerance]
+    for i in R_idx:
+        boundary[i] = [0-tolerance, initial_conc[i]+tolerance]
+    for i in P_idx:
+        boundary[i] = [0-tolerance, np.max(initial_conc[R_idx])+tolerance]
+    for i in INT_idx:
+        boundary[i] = [0-tolerance, initial_conc[0]+tolerance]
+
+    def bound_decorator(boundary):
+        def decorator(func):
+            def wrapper(t, y):
+                dy_dt = func(t, y)
+                violate_low_idx = np.where(y < boundary[:, 0])
+                violate_up_idx = np.where(y > boundary[:, 1])
+                try:
+                    y[violate_low_idx] = boundary[violate_low_idx, 0]
+                    y[violate_up_idx] = boundary[violate_up_idx, 1]
+                    # dy_dt[violate_low_idx] = dy_dt[violate_low_idx] + (boundary[violate_low_idx, 0] - y[violate_low_idx])/2
+                    # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
+                    dy_dt[violate_low_idx] = 0
+                    dy_dt[violate_up_idx] = 0
+                except TypeError as e:
+                    y_ = np.array(y._value)
+                    dy_dt_ = np.array(dy_dt._value)
+                    # arraybox failure
+                    y[violate_low_idx] = boundary[violate_low_idx, 0]
+                    y[violate_up_idx] = boundary[violate_up_idx, 1]
+                    # dy_dt[violate_low_idx] = dy_dt[violate_low_idx] + (boundary[violate_low_idx, 0] - y[violate_low_idx])/2
+                    # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
+                    dy_dt[violate_low_idx] = 0
+                    dy_dt[violate_up_idx] = 0
+                    dy_dt = np.array(dy_dt_)
+                    y = np.array(y_)
+                return dy_dt
+            return wrapper
+        return decorator
+
+    @bound_decorator(boundary)
     def _dydt(t, y):
         dydt = [None for _ in range(initial_conc.shape[0])]
         for a in range(initial_conc.shape[0]):
             dydt[a] = calc_dX_dt(
                 y, k_forward_all, k_reverse_all, rxn_network_all, a)
         dydt = np.array(dydt)
-        print(y[-1], y[-2], y[-3])
         return dydt
 
     _dydt.jac = jacobian(_dydt, argnum=1)
@@ -325,6 +368,7 @@ def plot_save(result_solve_ivp, dir, name, states, more_species_mkm):
     plt.tight_layout()
     fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
 
+    np.savetxt(f't_{name}.txt', result_solve_ivp.t)
     np.savetxt(f'cat_{name}.txt', result_solve_ivp.y[0, :])
     np.savetxt(
         f'Rs_{name}.txt', result_solve_ivp.y[r_indices])
@@ -333,6 +377,7 @@ def plot_save(result_solve_ivp, dir, name, states, more_species_mkm):
 
     if dir:
         out = [
+            f't_{name}.txt',
             f'cat_{name}.txt',
             f'Rs_{name}.txt',
             f'Ps_{name}.txt',
@@ -468,7 +513,7 @@ if __name__ == "__main__":
     assert k_reverse_all.shape[0] == rxn_network_all.shape[0]
 
     dydt = system_KE_DE(k_forward_all, k_reverse_all,
-                        rxn_network_all, initial_conc)
+                        rxn_network_all, initial_conc, states)
 
     max_step = (t_span[1] - t_span[0]) / 1
     first_step = np.min(
@@ -501,5 +546,6 @@ if __name__ == "__main__":
         atol=atol,
         jac=jac,
     )
-    plot_save(result_solve_ivp, dir, "name", states, None)
+    states_ = [s.replace("*", "") for s in states] 
+    plot_save(result_solve_ivp, dir, "name", states_, None)
     print("Words that have faded to gray are colored like cappuccino")

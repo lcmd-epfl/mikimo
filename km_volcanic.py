@@ -19,91 +19,91 @@ import argparse
 import matplotlib.pyplot as plt
 
 
-def check_km_inp(df_network, initial_conc):
-    """Check the validity of the input data for a kinetic model.
+# def check_km_inp(df_network, initial_conc):
+#     """Check the validity of the input data for a kinetic model.
 
-    Args:
-        coeff_TS_all (list of numpy.ndarray): List of transition state coordinate data.
-        df_network (pandas.DataFrame): Reaction network data as a pandas DataFrame.
-        c0 (str): File path of the initial concentration data.
+#     Args:
+#         coeff_TS_all (list of numpy.ndarray): List of transition state coordinate data.
+#         df_network (pandas.DataFrame): Reaction network data as a pandas DataFrame.
+#         c0 (str): File path of the initial concentration data.
 
-    Raises:
-        InputError: If the number of states in the initial condition does not match the number of states in the
-            reaction network, or if the number of intermediates in the reaction data does not match the number of
-            intermediates in the reaction network.
+#     Raises:
+#         InputError: If the number of states in the initial condition does not match the number of states in the
+#             reaction network, or if the number of intermediates in the reaction data does not match the number of
+#             intermediates in the reaction network.
 
-    Returns:
-        T/F
-    """
-    clean = True
-    warn = False
+#     Returns:
+#         T/F
+#     """
+#     clean = True
+#     warn = False
 
-    df_network.fillna(0, inplace=True)
-    rxn_network_all = df_network.to_numpy()[:, 1:]
-    rxn_network_all = rxn_network_all.astype(np.int32)
-    states = df_network.columns[1:].tolist()
-    nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
-    nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
-    n_INT_tot = rxn_network_all.shape[1] - nR - nP
-    rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
+#     df_network.fillna(0, inplace=True)
+#     rxn_network_all = df_network.to_numpy()[:, 1:]
+#     rxn_network_all = rxn_network_all.astype(np.int32)
+#     states = df_network.columns[1:].tolist()
+#     nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
+#     nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
+#     n_INT_tot = rxn_network_all.shape[1] - nR - nP
+#     rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
 
-    n_INT_all = []
-    x = 1
-    for i in range(1, rxn_network.shape[1]):
-        if rxn_network[i, i - 1] == -1:
-            x += 1
-        elif rxn_network[i, i - 1] != -1:
-            n_INT_all.append(x)
-            x = 1
-    n_INT_all.append(x)
-    n_INT_all = np.array(n_INT_all)
+#     n_INT_all = []
+#     x = 1
+#     for i in range(1, rxn_network.shape[1]):
+#         if rxn_network[i, i - 1] == -1:
+#             x += 1
+#         elif rxn_network[i, i - 1] != -1:
+#             n_INT_all.append(x)
+#             x = 1
+#     n_INT_all.append(x)
+#     n_INT_all = np.array(n_INT_all)
 
-    if len(initial_conc) != rxn_network_all.shape[1]:
-        tmp = np.zeros(rxn_network_all.shape[1])
-        for i, c in enumerate(initial_conc):
-            if i == 0:
-                tmp[0] = initial_conc[0]
-            else:
-                tmp[n_INT_tot + i - 1] = c
-        initial_conc = np.array(tmp)
+#     if len(initial_conc) != rxn_network_all.shape[1]:
+#         tmp = np.zeros(rxn_network_all.shape[1])
+#         for i, c in enumerate(initial_conc):
+#             if i == 0:
+#                 tmp[0] = initial_conc[0]
+#             else:
+#                 tmp[n_INT_tot + i - 1] = c
+#         initial_conc = np.array(tmp)
 
-    # check initial state
-    if len(initial_conc) != rxn_network_all.shape[1]:
-        clean = False
-        raise InputError(
-            f"Number of state in initial condition does not match with that in reaction network."
-        )
+#     # check initial state
+#     if len(initial_conc) != rxn_network_all.shape[1]:
+#         clean = False
+#         raise InputError(
+#             f"Number of state in initial condition does not match with that in reaction network."
+#         )
 
-    # check reaction network
-    for i, nx in enumerate(rxn_network):
-        if 1 in nx and -1 in nx:
-            continue
-        else:
-            print(
-                f"The coordinate data for state {i} looks wrong or it is the pitfall")
-            warn = True
+#     # check reaction network
+#     for i, nx in enumerate(rxn_network):
+#         if 1 in nx and -1 in nx:
+#             continue
+#         else:
+#             print(
+#                 f"The coordinate data for state {i} looks wrong or it is the pitfall")
+#             warn = True
 
-    for i, nx in enumerate(np.transpose(
-            rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR])):
-        if np.any(nx < 0):
-            continue
-        else:
-            print(f"The coordinate data for R{i} looks wrong")
-            warn = True
+#     for i, nx in enumerate(np.transpose(
+#             rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR])):
+#         if np.any(nx < 0):
+#             continue
+#         else:
+#             print(f"The coordinate data for R{i} looks wrong")
+#             warn = True
 
-    for i, nx in enumerate(np.transpose(
-            rxn_network_all[:n_INT_tot, n_INT_tot + nR:])):
-        if np.any(nx > 0):
-            continue
-        else:
-            print(f"The coordinate data for P{i} looks wrong")
-            warn = True
+#     for i, nx in enumerate(np.transpose(
+#             rxn_network_all[:n_INT_tot, n_INT_tot + nR:])):
+#         if np.any(nx > 0):
+#             continue
+#         else:
+#             print(f"The coordinate data for P{i} looks wrong")
+#             warn = True
 
-    if not (np.array_equal(rxn_network, -rxn_network.T)):
-        print("Your reaction network looks wrong for catalytic reaction or you are not working with catalytic reaction.")
-        warn = True
+#     if not (np.array_equal(rxn_network, -rxn_network.T)):
+#         print("Your reaction network looks wrong for catalytic reaction or you are not working with catalytic reaction.")
+#         warn = True
 
-    return clean, warn
+#     return clean, warn
 
 def process_data_mkm(dg, initial_conc_, df_network, tags):
 
@@ -195,7 +195,7 @@ def calc_km(
             coeff_TS_all,
             temperature)
     dydt = system_KE_DE(k_forward_all, k_reverse_all,
-                        rxn_network_all, initial_conc)
+                        rxn_network_all, initial_conc, states)
     # first try BDF + ag with various rtol and atol
     # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
     # then LSODA + FD if all BDF attempts fail
@@ -634,15 +634,15 @@ if __name__ == "__main__":
     except FileNotFoundError as e:
         df_all = pd.read_csv(filename_csv)
     species_profile = df_all.columns.values[1:]
-    clean, warn = check_km_inp(df_network, initial_conc)
-    if not (clean):
-        sys.exit("Recheck your reaction network")
-    else:
-        if warn:
-            print("Reaction network appears wrong")
-        else:
-            if verb > 1:
-                print("KM input is clear")
+    # clean, warn = check_km_inp(df_network, initial_conc)
+    # if not (clean):
+    #     sys.exit("Recheck your reaction network")
+    # else:
+    #     if warn:
+    #         print("Reaction network appears wrong")
+    #     else:
+    #         if verb > 1:
+    #             print("KM input is clear")
 
     initial_conc_ = np.loadtxt(c0, dtype=np.float64)  # in M
     
