@@ -210,7 +210,7 @@ def add_rate(
                                      ** np.abs(rxn_network_all[a, left_species])[0])
     rate -= k_reverse_all[a]*np.prod(y[right_species]
                                      ** np.abs(rxn_network_all[a, right_species])[0])
-          
+
     return rate
 
 
@@ -227,11 +227,14 @@ def calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a):
 def system_KE_DE(k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states):
 
     boundary = np.zeros((initial_conc.shape[0], 2))
-    tolerance = 0.01
-    R_idx = [i for i, s in enumerate(states) if s.lower().startswith('r') and 'INT' not in s]
-    P_idx = [i for i, s in enumerate(states) if s.lower().startswith('p') and 'INT' not in s]
-    INT_idx = [i for i in range(1, initial_conc.shape[0]) if i not in R_idx and i not in P_idx ]
-    
+    tolerance = 1
+    R_idx = [i for i, s in enumerate(
+        states) if s.lower().startswith('r') and 'INT' not in s]
+    P_idx = [i for i, s in enumerate(
+        states) if s.lower().startswith('p') and 'INT' not in s]
+    INT_idx = [i for i in range(1, initial_conc.shape[0])
+               if i not in R_idx and i not in P_idx]
+
     boundary[0] = [0-tolerance, initial_conc[0]+tolerance]
     for i in R_idx:
         boundary[i] = [0-tolerance, initial_conc[i]+tolerance]
@@ -246,25 +249,27 @@ def system_KE_DE(k_forward_all, k_reverse_all, rxn_network_all, initial_conc, st
                 dy_dt = func(t, y)
                 violate_low_idx = np.where(y < boundary[:, 0])
                 violate_up_idx = np.where(y > boundary[:, 1])
-                try:
-                    y[violate_low_idx] = boundary[violate_low_idx, 0]
-                    y[violate_up_idx] = boundary[violate_up_idx, 1]
-                    # dy_dt[violate_low_idx] = dy_dt[violate_low_idx] + (boundary[violate_low_idx, 0] - y[violate_low_idx])/2
-                    # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
-                    dy_dt[violate_low_idx] = 0
-                    dy_dt[violate_up_idx] = 0
-                except TypeError as e:
-                    y_ = np.array(y._value)
-                    dy_dt_ = np.array(dy_dt._value)
-                    # arraybox failure
-                    y[violate_low_idx] = boundary[violate_low_idx, 0]
-                    y[violate_up_idx] = boundary[violate_up_idx, 1]
-                    # dy_dt[violate_low_idx] = dy_dt[violate_low_idx] + (boundary[violate_low_idx, 0] - y[violate_low_idx])/2
-                    # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
-                    dy_dt[violate_low_idx] = 0
-                    dy_dt[violate_up_idx] = 0
-                    dy_dt = np.array(dy_dt_)
-                    y = np.array(y_)
+                if violate_up_idx[0] and violate_low_idx[0]:
+                    try:
+                        y[violate_low_idx] = boundary[violate_low_idx, 0]
+                        y[violate_up_idx] = boundary[violate_up_idx, 1]
+                        # dy_dt[violate_low_idx] = dy_dt[violate_low_idx] + (boundary[violate_low_idx, 0] - y[violate_low_idx])/2
+                        # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
+                        dy_dt[violate_low_idx] = 0
+                        dy_dt[violate_up_idx] = 0
+                    except TypeError as e:
+                        print(y[violate_up_idx])
+                        y_ = np.array(y._value)
+                        dy_dt_ = np.array(dy_dt._value)
+                        # arraybox failure
+                        y_[violate_low_idx] = boundary[violate_low_idx, 0]
+                        y_[violate_up_idx] = boundary[violate_up_idx, 1]
+                        # dy_dt[violate_low_idx] = dy_dt[violate_low_idx] + (boundary[violate_low_idx, 0] - y[violate_low_idx])/2
+                        # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
+                        dy_dt_[violate_low_idx] = 0
+                        dy_dt_[violate_up_idx] = 0
+                        dy_dt = np.array(dy_dt_)
+                        y = np.array(y_)
                 return dy_dt
             return wrapper
         return decorator
@@ -528,10 +533,9 @@ if __name__ == "__main__":
             np.nextafter(np.float16(0), np.float16(1)),
         ]
     )
-    rtol = 1e-6
-    atol = 1e-9
+    rtol = 1e-3
+    atol = 1e-6
     jac = dydt.jac
-    method = method
     eps = 1e-7  # to avoid crashing due to dividing with zeroes
 
     result_solve_ivp = solve_ivp(
@@ -546,6 +550,17 @@ if __name__ == "__main__":
         atol=atol,
         jac=jac,
     )
-    states_ = [s.replace("*", "") for s in states] 
+    states_ = [s.replace("*", "") for s in states]
     plot_save(result_solve_ivp, dir, "name", states_, None)
+
+    print("\n-------------Reactant Final Concentration-------------\n")
+    r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+    for i in r_indices:
+        print('--[{}], Test Loss: {:.4f}--'.format(states[i], result_solve_ivp.y[i][-1]))    
+    print("\n-------------Product Final Concentration--------------\n")
+    p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
+    for i in p_indices:
+        print('--[{}], Test Loss: {:.4f}--'.format(states[i], result_solve_ivp.y[i][-1]))
+ 
+    
     print("Words that have faded to gray are colored like cappuccino")
