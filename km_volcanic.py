@@ -19,91 +19,58 @@ import argparse
 import matplotlib.pyplot as plt
 
 
-# def check_km_inp(df_network, initial_conc):
-#     """Check the validity of the input data for a kinetic model.
+def check_km_inp(df, df_network, initial_conc):
 
-#     Args:
-#         coeff_TS_all (list of numpy.ndarray): List of transition state coordinate data.
-#         df_network (pandas.DataFrame): Reaction network data as a pandas DataFrame.
-#         c0 (str): File path of the initial concentration data.
+    states_network = df_network.columns.to_numpy()[1:]
+    states_profile = df.columns.to_numpy()[1:]
+    states_network_int = [s for s in states_network if not (
+        s.lower().startswith("r")) and not (s.lower().startswith("p"))]
 
-#     Raises:
-#         InputError: If the number of states in the initial condition does not match the number of states in the
-#             reaction network, or if the number of intermediates in the reaction data does not match the number of
-#             intermediates in the reaction network.
+    p_indices = np.array([i for i, s in enumerate(
+        states_network) if s.lower().startswith("p")])
+    r_indices = np.array([i for i, s in enumerate(
+        states_network) if s.lower().startswith("r")])
 
-#     Returns:
-#         T/F
-#     """
-#     clean = True
-#     warn = False
+    clear = True
+    # all INT names in nx are the same as in the profile
+    for state in states_network_int:
+        if state in states_profile:
+            pass
+        else:
+            clear = False
+            print(f"""\n{state} cannot be found in the reaction data, if it is in different name, 
+                change it to be the same in both reaction data and the network""")
 
-#     df_network.fillna(0, inplace=True)
-#     rxn_network_all = df_network.to_numpy()[:, 1:]
-#     rxn_network_all = rxn_network_all.astype(np.int32)
-#     states = df_network.columns[1:].tolist()
-#     nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
-#     nP = len([s for s in states if s.lower().startswith('p') and 'INT' not in s])
-#     n_INT_tot = rxn_network_all.shape[1] - nR - nP
-#     rxn_network = rxn_network_all[:n_INT_tot, :n_INT_tot]
+    # initial conc
+    if len(r_indices) + 1 != len(initial_conc):
+        clear = False
+        print("\nYour initial conc seems wrong")
 
-#     n_INT_all = []
-#     x = 1
-#     for i in range(1, rxn_network.shape[1]):
-#         if rxn_network[i, i - 1] == -1:
-#             x += 1
-#         elif rxn_network[i, i - 1] != -1:
-#             n_INT_all.append(x)
-#             x = 1
-#     n_INT_all.append(x)
-#     n_INT_all = np.array(n_INT_all)
+    # check network sanity
+    mask = (~df_network.isin([-1, 1])).all(axis=1)
+    weird_step = df_network.index[mask].to_list()
 
-#     if len(initial_conc) != rxn_network_all.shape[1]:
-#         tmp = np.zeros(rxn_network_all.shape[1])
-#         for i, c in enumerate(initial_conc):
-#             if i == 0:
-#                 tmp[0] = initial_conc[0]
-#             else:
-#                 tmp[n_INT_tot + i - 1] = c
-#         initial_conc = np.array(tmp)
+    if weird_step:
+        clear = False
+        for s in weird_step:
+            print(f"\nYour step {s} is likely wrong.")
 
-#     # check initial state
-#     if len(initial_conc) != rxn_network_all.shape[1]:
-#         clean = False
-#         raise InputError(
-#             f"Number of state in initial condition does not match with that in reaction network."
-#         )
+    mask_R = (~df_network.iloc[:, r_indices +
+              1].isin([-1])).all(axis=0).to_numpy()
+    if np.any(mask_R):
+        clear = False
+        print(
+            f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong")
 
-#     # check reaction network
-#     for i, nx in enumerate(rxn_network):
-#         if 1 in nx and -1 in nx:
-#             continue
-#         else:
-#             print(
-#                 f"The coordinate data for state {i} looks wrong or it is the pitfall")
-#             warn = True
+    mask_P = (~df_network.iloc[:, p_indices +
+              1].isin([1])).all(axis=0).to_numpy()
+    if np.any(mask_P):
+        clear = False
+        print(
+            f"\nThe product location: {states_network[p_indices[mask_P]]} appears wrong")
 
-#     for i, nx in enumerate(np.transpose(
-#             rxn_network_all[:n_INT_tot, n_INT_tot:n_INT_tot + nR])):
-#         if np.any(nx < 0):
-#             continue
-#         else:
-#             print(f"The coordinate data for R{i} looks wrong")
-#             warn = True
+    return clear
 
-#     for i, nx in enumerate(np.transpose(
-#             rxn_network_all[:n_INT_tot, n_INT_tot + nR:])):
-#         if np.any(nx > 0):
-#             continue
-#         else:
-#             print(f"The coordinate data for P{i} looks wrong")
-#             warn = True
-
-#     if not (np.array_equal(rxn_network, -rxn_network.T)):
-#         print("Your reaction network looks wrong for catalytic reaction or you are not working with catalytic reaction.")
-#         warn = True
-
-#     return clean, warn
 
 def process_data_mkm(dg, initial_conc_, df_network, tags):
 
@@ -134,7 +101,7 @@ def process_data_mkm(dg, initial_conc_, df_network, tags):
         else:
             df_ = pd.concat([df_, df_all[species_profile[i]]],
                             ignore_index=False, axis=1)
-            
+
     for i in range(len(all_df)-1):
         try:
             # step where branching is (the first 1)
@@ -168,7 +135,6 @@ def process_data_mkm(dg, initial_conc_, df_network, tags):
         coeff_TS_all.append(np.array(coeff_TS))
         energy_profile_all.append(np.array(energy_profile))
 
-
     return initial_conc, energy_profile_all, dgr_all, \
         coeff_TS_all, rxn_network_all
 
@@ -185,15 +151,12 @@ def calc_km(
         timeout,
         report_as_yield,
         quality):
-    
-    nR = len([s for s in states if s.lower().startswith('r') and 'INT' not in s])
-    n_INT_tot = len([s for s in states if "INT" in s.upper()])
 
     k_forward_all, k_reverse_all = calc_k(
-            energy_profile_all,
-            dgr_all,
-            coeff_TS_all,
-            temperature)
+        energy_profile_all,
+        dgr_all,
+        coeff_TS_all,
+        temperature)
     dydt = system_KE_DE(k_forward_all, k_reverse_all,
                         rxn_network_all, initial_conc, states)
     # first try BDF + ag with various rtol and atol
@@ -204,10 +167,11 @@ def calc_km(
     rtol_values = [1e-3, 1e-6, 1e-9]
     atol_values = [1e-6, 1e-9, 1e-9]
     last_ = [rtol_values[-1], atol_values[-1]]
-    
+
     if quality == 0:
-            max_step = np.nan
-            first_step = None
+        max_step = np.nan
+        first_step = None
+        initial_conc += 1e-10
     elif quality == 1:
         max_step = np.nan
         first_step = np.min(
@@ -249,11 +213,12 @@ def calc_km(
                 np.nextafter(np.float64(0), np.float64(1)),
             ]
         )
-        rtol_values = [1e-8, 1e-9, 1e-10]
+        rtol_values = [1e-6, 1e-9, 1e-10]
         atol_values = [1e-9, 1e-9, 1e-10]
         last_ = [rtol_values[-1], atol_values[-1]]
     success = False
     cont = False
+
     while success == False:
         atol = atol_values.pop(0)
         rtol = rtol_values.pop(0)
@@ -288,8 +253,8 @@ def calc_km(
             continue
 
     if cont:
-        rtol_values = [1e-3, 1e-6, 1e-9, 1e-10]
-        atol_values = [1e-6, 1e-6, 1e-9, 1e-10]
+        rtol_values = [1e-6, 1e-9, 1e-10]
+        atol_values = [1e-9, 1e-9, 1e-10]
         last_ = [rtol_values[-1], atol_values[-1]]
         success = False
         cont = False
@@ -360,8 +325,9 @@ def calc_km(
             idx_target_all = [states.index(i) for i in states if "*" in i]
             c_target_t = np.array([result_solve_ivp.y[i][-1]
                                   for i in idx_target_all])
-            
-            R_idx = [i for i, s in enumerate(states) if s.lower().startswith('r') and 'INT' not in s]
+
+            R_idx = [i for i, s in enumerate(
+                states) if s.lower().startswith('r') and 'INT' not in s]
             Rp = rxn_network_all[:, R_idx]
             Rp_ = []
             for col in range(Rp.shape[1]):
@@ -383,11 +349,12 @@ def calc_km(
                 c_target_t[c_target_t < 0] = 0
                 c_target_t = np.minimum(c_target_t, upper)
                 return c_target_t, result_solve_ivp
-            
+
         else:
             return np.NaN, result_solve_ivp
     except IndexError as e:
         return np.NaN, result_solve_ivp
+
 
 if __name__ == "__main__":
 
@@ -410,8 +377,8 @@ if __name__ == "__main__":
         "-Time",
         dest="time",
         type=float,
-        default=1e5,
-        help="Total reaction time (s)",
+        default=86400,
+        help="Total reaction time (s) (default=1d)",
     )
 
     parser.add_argument(
@@ -461,10 +428,10 @@ if __name__ == "__main__":
         "--verb",
         dest="verb",
         type=int,
-        default=0,
-        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv output files (default: 1)",
+        default=1,
+        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv/h5 output files (default: 1)",
     )
-    
+
     parser.add_argument(
         "-pm",
         "--pm",
@@ -501,7 +468,7 @@ if __name__ == "__main__":
         dest="timeout",
         type=int,
         default=60,
-        help="""Timeout for each integration run (default = 60 s). Increase timeout if your mechanism seems complicated or multiple chemical species involved in your mechanism""",
+        help="""Timeout for each integration run (default = 60 s). Increase timeout if your mechanism seems complicated or multiple chemical species involved in your mechanism (default: 60)""",
     )
 
     parser.add_argument(
@@ -510,9 +477,9 @@ if __name__ == "__main__":
         dest="quality",
         type=int,
         default=1,
-        help="""integration quality (0-2) (the higher, longer the integratoion, but smoother the plot)""",
+        help="""integration quality (0-2) (the higher, longer the integratoion, but smoother the plot) (default: 1)""",
     )
-    
+
     parser.add_argument(
         "-a",
         "--a",
@@ -521,7 +488,7 @@ if __name__ == "__main__":
         nargs='+',
         help="Index of additional species to be included in the mkm plot",
     )
-    
+
     # %% loading and processing------------------------------------------------------------------------#
     args = parser.parse_args()
     temperature = args.temp
@@ -536,7 +503,7 @@ if __name__ == "__main__":
     quality = args.quality
     plotmode = args.plotmode
     more_species_mkm = args.addition
-    
+
     # for volcano line
     interpolate = True
     n_point_calc = 100
@@ -634,23 +601,21 @@ if __name__ == "__main__":
     except FileNotFoundError as e:
         df_all = pd.read_csv(filename_csv)
     species_profile = df_all.columns.values[1:]
-    # clean, warn = check_km_inp(df_network, initial_conc)
-    # if not (clean):
-    #     sys.exit("Recheck your reaction network")
-    # else:
-    #     if warn:
-    #         print("Reaction network appears wrong")
-    #     else:
-    #         if verb > 1:
-    #             print("KM input is clear")
+
+    clear = check_km_inp(df, df_network, initial_conc)
+    if not (clear):
+        print("\nRecheck your reaction network and your reaction data\n")
+    else:
+        if verb > 0:
+            print("\nKM input is clear\n")
 
     initial_conc_ = np.loadtxt(c0, dtype=np.float64)  # in M
-    
+
     if not (evol_mode):
         # %% volcano line------------------------------------------------------------------------------#
         # only applicable to single profile for now
         if interpolate:
-            if verb > 1:
+            if verb > 0:
                 print(
                     f"Performing microkinetics modelling for the volcano line ({n_point_calc})")
             selected_indices = np.round(
@@ -666,8 +631,9 @@ if __name__ == "__main__":
                     trun_dgs.append(dgs[i])
         else:
             trun_dgs = dgs
-            print(
-                f"Performing microkinetics modelling for the volcano line ({npoints})")
+            if verb > 0:
+                print(
+                    f"Performing microkinetics modelling for the volcano line ({npoints})")
         prod_conc = []
         for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
             if np.isnan(profile[0]):
@@ -676,7 +642,8 @@ if __name__ == "__main__":
             else:
                 try:
                     initial_conc, energy_profile_all, dgr_all, \
-                        coeff_TS_all, rxn_network = process_data_mkm(profile, initial_conc_, df_network, tags)
+                        coeff_TS_all, rxn_network = process_data_mkm(
+                            profile, initial_conc_, df_network, tags)
                     result, _ = calc_km(
                         energy_profile_all,
                         dgr_all,
@@ -724,7 +691,8 @@ if __name__ == "__main__":
 
             try:
                 initial_conc, energy_profile_all, dgr_all, \
-                        coeff_TS_all, rxn_network = process_data_mkm(profile, initial_conc_, df_network, tags)
+                    coeff_TS_all, rxn_network = process_data_mkm(
+                        profile, initial_conc_, df_network, tags)
                 result, _ = calc_km(
                     energy_profile_all,
                     dgr_all,
@@ -870,7 +838,7 @@ if __name__ == "__main__":
 
     # %% evol mode----------------------------------------------------------------------------------#
     else:
-        if verb > 1:
+        if verb > 0:
             print("Evol mode: plotting evolution for all points")
 
         prod_conc_pt = []
@@ -884,7 +852,8 @@ if __name__ == "__main__":
         for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
             try:
                 initial_conc, energy_profile_all, dgr_all, \
-                        coeff_TS_all, rxn_network = process_data_mkm(profile, initial_conc_, df_network, tags)
+                    coeff_TS_all, rxn_network = process_data_mkm(
+                        profile, initial_conc_, df_network, tags)
                 result, result_solve_ivp = calc_km(
                     energy_profile_all,
                     dgr_all,
@@ -903,8 +872,8 @@ if __name__ == "__main__":
                     prod_conc_pt.append(result)
 
                 result_solve_ivp_all.append(result_solve_ivp)
-                
-                states_ = [s.replace("*", "") for s in states] 
+
+                states_ = [s.replace("*", "") for s in states]
                 plot_evo(result_solve_ivp, names[i], states_, more_species_mkm)
                 source_file = os.path.abspath(
                     f"kinetic_modelling_{names[i]}.png")
@@ -925,8 +894,13 @@ if __name__ == "__main__":
                 data_dict[prod_names[i]] = prod_conc_pt[i]
 
             df = pd.DataFrame(data_dict)
-            df.to_csv('my_data.csv', index=False)
+            df.to_csv('prod_conc.csv', index=False)
             print(df.to_string(index=False))
+            source_file = os.path.abspath(
+                'prod_conc.csv')
+            destination_file = os.path.join(
+                "output_evo/", os.path.basename('prod_conc.csv'))
+            shutil.move(source_file, destination_file)
 
         if not os.path.isdir(os.path.join(dir, "output_evo/")):
             shutil.move("output_evo/", os.path.join(dir, "output_evo"))

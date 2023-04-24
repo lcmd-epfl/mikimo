@@ -11,6 +11,58 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
+def check_km_inp(df, df_network, initial_conc):
+
+    states_network = df_network.columns.to_numpy()[1:]
+    states_profile = df.columns.to_numpy()[1:]
+    states_network_int = [s for s in states_network if not (
+        s.lower().startswith("r")) and not (s.lower().startswith("p"))]
+
+    p_indices = np.array([i for i, s in enumerate(
+        states_network) if s.lower().startswith("p")])
+    r_indices = np.array([i for i, s in enumerate(
+        states_network) if s.lower().startswith("r")])
+
+    clear = True
+    # all INT names in nx are the same as in the profile
+    for state in states_network_int:
+        if state in states_profile:
+            pass
+        else:
+            clear = False
+            print(f"""\n{state} cannot be found in the reaction data, if it is in different name, 
+                change it to be the same in both reaction data and the network""")
+
+    # initial conc
+    if len(states_network) != len(initial_conc):
+        clear = False
+        print("\nYour initial conc seems wrong")
+
+    # check network sanity
+    mask = (~df_network.isin([-1, 1])).all(axis=1)
+    weird_step = df_network.index[mask].to_list()
+
+    if weird_step:
+        clear = False
+        for s in weird_step:
+            print(f"\nYour step {s} is likely wrong.")
+
+    mask_R = (~df_network.iloc[:, r_indices +
+              1].isin([-1])).all(axis=0).to_numpy()
+    if np.any(mask_R):
+        clear = False
+        print(
+            f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong")
+
+    mask_P = (~df_network.iloc[:, p_indices +
+              1].isin([1])).all(axis=0).to_numpy()
+    if np.any(mask_P):
+        clear = False
+        print(
+            f"\nThe product location: {states_network[p_indices[mask_P]]} appears wrong")
+
+    return clear
+
 def load_data(args):
 
     rxn_data = args.i
@@ -37,9 +89,19 @@ def load_data(args):
         initial_conc = initial_conc_
 
     # Reaction data-----------------------------------------------------------
-    df_all = pd.read_csv(rxn_data)
-    species_profile = df_all.columns.values[1:]
+    try:
+        df_all = pd.read_csv(rxn_data)
+    except Exception as e:
+        rxn_data = rxn_data.replace(".csv", ".xlsx")
+        df_all = pd.read_excel(rxn_data)
 
+    species_profile = df_all.columns.values[1:]
+    clear = check_km_inp(df_all, df_network, initial_conc)
+    
+    if not (clear):
+        print("\nRecheck your reaction network and your reaction data\n")
+    else:
+        print("\nKM input is clear\n")
     all_df = []
     df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
     for i in range(1, len(species_profile)):
@@ -130,7 +192,6 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
                 f"WARNING: The species number {n_S} does not seem to match the identified intermediates ({n_I}) plus TS ({n_TS})."
             )
 
-        X_TOF = np.zeros((n_I, 2))
         matrix_T_I = np.zeros((n_I, 2))
 
         j = 0
@@ -451,8 +512,8 @@ if __name__ == "__main__":
         "-Time",
         dest="time",
         type=float,
-        default=1e5,
-        help="Total reaction time (s)",
+        default=86400,
+        help="Total reaction time (s) (default=1d",
     )
 
     parser.add_argument(
@@ -482,9 +543,7 @@ if __name__ == "__main__":
         "--de",
         type=str,
         default="BDF",
-        help="Integration method to use (odesolver). \
-            Default=BDF.\
-            LSODA may fail to converge sometimes, try Radau(slower), BDF")
+        help="Integration method to use (odesolver). Default=BDF")
 
     parser.add_argument(
         "-a",
@@ -556,11 +615,12 @@ if __name__ == "__main__":
     print("\n-------------Reactant Final Concentration-------------\n")
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     for i in r_indices:
-        print('--[{}], Test Loss: {:.4f}--'.format(states[i], result_solve_ivp.y[i][-1]))    
+        print('--[{}], Test Loss: {:.4f}--'.format(states[i],
+              result_solve_ivp.y[i][-1]))
     print("\n-------------Product Final Concentration--------------\n")
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
     for i in p_indices:
-        print('--[{}], Test Loss: {:.4f}--'.format(states[i], result_solve_ivp.y[i][-1]))
- 
-    
-    print("Words that have faded to gray are colored like cappuccino")
+        print('--[{}], Test Loss: {:.4f}--'.format(states[i],
+              result_solve_ivp.y[i][-1]))
+
+    print("\nWords that have faded to gray are colored like cappuccino\n")
