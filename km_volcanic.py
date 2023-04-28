@@ -1,26 +1,34 @@
 #!/usr/bin/env python
-from navicat_volcanic.helpers import group_data_points, user_choose_1_dv, bround
-from navicat_volcanic.plotting2d import get_reg_targets, plot_2d
-from navicat_volcanic.dv1 import curate_d, find_1_dv
-from navicat_volcanic.exceptions import InputError
-from kinetic_solver import system_KE_DE, calc_k
-from plot2d_mod import plot_2d_combo, plot_evo
-import scipy.stats as stats
-from scipy.interpolate import interp1d
-from scipy.integrate import solve_ivp
-import pandas as pd
-import numpy as np
-from tqdm import tqdm
-import h5py
-import sys
+import argparse
+import glob
 import os
 import shutil
-import argparse
+
+import h5py
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import scipy.stats as stats
+from navicat_volcanic.dv1 import curate_d, find_1_dv
+from navicat_volcanic.helpers import (bround, group_data_points,
+                                      user_choose_1_dv)
+from navicat_volcanic.plotting2d import get_reg_targets, plot_2d, plot_2d_lsfer
+from scipy.integrate import solve_ivp
+from scipy.interpolate import interp1d
+from tqdm import tqdm
+
+from kinetic_solver import calc_k, system_KE_DE
+from plot2d_mod import plot_2d_combo, plot_evo
 
 
 def check_km_inp(df, df_network, initial_conc):
-
+    """
+    check if the input is correct
+    df: reaction data dataframe
+    df_network: network dataframe
+    initial_conc: initial concentration
+    """
+    
     states_network = df_network.columns.to_numpy()[1:]
     states_profile = df.columns.to_numpy()[1:]
     states_network_int = [s for s in states_network if not (
@@ -75,6 +83,7 @@ def check_km_inp(df, df_network, initial_conc):
 def process_data_mkm(dg, initial_conc_, df_network, tags):
 
     df_network.fillna(0, inplace=True)
+    states = df_network.columns[1:].tolist()
     rxn_network_all = df_network.to_numpy()[:, 1:]
 
     initial_conc = np.zeros(rxn_network_all.shape[1])
@@ -140,18 +149,18 @@ def process_data_mkm(dg, initial_conc_, df_network, tags):
 
 
 def calc_km(
-        energy_profile_all,
-        dgr_all,
-        temperature,
-        coeff_TS_all,
-        rxn_network_all,
-        t_span,
-        initial_conc,
-        states,
-        timeout,
-        report_as_yield,
-        quality):
-
+        energy_profile_all: list,
+        dgr_all: list,
+        temperature: float,
+        coeff_TS_all: list,
+        rxn_network_all: np.ndarray,
+        t_span: tuple,
+        initial_conc: np.ndarray,
+        states: list,
+        timeout: float,
+        report_as_yield: bool,
+        quality: int = 0,):
+    
     k_forward_all, k_reverse_all = calc_k(
         energy_profile_all,
         dgr_all,
@@ -352,7 +361,7 @@ def calc_km(
 
         else:
             return np.NaN, result_solve_ivp
-    except IndexError as e:
+    except IndexError as err:
         return np.NaN, result_solve_ivp
 
 
@@ -488,6 +497,13 @@ if __name__ == "__main__":
         nargs='+',
         help="Index of additional species to be included in the mkm plot",
     )
+    parser.add_argument(
+        "-lfesr",
+        "--lfesr",
+        dest="lfesr",
+        action="store_true",
+        help="""Toggle to plot LFESRs. (default: False)""",
+    )
 
     # %% loading and processing------------------------------------------------------------------------#
     args = parser.parse_args()
@@ -495,7 +511,7 @@ if __name__ == "__main__":
     lmargin = args.lmargin
     rmargin = args.rmargin
     verb = args.verb
-    dir = args.dir
+    wdir = args.dir
     imputer_strat = args.imputer_strat
     report_as_yield = args.percent
     evol_mode = args.evol_mode
@@ -503,6 +519,7 @@ if __name__ == "__main__":
     quality = args.quality
     plotmode = args.plotmode
     more_species_mkm = args.addition
+    lfesr = args.lfesr
 
     # for volcano line
     interpolate = True
@@ -510,10 +527,10 @@ if __name__ == "__main__":
     npoints = 200  # for volcanic
     xbase = 20
 
-    filename_xlsx = f"{dir}reaction_data.xlsx"
-    filename_csv = f"{dir}reaction_data.csv"
-    c0 = f"{dir}c0.txt"
-    df_network = pd.read_csv(f"{dir}rxn_network.csv")
+    filename_xlsx = f"{wdir}reaction_data.xlsx"
+    filename_csv = f"{wdir}reaction_data.csv"
+    c0 = f"{wdir}c0.txt"
+    df_network = pd.read_csv(f"{wdir}rxn_network.csv")
     initial_conc = np.loadtxt(c0, dtype=np.float64)
     t_span = (0, args.time)
 
@@ -523,7 +540,6 @@ if __name__ == "__main__":
         df = pd.read_csv(filename_csv)
     names = df[df.columns[0]].values
     cb, ms = group_data_points(0, 2, names)
-
     tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
     d = np.float32(df.to_numpy()[:, 1:])
 
@@ -559,17 +575,42 @@ if __name__ == "__main__":
             coeff[i] = False
             regress[i] = True
 
-    dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
-    if not (evol_mode):
-        idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
-    else:
-        idx = 3
     d, cb, ms = curate_d(d, regress, cb, ms, tags,
                          imputer_strat, nstds=3, verb=verb)
-
+    dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
+    if not evol_mode:
+        idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
+        if lfesr:
+            d = plot_2d_lsfer(
+                idx,
+                d,
+                tags,
+                coeff,
+                regress,
+                cb,
+                ms,
+                lmargin,
+                rmargin,
+                npoints,
+                plotmode,
+                verb,
+            )
+            lfesr_csv = [s+".csv" for s in tags[1:]]
+            all_lfsers = [s+".png" for s in tags[1:]]
+            all_lfsers.extend(lfesr_csv)
+            if not os.path.isdir("lfesr"):
+                os.makedirs("lfesr")
+            for file_name in all_lfsers:
+                source_file = os.path.abspath(file_name)
+                destination_file = os.path.join(
+                    "lfesr/", os.path.basename(file_name))
+                shutil.move(source_file, destination_file)
+                
+    else:
+        idx = 3
     X, tag, tags, d, d2, coeff = get_reg_targets(
         idx, d, tags, coeff, regress, mode="k")
-    descp_idx = np.where(tag == tags)[0][0]
+    
     lnsteps = range(d.shape[1])
     xmax = bround(X.max() + rmargin, xbase)
     xmin = bround(X.min() - lmargin, xbase)
@@ -611,7 +652,7 @@ if __name__ == "__main__":
 
     initial_conc_ = np.loadtxt(c0, dtype=np.float64)  # in M
 
-    if not (evol_mode):
+    if not evol_mode:
         # %% volcano line------------------------------------------------------------------------------#
         # only applicable to single profile for now
         if interpolate:
@@ -624,11 +665,13 @@ if __name__ == "__main__":
                     len(dgs) - 1,
                     n_point_calc)).astype(int)
             trun_dgs = []
-            for i in range(len(dgs)):
+            
+            for i, d in enumerate(dgs):
                 if i not in selected_indices:
                     trun_dgs.append([np.nan])
                 else:
-                    trun_dgs.append(dgs[i])
+                    trun_dgs.append(d)
+                
         else:
             trun_dgs = dgs
             if verb > 0:
@@ -662,11 +705,11 @@ if __name__ == "__main__":
                         prod_conc.append(result)
 
                 except Exception as e:
-                    print(e)
-                    print("Fail hereee")
+                    if verb > 1:
+                        print(f"Fail to compute at point {profile} in the volcano line")
                     prod_conc.append(np.array([np.nan] * n_target))
 
-        descr_all = dgs[:, descp_idx]
+        descr_all = dgs[:, idx]
         prod_conc = np.array(prod_conc)
 
         # interpolation
@@ -710,9 +753,11 @@ if __name__ == "__main__":
                 else:
                     prod_conc_pt.append(result)
             except Exception as e:
+                if verb > 1:
+                    print(f"Fail to compute at point {profile} in the volcano line")
                 prod_conc_pt.append(np.array([np.nan] * n_target))
 
-        descrp_pt = d[:, descp_idx]
+        descrp_pt = d[:, idx]
         prod_conc_pt = np.array(prod_conc_pt)
 
         # interpolation
@@ -814,6 +859,7 @@ if __name__ == "__main__":
 
         if not os.path.isdir("output"):
             os.makedirs("output")
+            shutil.move("lfesr", "output")
         else:
             print("The output directort already exists")
 
@@ -823,13 +869,13 @@ if __name__ == "__main__":
                 "output/", os.path.basename(file_name))
             shutil.move(source_file, destination_file)
 
-        if not os.path.isdir(os.path.join(dir, "output/")):
-            shutil.move("output/", os.path.join(dir, "output"))
+        if not os.path.isdir(os.path.join(wdir, "output/")):
+            shutil.move("output/", os.path.join(wdir, "output"))
         else:
             print("Output already exist")
             move_bool = input("Move anyway? (y/n): ")
             if move_bool == "y":
-                shutil.move("output/", os.path.join(dir, "output"))
+                shutil.move("output/", os.path.join(wdir, "output"))
             elif move_bool == "n":
                 pass
             else:
@@ -902,13 +948,13 @@ if __name__ == "__main__":
                 "output_evo/", os.path.basename('prod_conc.csv'))
             shutil.move(source_file, destination_file)
 
-        if not os.path.isdir(os.path.join(dir, "output_evo/")):
-            shutil.move("output_evo/", os.path.join(dir, "output_evo"))
+        if not os.path.isdir(os.path.join(wdir, "output_evo/")):
+            shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
         else:
             print("Output already exist")
             move_bool = input("Move anyway? (y/n): ")
             if move_bool == "y":
-                shutil.move("output_evo/", os.path.join(dir, "output_evo"))
+                shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
             elif move_bool == "n":
                 pass
             else:
