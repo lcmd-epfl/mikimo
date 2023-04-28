@@ -1,13 +1,15 @@
-from scipy.integrate import solve_ivp
-from scipy.constants import R, kilo, calorie, k, h
-import autograd.numpy as np
-from autograd import jacobian
-import matplotlib.pyplot as plt
-import pandas as pd
 import argparse
 import os
 import shutil
 import warnings
+
+import autograd.numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from autograd import jacobian
+from scipy.constants import R, calorie, h, k, kilo
+from scipy.integrate import solve_ivp
+
 warnings.filterwarnings("ignore")
 
 
@@ -349,11 +351,32 @@ def system_KE_DE(k_forward_all, k_reverse_all, rxn_network_all, initial_conc, st
     return _dydt
 
 
-def plot_save(result_solve_ivp, dir, name, states, more_species_mkm):
+def plot_save(result_solve_ivp, dir, name, states, x_scale, more_species_mkm):
 
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
-
+    
+    if x_scale == "ls":
+        t = np.log10(result_solve_ivp.t)
+        xlabel = "log(time) (s)"
+    elif x_scale == "s":
+        t = result_solve_ivp.t
+        xlabel = "time (s)"
+    elif x_scale == "lmin":
+        t = np.log10(result_solve_ivp.t/60)
+        xlabel = "log(time) (min)"
+    elif x_scale == "min":
+        t = result_solve_ivp.t/60
+        xlabel = "time (min)"
+    elif x_scale == "h":
+        t = result_solve_ivp.t/3600
+        xlabel = "time (h)"
+    elif x_scale == "d":
+        t = result_solve_ivp.t/86400
+        xlabel = "time (d)"
+    else:
+        raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+        
     plt.rc("axes", labelsize=16)
     plt.rc("xtick", labelsize=16)
     plt.rc("ytick", labelsize=16)
@@ -361,8 +384,8 @@ def plot_save(result_solve_ivp, dir, name, states, more_species_mkm):
 
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(1, 1, 1)
-    # Catalyst---------
-    ax.plot(np.log10(result_solve_ivp.t),
+    # Catalyst--------------------------
+    ax.plot(t,
             result_solve_ivp.y[0, :],
             c="#797979",
             linewidth=2,
@@ -380,7 +403,7 @@ def plot_save(result_solve_ivp, dir, name, states, more_species_mkm):
         "#ACBD0A"]
 
     for n, i in enumerate(r_indices):
-        ax.plot(np.log10(result_solve_ivp.t),
+        ax.plot(t,
                 result_solve_ivp.y[i, :],
                 linestyle="--",
                 c=color_R[n],
@@ -399,7 +422,7 @@ def plot_save(result_solve_ivp, dir, name, states, more_species_mkm):
         "#602AFC"]
 
     for n, i in enumerate(p_indices):
-        ax.plot(np.log10(result_solve_ivp.t),
+        ax.plot(t,
                 result_solve_ivp.y[i, :],
                 linestyle="dashdot",
                 c=color_P[n],
@@ -418,7 +441,7 @@ def plot_save(result_solve_ivp, dir, name, states, more_species_mkm):
         "#147F58"]
     if more_species_mkm != None:
         for i in more_species_mkm:
-            ax.plot(np.log10(result_solve_ivp.t),
+            ax.plot(t,
                     result_solve_ivp.y[i, :],
                     linestyle="dashdot",
                     c=color_INT[i],
@@ -427,7 +450,7 @@ def plot_save(result_solve_ivp, dir, name, states, more_species_mkm):
                     zorder=1,
                     label=states[i])
 
-    plt.xlabel('log(time, s)')
+    plt.xlabel(xlabel)
     plt.ylabel('Concentration (mol/l)')
     plt.legend()
     plt.grid(True, linestyle='--', linewidth=0.75)
@@ -553,15 +576,24 @@ if __name__ == "__main__":
         nargs='+',
         help="Index of additional species to be included in the mkm plot",
     )
+    parser.add_argument(
+        "-x",
+        "--x",
+        dest="xscale",
+        type=str,
+        default="ls",
+        help="time scale (ls (log10(s)), s, lmin, min, h, day) (default=ls)",
+    )
 
     args = parser.parse_args()
     more_species_mkm = args.addition
     n_processors = args.njob
-    dir = args.dir
-    if dir:
-        args = parser.parse_args(['-i', f"{dir}/reaction_data.csv",
-                                  '-c', f"{dir}/c0.txt",
-                                  "-rn", f"{dir}/rxn_network.csv",
+    w_dir = args.dir
+    x_scale = args.xscale
+    if w_dir:
+        args = parser.parse_args(['-i', f"{w_dir}/reaction_data.csv",
+                                  '-c', f"{w_dir}/c0.txt",
+                                  "-rn", f"{w_dir}/rxn_network.csv",
                                   "-t", f"{args.temp}",
                                   "--time", f"{args.time}",
                                   "-de", f"{args.de}",
@@ -610,17 +642,23 @@ if __name__ == "__main__":
         jac=jac,
     )
     states_ = [s.replace("*", "") for s in states]
-    plot_save(result_solve_ivp, dir, "name", states_, None)
+    plot_save(result_solve_ivp, w_dir, "name", states_, x_scale, more_species_mkm)
+
+    print("\n-------------Reactant Initial Concentration-------------\n")
+    r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+    for i in r_indices:
+        print('--[{}]: {:.4f}--'.format(states[i],
+              initial_conc[i]))
 
     print("\n-------------Reactant Final Concentration-------------\n")
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     for i in r_indices:
-        print('--[{}], Test Loss: {:.4f}--'.format(states[i],
+        print('--[{}]: {:.4f}--'.format(states[i],
               result_solve_ivp.y[i][-1]))
     print("\n-------------Product Final Concentration--------------\n")
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
     for i in p_indices:
-        print('--[{}], Test Loss: {:.4f}--'.format(states[i],
+        print('--[{}]: {:.4f}--'.format(states[i],
               result_solve_ivp.y[i][-1]))
 
     print("\nWords that have faded to gray are colored like cappuccino\n")

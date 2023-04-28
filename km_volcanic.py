@@ -488,7 +488,14 @@ if __name__ == "__main__":
         default=1,
         help="""integration quality (0-2) (the higher, longer the integratoion, but smoother the plot) (default: 1)""",
     )
-
+    parser.add_argument(
+        "-x",
+        "--x",
+        dest="xscale",
+        type=str,
+        default="ls",
+        help="time scale for evo mode (ls (log10(s)), s, lmin, min, h, day) (default=ls)",
+    )
     parser.add_argument(
         "-a",
         "--a",
@@ -504,6 +511,7 @@ if __name__ == "__main__":
         action="store_true",
         help="""Toggle to plot LFESRs. (default: False)""",
     )
+    
 
     # %% loading and processing------------------------------------------------------------------------#
     args = parser.parse_args()
@@ -520,6 +528,7 @@ if __name__ == "__main__":
     plotmode = args.plotmode
     more_species_mkm = args.addition
     lfesr = args.lfesr
+    x_scale = args.xscale
 
     # for volcano line
     interpolate = True
@@ -920,7 +929,7 @@ if __name__ == "__main__":
                 result_solve_ivp_all.append(result_solve_ivp)
 
                 states_ = [s.replace("*", "") for s in states]
-                plot_evo(result_solve_ivp, names[i], states_, more_species_mkm)
+                plot_evo(result_solve_ivp, names[i], states_, x_scale, more_species_mkm)
                 source_file = os.path.abspath(
                     f"kinetic_modelling_{names[i]}.png")
                 destination_file = os.path.join(

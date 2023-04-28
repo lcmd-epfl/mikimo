@@ -1,8 +1,9 @@
 
-import numpy as np
-import matplotlib.pyplot as plt
-from navicat_volcanic.helpers import bround
 import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from navicat_volcanic.helpers import bround
+
 matplotlib.use("Agg")
 
 
@@ -74,7 +75,6 @@ def plotpoints(ax, px, py, cb, ms, plotmode):
     if plotmode == 1:
         s = 15
         lw = 0.25
-        print(ms)
         ax.scatter(
             px,
             py,
@@ -281,11 +281,32 @@ def plot_2d_combo(
     plt.savefig(filename)
     
 
-def plot_evo(result_solve_ivp, name, states, more_species_mkm=None):
+def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
 
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
 
+    if x_scale == "ls":
+        t = np.log10(result_solve_ivp.t)
+        xlabel = "log(time) (s)"
+    elif x_scale == "s":
+        t = result_solve_ivp.t
+        xlabel = "time (s)"
+    elif x_scale == "lmin":
+        t = np.log10(result_solve_ivp.t/60)
+        xlabel = "log(time) (min)"
+    elif x_scale == "min":
+        t = result_solve_ivp.t/60
+        xlabel = "time (min)"
+    elif x_scale == "h":
+        t = result_solve_ivp.t/3600
+        xlabel = "time (h)"
+    elif x_scale == "d":
+        t = result_solve_ivp.t/86400
+        xlabel = "time (d)"
+    else:
+        raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+    
     plt.rc("axes", labelsize=18)
     plt.rc("xtick", labelsize=18)
     plt.rc("ytick", labelsize=18)
@@ -295,7 +316,7 @@ def plot_evo(result_solve_ivp, name, states, more_species_mkm=None):
     ax = fig.add_subplot(1, 1, 1)
     
     # Catalyst---------
-    ax.plot(np.log10(result_solve_ivp.t),
+    ax.plot(t,
             result_solve_ivp.y[0, :],
             c="#797979",
             linewidth=2,
@@ -313,7 +334,7 @@ def plot_evo(result_solve_ivp, name, states, more_species_mkm=None):
         "#ACBD0A"]
     
     for n, i in enumerate(r_indices):
-        ax.plot(np.log10(result_solve_ivp.t),
+        ax.plot(t,
                 result_solve_ivp.y[i, :],
                 linestyle="--",
                 c=color_R[n],
@@ -332,7 +353,7 @@ def plot_evo(result_solve_ivp, name, states, more_species_mkm=None):
         "#602AFC"]
     
     for n, i in enumerate(p_indices):
-        ax.plot(np.log10(result_solve_ivp.t),
+        ax.plot(t,
                 result_solve_ivp.y[i, :],
                 linestyle="dashdot",
                 c=color_P[n],
@@ -351,7 +372,7 @@ def plot_evo(result_solve_ivp, name, states, more_species_mkm=None):
         "#147F58"]
     if more_species_mkm != None:
         for i in more_species_mkm:
-            ax.plot(np.log10(result_solve_ivp.t),
+            ax.plot(t,
                     result_solve_ivp.y[i, :],
                     linestyle="dashdot",
                     c=color_INT[i],
@@ -362,7 +383,7 @@ def plot_evo(result_solve_ivp, name, states, more_species_mkm=None):
             
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible
-    plt.xlabel('log(time) [s])')
+    plt.xlabel(xlabel)
     plt.ylabel('Concentration [mol/l]')
     plt.legend(frameon=False)
     plt.grid(True, linestyle='--', linewidth=0.75)
