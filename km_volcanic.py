@@ -12,7 +12,8 @@ import scipy.stats as stats
 from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.helpers import (bround, group_data_points,
                                       user_choose_1_dv)
-from navicat_volcanic.plotting2d import get_reg_targets, plot_2d, plot_2d_lsfer
+from navicat_volcanic.plotting2d import (calc_ci, get_reg_targets, plot_2d,
+                                         plot_2d_lsfer)
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 from tqdm import tqdm
@@ -481,12 +482,20 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-q",
-        "--q",
-        dest="quality",
+        "-iq",
+        "--iq",
+        dest="int_quality",
         type=int,
         default=1,
-        help="""integration quality (0-2) (the higher, longer the integratoion, but smoother the plot) (default: 1)""",
+        help="""integration quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
+    )
+    parser.add_argument(
+        "-pq",
+        "--pq",
+        dest="plot_quality",
+        type=int,
+        default=1,
+        help="""plot quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
     )
     parser.add_argument(
         "-x",
@@ -524,17 +533,29 @@ if __name__ == "__main__":
     report_as_yield = args.percent
     evol_mode = args.evol_mode
     timeout = args.timeout
-    quality = args.quality
+    quality = args.int_quality
+    p_quality = args.plot_quality
     plotmode = args.plotmode
     more_species_mkm = args.addition
     lfesr = args.lfesr
     x_scale = args.xscale
-
-    # for volcano line
-    interpolate = True
-    n_point_calc = 100
-    npoints = 200  # for volcanic
+    
     xbase = 20
+    npoints = 200
+    if p_quality == 0:
+        interpolate = True
+        npoints = 200
+    elif p_quality == 1:
+        interpolate = True
+        n_point_calc = 100
+    elif p_quality == 2:
+        interpolate = True
+        n_point_calc = 150
+    elif p_quality == 3:
+        interpolate = False 
+    elif p_quality > 3:
+        interpolate = False 
+        npoints = 300
 
     filename_xlsx = f"{wdir}reaction_data.xlsx"
     filename_csv = f"{wdir}reaction_data.csv"
@@ -628,6 +649,7 @@ if __name__ == "__main__":
         print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
     xint = np.linspace(xmin, xmax, npoints)
     dgs = np.zeros((npoints, len(lnsteps)))
+    sigma_dgs = np.zeros((npoints, len(lnsteps)))
     for i, j in enumerate(lnsteps):
         Y = d[:, j].reshape(-1)
         p, cov = np.polyfit(X, Y, 1, cov=True)
@@ -635,13 +657,13 @@ if __name__ == "__main__":
         n = Y.size
         m = p.size
         dof = n - m
-        t = stats.t.ppf(0.95, dof)
         resid = Y - Y_pred
         with np.errstate(invalid="ignore"):
             chi2 = np.sum((resid / Y_pred) ** 2)
-        s_err = np.sqrt(np.sum(resid**2) / dof)
         yint = np.polyval(p, xint)
+        ci = calc_ci(resid, n, dof, X, xint, yint)
         dgs[:, i] = yint
+        sigma_dgs[:, i] = ci
 
     states = df_network.columns[1:].tolist()
     n_target = len([states.index(i) for i in states if "*" in i])
@@ -667,7 +689,7 @@ if __name__ == "__main__":
         if interpolate:
             if verb > 0:
                 print(
-                    f"Performing microkinetics modelling for the volcano line ({n_point_calc})")
+                    f"Performing microkinetics modelling for the volcano line ({n_point_calc} points)")
             selected_indices = np.round(
                 np.linspace(
                     0,
@@ -675,11 +697,11 @@ if __name__ == "__main__":
                     n_point_calc)).astype(int)
             trun_dgs = []
             
-            for i, d in enumerate(dgs):
+            for i, dg in enumerate(dgs):
                 if i not in selected_indices:
                     trun_dgs.append([np.nan])
                 else:
-                    trun_dgs.append(d)
+                    trun_dgs.append(dg)
                 
         else:
             trun_dgs = dgs
@@ -718,7 +740,6 @@ if __name__ == "__main__":
                         print(f"Fail to compute at point {profile} in the volcano line")
                     prod_conc.append(np.array([np.nan] * n_target))
 
-        descr_all = dgs[:, idx]
         prod_conc = np.array(prod_conc)
 
         # interpolation
@@ -727,17 +748,18 @@ if __name__ == "__main__":
                                    )
         for i in range(n_target):
 
-            f = interp1d(descr_all[~missing_indices],
+            f = interp1d(xint[~missing_indices],
                          prod_conc[:, i][~missing_indices],
                          kind='cubic',
                          fill_value="extrapolate")
-            y_interp = f(descr_all[missing_indices])
+            y_interp = f(xint[missing_indices])
             prod_conc_[:, i][missing_indices] = y_interp
 
         prod_conc_ = prod_conc_.T
         # %% volcano point------------------------------------------------------------------------------#
         print(
             f"Performing microkinetics modelling for the volcano line ({len(d)})")
+        print(temperature)
         prod_conc_pt = []
         for profile in tqdm(d, total=len(d), ncols=80):
 
@@ -766,7 +788,8 @@ if __name__ == "__main__":
                     print(f"Fail to compute at point {profile} in the volcano line")
                 prod_conc_pt.append(np.array([np.nan] * n_target))
 
-        descrp_pt = d[:, idx]
+        # descrp_pt = d[:, idx]
+        # X = d[:, idx]
         prod_conc_pt = np.array(prod_conc_pt)
 
         # interpolation
@@ -774,11 +797,11 @@ if __name__ == "__main__":
         prod_conc_pt_ = prod_conc_pt.copy()
         for i in range(n_target):
             if np.any(np.isnan(prod_conc_pt)):
-                f = interp1d(descrp_pt[~missing_indices],
+                f = interp1d(X[~missing_indices],
                              prod_conc_pt[:, i][~missing_indices],
                              kind='cubic',
                              fill_value="extrapolate")
-                y_interp = f(descrp_pt[missing_indices])
+                y_interp = f(X[missing_indices])
                 prod_conc_pt_[:, i][missing_indices] = y_interp
             else:
                 prod_conc_pt_ = prod_conc_pt.copy()
@@ -801,9 +824,9 @@ if __name__ == "__main__":
         if prod_conc_.shape[0] > 1:
             prod_names = [i.replace("*", "") for i in states if "*" in i]
             plot_2d_combo(
-                descr_all,
+                xint,
                 prod_conc_,
-                descrp_pt,
+                X,
                 prod_conc_pt_,
                 ms=ms,
                 xmin=xmin,
@@ -817,9 +840,9 @@ if __name__ == "__main__":
             out.append(f"km_volcano_{tag}_combo.png")
             for i in range(prod_conc_.shape[0]):
                 plot_2d(
-                    descr_all,
+                    xint,
                     prod_conc_[i],
-                    descrp_pt,
+                    X,
                     prod_conc_pt_[i],
                     xmin=xmin,
                     xmax=xmax,
@@ -834,9 +857,9 @@ if __name__ == "__main__":
                 plt.clf()
         else:
             plot_2d(
-                descr_all,
+                xint,
                 prod_conc_[0],
-                descrp_pt,
+                X,
                 prod_conc_pt_[0],
                 xmin=xmin,
                 xmax=xmax,
@@ -855,9 +878,9 @@ if __name__ == "__main__":
             with h5py.File('data.h5', 'w') as f:
                 group = f.create_group('data')
                 # save each numpy array as a dataset in the group
-                group.create_dataset('descr_all', data=descr_all)
+                group.create_dataset('descr_all', data=xint)
                 group.create_dataset('prod_conc_', data=prod_conc_)
-                group.create_dataset('descrp_pt', data=descrp_pt)
+                group.create_dataset('descrp_pt', data=X)
                 group.create_dataset('prod_conc_pt_', data=prod_conc_pt_)
                 group.create_dataset('cb', data=cb)
                 group.create_dataset('ms', data=ms)
