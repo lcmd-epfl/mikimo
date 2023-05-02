@@ -19,7 +19,7 @@ from scipy.interpolate import interp1d
 from tqdm import tqdm
 
 from kinetic_solver import calc_k, system_KE_DE
-from plot2d_mod import plot_2d_combo, plot_evo
+from plot2d_mod_ci import plot_2d_combo, plot_evo
 
 
 def check_km_inp(df, df_network, initial_conc):
@@ -433,16 +433,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-v",
-        "--v",
-        "--verb",
-        dest="verb",
-        type=int,
-        default=1,
-        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv/h5 output files (default: 1)",
-    )
-
-    parser.add_argument(
         "-pm",
         "--pm",
         "-plotmode",
@@ -461,18 +451,22 @@ if __name__ == "__main__":
         default="knn",
         help="Imputter to refill missing datapoints. Beta version. (default: knn) (simple, knn, iterative, None)",
     )
-
+    
     parser.add_argument(
-        "-ev",
-        "--ev"
-        "-evol",
-        "--evol",
-        dest="evol_mode",
+        "-ci",
+        "--ci",
+        dest="confidence_interval",
         action="store_true",
-        help="""Flag to disable plotting the volcano
-        Instead plot the evolution of each point. (default: False)""",
+        help="Toggle to compute confidence interval. (default: False)",
     )
-
+    
+    parser.add_argument(
+        "-lfesr",
+        "--lfesr",
+        dest="lfesr",
+        action="store_true",
+        help="""Toggle to plot LFESRs. (default: False)""",
+    )
     parser.add_argument(
         "--timeout",
         dest="timeout",
@@ -498,6 +492,16 @@ if __name__ == "__main__":
         help="""plot quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
     )
     parser.add_argument(
+        "-ev",
+        "--ev"
+        "-evol",
+        "--evol",
+        dest="evol_mode",
+        action="store_true",
+        help="""Flag to disable plotting the volcano
+        Instead plot the evolution of each point. (default: False)""",
+    )
+    parser.add_argument(
         "-x",
         "--x",
         dest="xscale",
@@ -514,13 +518,15 @@ if __name__ == "__main__":
         help="Index of additional species to be included in the mkm plot",
     )
     parser.add_argument(
-        "-lfesr",
-        "--lfesr",
-        dest="lfesr",
-        action="store_true",
-        help="""Toggle to plot LFESRs. (default: False)""",
+        "-v",
+        "--v",
+        "--verb",
+        dest="verb",
+        type=int,
+        default=1,
+        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv/h5 output files (default: 1)",
     )
-    
+   
 
     # %% loading and processing------------------------------------------------------------------------#
     args = parser.parse_args()
@@ -539,12 +545,16 @@ if __name__ == "__main__":
     more_species_mkm = args.addition
     lfesr = args.lfesr
     x_scale = args.xscale
+    comp_ci =  args.confidence_interval
+    
+    if plotmode == 0 and comp_ci:
+        plotmode = 1
     
     xbase = 20
     npoints = 200
     if p_quality == 0:
         interpolate = True
-        npoints = 200
+        n_point_calc = 200
     elif p_quality == 1:
         interpolate = True
         n_point_calc = 100
@@ -708,10 +718,13 @@ if __name__ == "__main__":
             if verb > 0:
                 print(
                     f"Performing microkinetics modelling for the volcano line ({npoints})")
-        prod_conc = []
-        for profile in tqdm(trun_dgs, total=len(trun_dgs), ncols=80):
+        prod_conc = np.zeros((len(dgs), n_target))
+        ci = np.zeros((len(dgs), n_target))
+        
+        for i, (profile, sigma_p) in tqdm(enumerate(zip(trun_dgs, sigma_dgs)), total=len(trun_dgs), ncols=80):
             if np.isnan(profile[0]):
-                prod_conc.append(np.array([np.nan] * n_target))
+                prod_conc[i, :] = np.array([np.nan] * n_target)
+                ci[i, :] = np.array([np.nan] * n_target)
                 continue
             else:
                 try:
@@ -730,20 +743,56 @@ if __name__ == "__main__":
                         timeout,
                         report_as_yield,
                         quality)
-                    if len(result) != n_target:
-                        prod_conc.append(np.array([np.nan] * n_target))
-                    else:
-                        prod_conc.append(result)
+                    if comp_ci:
+                        profile_u = profile + sigma_p
+                        profile_d = profile - sigma_p
+
+                        initial_conc, energy_profile_all_u, dgr_all, \
+                            coeff_TS_all, rxn_network = process_data_mkm(
+                                profile_u, initial_conc_, df_network, tags)
+                        initial_conc, energy_profile_all_d, dgr_all, \
+                            coeff_TS_all, rxn_network = process_data_mkm(
+                                profile_d, initial_conc_, df_network, tags)
+                        
+                        result_u, _ = calc_km(
+                            energy_profile_all_u,
+                            dgr_all,
+                            temperature,
+                            coeff_TS_all,
+                            rxn_network,
+                            t_span,
+                            initial_conc,
+                            states,
+                            timeout,
+                            False,
+                            1)
+
+                        result_d, _ = calc_km(
+                            energy_profile_all_d,
+                            dgr_all,
+                            temperature,
+                            coeff_TS_all,
+                            rxn_network,
+                            t_span,
+                            initial_conc,
+                            states,
+                            timeout,
+                            False,
+                            1)
+                        ci[i, :] = np.abs(result_u - result_d) / 2
+                    prod_conc[i, :] = result
+                
 
                 except Exception as e:
+                    print(e)
                     if verb > 1:
                         print(f"Fail to compute at point {profile} in the volcano line")
-                    prod_conc.append(np.array([np.nan] * n_target))
-
-        prod_conc = np.array(prod_conc)
+                    prod_conc[i, :] = np.array([np.nan] * n_target)
+                    ci[i, :] = np.array([np.nan] * n_target)
 
         # interpolation
         prod_conc_ = prod_conc.copy()
+        ci_ = ci.copy()
         missing_indices = np.isnan(prod_conc[:, 0]
                                    )
         for i in range(n_target):
@@ -755,13 +804,22 @@ if __name__ == "__main__":
             y_interp = f(xint[missing_indices])
             prod_conc_[:, i][missing_indices] = y_interp
 
+            if comp_ci:
+                f_ci = interp1d(xint[~missing_indices],
+                            ci[:, i][~missing_indices],
+                            kind='cubic',
+                            fill_value="extrapolate")
+                y_interp_ci = f_ci(xint[missing_indices])
+                ci_[:, i][missing_indices] = y_interp_ci
+
         prod_conc_ = prod_conc_.T
+        ci_ = ci_.T
         # %% volcano point------------------------------------------------------------------------------#
         print(
             f"Performing microkinetics modelling for the volcano line ({len(d)})")
-        print(temperature)
-        prod_conc_pt = []
-        for profile in tqdm(d, total=len(d), ncols=80):
+        
+        prod_conc_pt = np.zeros((len(d), n_target))
+        for i, profile in tqdm(enumerate(d), total=len(d), ncols=80):
 
             try:
                 initial_conc, energy_profile_all, dgr_all, \
@@ -780,17 +838,13 @@ if __name__ == "__main__":
                     report_as_yield,
                     quality)
                 if len(result) != n_target:
-                    prod_conc_pt.append(np.array([np.nan] * n_target))
+                    prod_conc_pt[i, :] = np.array([np.nan] * n_target)
                 else:
-                    prod_conc_pt.append(result)
+                    prod_conc_pt[i, :] = result
             except Exception as e:
                 if verb > 1:
                     print(f"Fail to compute at point {profile} in the volcano line")
-                prod_conc_pt.append(np.array([np.nan] * n_target))
-
-        # descrp_pt = d[:, idx]
-        # X = d[:, idx]
-        prod_conc_pt = np.array(prod_conc_pt)
+                prod_conc_pt[i, :] = np.array([np.nan] * n_target)
 
         # interpolation
         missing_indices = np.isnan(prod_conc_pt[:, 0])
@@ -828,6 +882,7 @@ if __name__ == "__main__":
                 prod_conc_,
                 X,
                 prod_conc_pt_,
+                ci=ci_,
                 ms=ms,
                 xmin=xmin,
                 xmax=xmax,
@@ -844,6 +899,7 @@ if __name__ == "__main__":
                     prod_conc_[i],
                     X,
                     prod_conc_pt_[i],
+                    ci=ci_[i],
                     xmin=xmin,
                     xmax=xmax,
                     ybase=y_base,
@@ -856,11 +912,13 @@ if __name__ == "__main__":
                 out.append(f"km_volcano_{tag}_profile{i}.png")
                 plt.clf()
         else:
+            plotmode=3
             plot_2d(
                 xint,
                 prod_conc_[0],
                 X,
                 prod_conc_pt_[0],
+                ci=ci_[0],
                 xmin=xmin,
                 xmax=xmax,
                 ybase=y_base,
@@ -872,6 +930,7 @@ if __name__ == "__main__":
                 plotmode=plotmode)
             out.append(f"km_volcano_{tag}.png")
 
+        #TODO will save ci later
         if verb > 1:
             cb = np.array(cb, dtype='S')
             ms = np.array(ms, dtype='S')

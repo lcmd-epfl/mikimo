@@ -199,6 +199,8 @@ def plot_2d_combo(
                         alpha=0.75,
                         zorder=3,
                     )
+            if ci is not None:
+                plot_ci(ci[i], x, y[i], ax=ax)
             plotpoints(ax, px, py[i], color[i], marker[i], plotmode)
     
     elif plotmode == 2:
@@ -239,6 +241,8 @@ def plot_2d_combo(
                         rotation="vertical",
                         zorder=4,
                     )
+            if ci is not None:
+                plot_ci(ci[i], x, y[i], ax=ax)
             plotpoints(ax, px, py[i], np.repeat([color[i]],len(px)), ms, plotmode)
     
     #TODO color by the ranking
@@ -269,7 +273,7 @@ def plot_2d_combo(
                         zorder=3,
                     )
             if ci is not None:
-                plot_ci(ci, x, y[i], ax=ax)
+                plot_ci(ci[i], x, y[i], ax=ax)
             plotpoints(ax, px, py[i], np.repeat([color[i]],len(px)), ms, plotmode)
 
     ymin, ymax = ax.get_ylim()
