@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import glob
+import multiprocessing
 import os
 import shutil
 
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
+from joblib import Parallel, delayed
 from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.helpers import (bround, group_data_points,
                                       user_choose_1_dv)
@@ -19,7 +21,7 @@ from scipy.interpolate import interp1d
 from tqdm import tqdm
 
 from kinetic_solver import calc_k, system_KE_DE
-from plot2d_mod_ci import plot_2d_combo, plot_evo
+from plot2d_mod import plot_2d_combo, plot_evo
 
 
 def check_km_inp(df, df_network, initial_conc):
@@ -365,6 +367,76 @@ def calc_km(
     except IndexError as err:
         return np.NaN, result_solve_ivp
 
+def grouper(iterable, n):
+    args = [iter(iterable)] * n
+    return zip_longest(*args)
+
+def process_n_calc(profile, sigma_p, initial_conc_, df_network, tags, states, timeout, report_as_yield, quality, comp_ci):
+
+    try:
+        if np.isnan(profile[0]):
+            return  np.array([np.nan] * n_target),  np.array([np.nan] * n_target)
+        else: 
+            initial_conc, energy_profile_all, dgr_all, \
+                coeff_TS_all, rxn_network = process_data_mkm(
+                    profile, initial_conc_, df_network, tags)
+            result, result_ivp = calc_km(
+                energy_profile_all,
+                dgr_all,
+                temperature,
+                coeff_TS_all,
+                rxn_network,
+                t_span,
+                initial_conc,
+                states,
+                timeout,
+                report_as_yield,
+                quality)
+
+            if comp_ci:
+                profile_u = profile + sigma_p
+                profile_d = profile - sigma_p
+
+                initial_conc, energy_profile_all_u, dgr_all, \
+                    coeff_TS_all, rxn_network = process_data_mkm(
+                        profile_u, initial_conc_, df_network, tags)
+                initial_conc, energy_profile_all_d, dgr_all, \
+                    coeff_TS_all, rxn_network = process_data_mkm(
+                        profile_d, initial_conc_, df_network, tags)
+                
+                result_u, _ = calc_km(
+                    energy_profile_all_u,
+                    dgr_all,
+                    temperature,
+                    coeff_TS_all,
+                    rxn_network,
+                    t_span,
+                    initial_conc,
+                    states,
+                    timeout,
+                    False,
+                    1)
+
+                result_d, _ = calc_km(
+                    energy_profile_all_d,
+                    dgr_all,
+                    temperature,
+                    coeff_TS_all,
+                    rxn_network,
+                    t_span,
+                    initial_conc,
+                    states,
+                    timeout,
+                    False,
+                    1)
+                return result, np.abs(result_u - result_d) / 2
+            else:  return result, np.zeros(n_target)
+
+    except Exception as e:
+        print(e)
+        if verb > 1:
+            print(f"Fail to compute at point {profile} in the volcano line")
+        return  np.array([np.nan] * n_target),  np.array([np.nan] * n_target)
 
 if __name__ == "__main__":
 
@@ -526,6 +598,14 @@ if __name__ == "__main__":
         default=1,
         help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv/h5 output files (default: 1)",
     )
+    parser.add_argument(
+        "-ncore",
+        "--ncore",
+        dest="ncore",
+        type=int,
+        default=1,
+        help="number of cpu cores for the parallel computing (default: 1)",
+    )
    
 
     # %% loading and processing------------------------------------------------------------------------#
@@ -546,6 +626,13 @@ if __name__ == "__main__":
     lfesr = args.lfesr
     x_scale = args.xscale
     comp_ci =  args.confidence_interval
+    ncore = args.ncore
+    
+    if ncore == -1:
+        ncore = multiprocessing.cpu_count()
+    if verb > 2:
+        print(f"Use {ncore} cores for parallel computing")
+        
     
     if plotmode == 0 and comp_ci:
         plotmode = 1
@@ -709,7 +796,7 @@ if __name__ == "__main__":
             
             for i, dg in enumerate(dgs):
                 if i not in selected_indices:
-                    trun_dgs.append([np.nan])
+                    trun_dgs.append([np.nan]*len(dgs[0]))
                 else:
                     trun_dgs.append(dg)
                 
@@ -721,74 +808,19 @@ if __name__ == "__main__":
         prod_conc = np.zeros((len(dgs), n_target))
         ci = np.zeros((len(dgs), n_target))
         
-        for i, (profile, sigma_p) in tqdm(enumerate(zip(trun_dgs, sigma_dgs)), total=len(trun_dgs), ncols=80):
-            if np.isnan(profile[0]):
-                prod_conc[i, :] = np.array([np.nan] * n_target)
-                ci[i, :] = np.array([np.nan] * n_target)
-                continue
-            else:
-                try:
-                    initial_conc, energy_profile_all, dgr_all, \
-                        coeff_TS_all, rxn_network = process_data_mkm(
-                            profile, initial_conc_, df_network, tags)
-                    result, _ = calc_km(
-                        energy_profile_all,
-                        dgr_all,
-                        temperature,
-                        coeff_TS_all,
-                        rxn_network,
-                        t_span,
-                        initial_conc,
-                        states,
-                        timeout,
-                        report_as_yield,
-                        quality)
-                    if comp_ci:
-                        profile_u = profile + sigma_p
-                        profile_d = profile - sigma_p
+        dgs_g = np.array_split(trun_dgs, len(trun_dgs)// ncore + 1)
+        sigma_dgs_g = np.array_split(sigma_dgs, len(sigma_dgs)// ncore + 1)
 
-                        initial_conc, energy_profile_all_u, dgr_all, \
-                            coeff_TS_all, rxn_network = process_data_mkm(
-                                profile_u, initial_conc_, df_network, tags)
-                        initial_conc, energy_profile_all_d, dgr_all, \
-                            coeff_TS_all, rxn_network = process_data_mkm(
-                                profile_d, initial_conc_, df_network, tags)
-                        
-                        result_u, _ = calc_km(
-                            energy_profile_all_u,
-                            dgr_all,
-                            temperature,
-                            coeff_TS_all,
-                            rxn_network,
-                            t_span,
-                            initial_conc,
-                            states,
-                            timeout,
-                            False,
-                            1)
-
-                        result_d, _ = calc_km(
-                            energy_profile_all_d,
-                            dgr_all,
-                            temperature,
-                            coeff_TS_all,
-                            rxn_network,
-                            t_span,
-                            initial_conc,
-                            states,
-                            timeout,
-                            False,
-                            1)
-                        ci[i, :] = np.abs(result_u - result_d) / 2
-                    prod_conc[i, :] = result
-                
-
-                except Exception as e:
-                    print(e)
-                    if verb > 1:
-                        print(f"Fail to compute at point {profile} in the volcano line")
-                    prod_conc[i, :] = np.array([np.nan] * n_target)
-                    ci[i, :] = np.array([np.nan] * n_target)
+        i = 0
+        for batch_dgs, batch_s_dgs in tqdm(zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
+            results = Parallel(n_jobs=ncore)(delayed(process_n_calc)\
+                (profile, sigma_dgs, initial_conc_, df_network, tags, states, timeout,\
+                report_as_yield, quality, comp_ci) for profile, sigma_dgs in\
+                    zip(batch_dgs, batch_s_dgs))
+            for j, res in enumerate(results):
+                prod_conc[i , :] = res[0]
+                ci[i, :] = res[1]
+                i+=1
 
         # interpolation
         prod_conc_ = prod_conc.copy()
@@ -819,32 +851,17 @@ if __name__ == "__main__":
             f"Performing microkinetics modelling for the volcano line ({len(d)})")
         
         prod_conc_pt = np.zeros((len(d), n_target))
-        for i, profile in tqdm(enumerate(d), total=len(d), ncols=80):
-
-            try:
-                initial_conc, energy_profile_all, dgr_all, \
-                    coeff_TS_all, rxn_network = process_data_mkm(
-                        profile, initial_conc_, df_network, tags)
-                result, _ = calc_km(
-                    energy_profile_all,
-                    dgr_all,
-                    temperature,
-                    coeff_TS_all,
-                    rxn_network,
-                    t_span,
-                    initial_conc,
-                    states,
-                    timeout,
-                    report_as_yield,
-                    quality)
-                if len(result) != n_target:
-                    prod_conc_pt[i, :] = np.array([np.nan] * n_target)
-                else:
-                    prod_conc_pt[i, :] = result
-            except Exception as e:
-                if verb > 1:
-                    print(f"Fail to compute at point {profile} in the volcano line")
-                prod_conc_pt[i, :] = np.array([np.nan] * n_target)
+        
+        
+        d_g = np.array_split(d, len(d)// ncore + 1)
+        i = 0
+        for batch_dgs in tqdm(d_g, total=len(d_g), ncols=80):
+            results = Parallel(n_jobs=ncore)(delayed(process_n_calc)\
+                (profile, 0, initial_conc_, df_network, tags, states, timeout,\
+                report_as_yield, quality, comp_ci) for profile in batch_dgs)
+            for j, res in enumerate(results):
+                prod_conc_pt[i , :] = res[0]
+                i+=1
 
         # interpolation
         missing_indices = np.isnan(prod_conc_pt[:, 0])
@@ -875,6 +892,7 @@ if __name__ == "__main__":
             ylabel = "Final product concentraion (M)"
 
         out = []
+        if not(comp_ci): ci_ = np.full(prod_conc_.shape[0], None)
         if prod_conc_.shape[0] > 1:
             prod_names = [i.replace("*", "") for i in states if "*" in i]
             plot_2d_combo(
@@ -912,7 +930,6 @@ if __name__ == "__main__":
                 out.append(f"km_volcano_{tag}_profile{i}.png")
                 plt.clf()
         else:
-            plotmode=3
             plot_2d(
                 xint,
                 prod_conc_[0],
@@ -950,7 +967,8 @@ if __name__ == "__main__":
 
         if not os.path.isdir("output"):
             os.makedirs("output")
-            shutil.move("lfesr", "output")
+            if lfesr:
+                shutil.move("lfesr", "output")
         else:
             print("The output directort already exists")
 
