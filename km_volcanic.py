@@ -24,7 +24,7 @@ from kinetic_solver import calc_k, system_KE_DE
 from plot2d_mod import plot_2d_combo, plot_evo
 
 
-def check_km_inp(df, df_network, initial_conc):
+def check_km_inp(df, df_network):
     """
     check if the input is correct
     df: reaction data dataframe
@@ -32,7 +32,7 @@ def check_km_inp(df, df_network, initial_conc):
     initial_conc: initial concentration
     """
     
-    states_network = df_network.columns.to_numpy()[1:]
+    states_network = df_network.columns.to_numpy()[:]
     states_profile = df.columns.to_numpy()[1:]
     states_network_int = [s for s in states_network if not (
         s.lower().startswith("r")) and not (s.lower().startswith("p"))]
@@ -52,11 +52,6 @@ def check_km_inp(df, df_network, initial_conc):
             print(f"""\n{state} cannot be found in the reaction data, if it is in different name, 
                 change it to be the same in both reaction data and the network""")
 
-    # initial conc
-    if len(r_indices) + 1 != len(initial_conc):
-        clear = False
-        print("\nYour initial conc seems wrong")
-
     # check network sanity
     mask = (~df_network.isin([-1, 1])).all(axis=1)
     weird_step = df_network.index[mask].to_list()
@@ -66,15 +61,13 @@ def check_km_inp(df, df_network, initial_conc):
         for s in weird_step:
             print(f"\nYour step {s} is likely wrong.")
 
-    mask_R = (~df_network.iloc[:, r_indices +
-              1].isin([-1])).all(axis=0).to_numpy()
+    mask_R = (~df_network.iloc[:, r_indices].isin([-1])).all(axis=0).to_numpy()
     if np.any(mask_R):
         clear = False
         print(
             f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong")
 
-    mask_P = (~df_network.iloc[:, p_indices +
-              1].isin([1])).all(axis=0).to_numpy()
+    mask_P = (~df_network.iloc[:, p_indices].isin([1])).all(axis=0).to_numpy()
     if np.any(mask_P):
         clear = False
         print(
@@ -83,21 +76,36 @@ def check_km_inp(df, df_network, initial_conc):
     return clear
 
 
-def process_data_mkm(dg, initial_conc_, df_network, tags):
+def process_data_mkm(dg, df_network, c0, tags):
 
-    df_network.fillna(0, inplace=True)
-    states = df_network.columns[1:].tolist()
-    rxn_network_all = df_network.to_numpy()[:, 1:]
-
-    initial_conc = np.zeros(rxn_network_all.shape[1])
-    indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
-    if len(initial_conc_) != rxn_network_all.shape[1]:
-        indices = [i for i, s in enumerate(
-            states) if s.lower().startswith("r")]
-        initial_conc[0] = initial_conc_[0]
-        initial_conc[indices] = initial_conc_[1:]
-    else:
-        initial_conc = initial_conc_
+    df_network.fillna(0, inplace=True)   
+    
+    # extract initial conditions
+    initial_conc = np.array([])
+    last_row_index = df_network.index[-1]
+    if type(last_row_index) == str:
+        if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
+            initial_conc = df_network.iloc[-1:].to_numpy()[0]
+            df_network = df_network.drop(df_network.index[-1])
+            if verb > 2:
+                print("Initial conditions found")
+            
+    # process reaction network
+    rxn_network_all = df_network.to_numpy()[:, :]
+    states = df_network.columns[:].tolist()
+    # initial concentration not in nx, read in text instead
+    if initial_conc.shape[0] == 0:
+        #print("Read Iniiial Concentration from text file")
+        initial_conc_ = np.loadtxt(c0, dtype=np.float64)
+        initial_conc = np.zeros(rxn_network_all.shape[1])
+        indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+        if len(initial_conc_) != rxn_network_all.shape[1]:
+            indices = [i for i, s in enumerate(
+                states) if s.lower().startswith("r")]
+            initial_conc[0] = initial_conc_[0]
+            initial_conc[indices] = initial_conc_[1:]
+        else:
+            initial_conc = initial_conc_
 
     # energy data-------------------------------------------
     df_all = pd.DataFrame([dg], columns=tags)  # %%
@@ -183,7 +191,6 @@ def calc_km(
     if quality == 0:
         max_step = np.nan
         first_step = None
-        initial_conc += 1e-10
     elif quality == 1:
         max_step = np.nan
         first_step = np.min(
@@ -257,7 +264,7 @@ def calc_km(
             else:
                 success = True
 
-        # should be arraybox failure
+        # TODO more specific error handling
         except Exception as e:
             if rtol == last_[0] and atol == last_[1]:
                 success = True
@@ -295,7 +302,7 @@ def calc_km(
                 else:
                     success = True
 
-            # should be arraybox failure
+            # TODO more specific error handling
             except Exception as e:
                 if rtol == last_[0] and atol == last_[1]:
                     success = True
@@ -367,11 +374,7 @@ def calc_km(
     except IndexError as err:
         return np.NaN, result_solve_ivp
 
-def grouper(iterable, n):
-    args = [iter(iterable)] * n
-    return zip_longest(*args)
-
-def process_n_calc(profile, sigma_p, initial_conc_, df_network, tags, states, timeout, report_as_yield, quality, comp_ci):
+def process_n_calc(profile, sigma_p, c0, df_network, tags, states, timeout, report_as_yield, quality, comp_ci):
 
     try:
         if np.isnan(profile[0]):
@@ -379,7 +382,7 @@ def process_n_calc(profile, sigma_p, initial_conc_, df_network, tags, states, ti
         else: 
             initial_conc, energy_profile_all, dgr_all, \
                 coeff_TS_all, rxn_network = process_data_mkm(
-                    profile, initial_conc_, df_network, tags)
+                    profile, df_network, c0, tags)
             result, result_ivp = calc_km(
                 energy_profile_all,
                 dgr_all,
@@ -392,17 +395,16 @@ def process_n_calc(profile, sigma_p, initial_conc_, df_network, tags, states, ti
                 timeout,
                 report_as_yield,
                 quality)
-
             if comp_ci:
                 profile_u = profile + sigma_p
                 profile_d = profile - sigma_p
 
                 initial_conc, energy_profile_all_u, dgr_all, \
                     coeff_TS_all, rxn_network = process_data_mkm(
-                        profile_u, initial_conc_, df_network, tags)
+                        profile_u, df_network, c0, tags)
                 initial_conc, energy_profile_all_d, dgr_all, \
                     coeff_TS_all, rxn_network = process_data_mkm(
-                        profile_d, initial_conc_, df_network, tags)
+                        profile_d, df_network, c0, tags)
                 
                 result_u, _ = calc_km(
                     energy_profile_all_u,
@@ -433,9 +435,8 @@ def process_n_calc(profile, sigma_p, initial_conc_, df_network, tags, states, ti
             else:  return result, np.zeros(n_target)
 
     except Exception as e:
-        print(e)
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line")
+            print(f"Fail to compute at point {profile} in the volcano line due to {e}")
         return  np.array([np.nan] * n_target),  np.array([np.nan] * n_target)
 
 if __name__ == "__main__":
@@ -657,8 +658,7 @@ if __name__ == "__main__":
     filename_xlsx = f"{wdir}reaction_data.xlsx"
     filename_csv = f"{wdir}reaction_data.csv"
     c0 = f"{wdir}c0.txt"
-    df_network = pd.read_csv(f"{wdir}rxn_network.csv")
-    initial_conc = np.loadtxt(c0, dtype=np.float64)
+    df_network = pd.read_csv(f"{wdir}rxn_network.csv", index_col=0)
     t_span = (0, args.time)
 
     try:
@@ -670,6 +670,7 @@ if __name__ == "__main__":
     tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
     d = np.float32(df.to_numpy()[:, 1:])
 
+    # LFESRs------------------------------------------------------------------------#
     coeff = np.zeros(len(tags), dtype=bool)
     regress = np.zeros(len(tags), dtype=bool)
     for i, tag in enumerate(tags):
@@ -762,7 +763,8 @@ if __name__ == "__main__":
         dgs[:, i] = yint
         sigma_dgs[:, i] = ci
 
-    states = df_network.columns[1:].tolist()
+    # %% check inp for microkinetics modelling------------------------------------------------------------------#
+    states = df_network.columns[:].tolist()
     n_target = len([states.index(i) for i in states if "*" in i])
 
     try:
@@ -771,14 +773,12 @@ if __name__ == "__main__":
         df_all = pd.read_csv(filename_csv)
     species_profile = df_all.columns.values[1:]
 
-    clear = check_km_inp(df, df_network, initial_conc)
+    clear = check_km_inp(df, df_network)
     if not (clear):
         print("\nRecheck your reaction network and your reaction data\n")
     else:
         if verb > 0:
             print("\nKM input is clear\n")
-
-    initial_conc_ = np.loadtxt(c0, dtype=np.float64)  # in M
 
     if not evol_mode:
         # %% volcano line------------------------------------------------------------------------------#
@@ -814,7 +814,7 @@ if __name__ == "__main__":
         i = 0
         for batch_dgs, batch_s_dgs in tqdm(zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
             results = Parallel(n_jobs=ncore)(delayed(process_n_calc)\
-                (profile, sigma_dgs, initial_conc_, df_network, tags, states, timeout,\
+                (profile, sigma_dgs, c0, df_network, tags, states, timeout,\
                 report_as_yield, quality, comp_ci) for profile, sigma_dgs in\
                     zip(batch_dgs, batch_s_dgs))
             for j, res in enumerate(results):
@@ -857,7 +857,7 @@ if __name__ == "__main__":
         i = 0
         for batch_dgs in tqdm(d_g, total=len(d_g), ncols=80):
             results = Parallel(n_jobs=ncore)(delayed(process_n_calc)\
-                (profile, 0, initial_conc_, df_network, tags, states, timeout,\
+                (profile, 0, c0, df_network, tags, states, timeout,\
                 report_as_yield, quality, comp_ci) for profile in batch_dgs)
             for j, res in enumerate(results):
                 prod_conc_pt[i , :] = res[0]
@@ -1008,7 +1008,7 @@ if __name__ == "__main__":
             try:
                 initial_conc, energy_profile_all, dgr_all, \
                     coeff_TS_all, rxn_network = process_data_mkm(
-                        profile, initial_conc_, df_network, tags)
+                        profile, df_network, c0, tags)
                 result, result_solve_ivp = calc_km(
                     energy_profile_all,
                     dgr_all,

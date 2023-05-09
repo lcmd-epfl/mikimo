@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 
 def check_km_inp(df, df_network, initial_conc):
 
-    states_network = df_network.columns.to_numpy()[1:]
+    states_network = df_network.columns.to_numpy()[:]
     states_profile = df.columns.to_numpy()[1:]
     states_network_int = [s for s in states_network if not (
         s.lower().startswith("r")) and not (s.lower().startswith("p"))]
@@ -49,15 +49,13 @@ def check_km_inp(df, df_network, initial_conc):
         for s in weird_step:
             print(f"\nYour step {s} is likely wrong.")
 
-    mask_R = (~df_network.iloc[:, r_indices +
-              1].isin([-1])).all(axis=0).to_numpy()
+    mask_R = (~df_network.iloc[:, r_indices].isin([-1])).all(axis=0).to_numpy()
     if np.any(mask_R):
         clear = False
         print(
             f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong")
 
-    mask_P = (~df_network.iloc[:, p_indices +
-              1].isin([1])).all(axis=0).to_numpy()
+    mask_P = (~df_network.iloc[:, p_indices].isin([1])).all(axis=0).to_numpy()
     if np.any(mask_P):
         clear = False
         print(
@@ -68,28 +66,40 @@ def check_km_inp(df, df_network, initial_conc):
 def load_data(args):
 
     rxn_data = args.i
-    c0 = args.c
-    initial_conc_ = np.loadtxt(c0, dtype=np.float64)  # in M
+    c0 = args.c  # in M
     t_span = (0.0, args.time)
     method = args.de
     temperature = args.temp
-    df_network = pd.read_csv(args.rn)
+    df_network = pd.read_csv(args.rn, index_col=0)
     df_network.fillna(0, inplace=True)
 
+    # extract initial conditions
+    initial_conc = np.array([])
+    last_row_index = df_network.index[-1]
+    if type(last_row_index) == str:
+        if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
+            initial_conc = df_network.iloc[-1:].to_numpy()[0]
+            df_network = df_network.drop(df_network.index[-1])
+            print("Initial conditions found")
+            
     # process reaction network
-    rxn_network_all = df_network.to_numpy()[:, 1:]
-    states = df_network.columns[1:].tolist()
-
-    initial_conc = np.zeros(rxn_network_all.shape[1])
-    indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
-    if len(initial_conc_) != rxn_network_all.shape[1]:
-        indices = [i for i, s in enumerate(
-            states) if s.lower().startswith("r")]
-        initial_conc[0] = initial_conc_[0]
-        initial_conc[indices] = initial_conc_[1:]
-    else:
-        initial_conc = initial_conc_
-
+    rxn_network_all = df_network.to_numpy()[:, :]
+    states = df_network.columns[:].tolist()
+    
+    # initial concentration not in nx, read in text instead
+    if initial_conc.shape[0] == 0:
+        print("Read Iniiial Concentration from text file")
+        initial_conc_ = np.loadtxt(c0, dtype=np.float64)
+        initial_conc = np.zeros(rxn_network_all.shape[1])
+        indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+        if len(initial_conc_) != rxn_network_all.shape[1]:
+            indices = [i for i, s in enumerate(
+                states) if s.lower().startswith("r")]
+            initial_conc[0] = initial_conc_[0]
+            initial_conc[indices] = initial_conc_[1:]
+        else:
+            initial_conc = initial_conc_
+            
     # Reaction data-----------------------------------------------------------
     try:
         df_all = pd.read_csv(rxn_data)
@@ -321,7 +331,6 @@ def system_KE_DE(k_forward_all, k_reverse_all, rxn_network_all, initial_conc, st
                         dy_dt[violate_low_idx] = 0
                         dy_dt[violate_up_idx] = 0
                     except TypeError as e:
-                        print(y[violate_up_idx])
                         y_ = np.array(y._value)
                         dy_dt_ = np.array(dy_dt._value)
                         # arraybox failure
