@@ -5,6 +5,7 @@ import glob
 import multiprocessing
 import os
 import shutil
+import itertools
 
 import h5py
 import matplotlib.pyplot as plt
@@ -13,10 +14,12 @@ import pandas as pd
 import scipy.stats as stats
 from joblib import Parallel, delayed
 from navicat_volcanic.dv1 import curate_d, find_1_dv
+from navicat_volcanic.dv2 import find_2_dv, find_2_dv
 from navicat_volcanic.helpers import (bround, group_data_points,
-                                      user_choose_1_dv)
-from navicat_volcanic.plotting2d import (calc_ci, get_reg_targets, plot_2d,
-                                         plot_2d_lsfer)
+                                      user_choose_1_dv, user_choose_2_dv)
+from navicat_volcanic.plotting2d import calc_ci, plot_2d, plot_2d_lsfer
+from navicat_volcanic.plotting3d import get_bases, bround, plot_3d_lsfer
+import sklearn as sk
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 from tqdm import tqdm
@@ -88,8 +91,6 @@ def process_data_mkm(dg, df_network, c0, tags):
         if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
             initial_conc = df_network.iloc[-1:].to_numpy()[0]
             df_network = df_network.drop(df_network.index[-1])
-            if verb > 2:
-                print("Initial conditions found")
             
     # process reaction network
     rxn_network_all = df_network.to_numpy()[:, :]
@@ -173,13 +174,16 @@ def calc_km(
         report_as_yield: bool,
         quality: int = 0,):
     
+    idx_target_all = [states.index(i) for i in states if "*" in i]
     k_forward_all, k_reverse_all = calc_k(
         energy_profile_all,
         dgr_all,
         coeff_TS_all,
         temperature)
+    
     dydt = system_KE_DE(k_forward_all, k_reverse_all,
                         rxn_network_all, initial_conc, states)
+    
     # first try BDF + ag with various rtol and atol
     # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
     # then LSODA + FD if all BDF attempts fail
@@ -342,7 +346,6 @@ def calc_km(
 
     try:
         if result_solve_ivp != "Shiki":
-            idx_target_all = [states.index(i) for i in states if "*" in i]
             c_target_t = np.array([result_solve_ivp.y[i][-1]
                                   for i in idx_target_all])
 
@@ -371,11 +374,11 @@ def calc_km(
                 return c_target_t, result_solve_ivp
 
         else:
-            return np.NaN, result_solve_ivp
-    except IndexError as err:
-        return np.NaN, result_solve_ivp
+            return np.array([np.NaN]*len(idx_target_all)), result_solve_ivp
+    except Exception as err:
+        return np.array([np.NaN]*len(idx_target_all)), result_solve_ivp
 
-def process_n_calc(profile, sigma_p, c0, df_network, tags, states, timeout, report_as_yield, quality, comp_ci):
+def process_n_calc_2d(profile, sigma_p, c0, df_network, tags, states, timeout, report_as_yield, quality, comp_ci):
 
     try:
         if np.isnan(profile[0]):
@@ -439,6 +442,33 @@ def process_n_calc(profile, sigma_p, c0, df_network, tags, states, timeout, repo
         if verb > 1:
             print(f"Fail to compute at point {profile} in the volcano line due to {e}")
         return  np.array([np.nan] * n_target),  np.array([np.nan] * n_target)
+
+def process_n_calc_3d(coord, c0, df_network, tags, states, timeout, report_as_yield, quality):
+
+    try:
+        profile = [gridj[coord] for gridj in grids]
+        initial_conc, energy_profile_all, dgr_all, \
+            coeff_TS_all, rxn_network = process_data_mkm(
+                profile, df_network, c0, tags)
+        result, _ = calc_km(
+            energy_profile_all,
+            dgr_all,
+            temperature,
+            coeff_TS_all,
+            rxn_network,
+            t_span,
+            initial_conc,
+            states,
+            timeout,
+            report_as_yield,
+            quality)
+
+        return result
+
+    except Exception as e:
+        if verb > 1:
+            print(f"Fail to compute at point {profile} in the volcano line due to {e}")
+        return  np.array([np.nan] * n_target)
 
 if __name__ == "__main__":
 
@@ -541,6 +571,7 @@ if __name__ == "__main__":
         action="store_true",
         help="""Toggle to plot LFESRs. (default: False)""",
     )
+   
     parser.add_argument(
         "--timeout",
         dest="timeout",
@@ -566,14 +597,16 @@ if __name__ == "__main__":
         help="""plot quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
     )
     parser.add_argument(
-        "-ev",
-        "--ev"
-        "-evol",
-        "--evol",
-        dest="evol_mode",
-        action="store_true",
-        help="""Flag to disable plotting the volcano
-        Instead plot the evolution of each point. (default: False)""",
+        "-nd",
+        "--nd",
+        dest="run_mode",
+        type=int,
+        default=1,
+        help="""run mode (default: 1)
+        0: run mkm for every profiles
+        1: construct MKM volcano plot
+        2: construct MKM activity/selectivity map
+        """,
     )
     parser.add_argument(
         "-x",
@@ -619,7 +652,6 @@ if __name__ == "__main__":
     wdir = args.dir
     imputer_strat = args.imputer_strat
     report_as_yield = args.percent
-    evol_mode = args.evol_mode
     timeout = args.timeout
     quality = args.int_quality
     p_quality = args.plot_quality
@@ -629,7 +661,27 @@ if __name__ == "__main__":
     x_scale = args.xscale
     comp_ci =  args.confidence_interval
     ncore = args.ncore
+    nd = args.run_mode
+
+    filename_xlsx = f"{wdir}reaction_data.xlsx"
+    filename_csv = f"{wdir}reaction_data.csv"
+    c0 = f"{wdir}c0.txt"
+    df_network = pd.read_csv(f"{wdir}rxn_network.csv", index_col=0)
+    t_span = (0, args.time)
+    states = df_network.columns[:].tolist()
+    n_target = len([states.index(i) for i in states if "*" in i])
     
+    try:
+        df = pd.read_excel(filename_xlsx)
+    except FileNotFoundError as e:
+        df = pd.read_csv(filename_csv)
+    clear = check_km_inp(df, df_network)
+    if not (clear):
+        print("\nRecheck your reaction network and your reaction data\n")
+    else:
+        if verb > 0:
+            print("\nKM input is clear\n")
+                  
     if ncore == -1:
         ncore = multiprocessing.cpu_count()
     if verb > 2:
@@ -638,6 +690,8 @@ if __name__ == "__main__":
     
     if plotmode == 0 and comp_ci:
         plotmode = 1
+    
+    
     
     xbase = 20
     npoints = 200
@@ -656,22 +710,11 @@ if __name__ == "__main__":
         interpolate = False 
         npoints = 300
 
-    filename_xlsx = f"{wdir}reaction_data.xlsx"
-    filename_csv = f"{wdir}reaction_data.csv"
-    c0 = f"{wdir}c0.txt"
-    df_network = pd.read_csv(f"{wdir}rxn_network.csv", index_col=0)
-    t_span = (0, args.time)
-
-    try:
-        df = pd.read_excel(filename_xlsx)
-    except FileNotFoundError as e:
-        df = pd.read_csv(filename_csv)
     names = df[df.columns[0]].values
     cb, ms = group_data_points(0, 2, names)
     tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
     d = np.float32(df.to_numpy()[:, 1:])
-
-    # LFESRs------------------------------------------------------------------------#
+    
     coeff = np.zeros(len(tags), dtype=bool)
     regress = np.zeros(len(tags), dtype=bool)
     for i, tag in enumerate(tags):
@@ -706,8 +749,13 @@ if __name__ == "__main__":
 
     d, cb, ms = curate_d(d, regress, cb, ms, tags,
                          imputer_strat, nstds=3, verb=verb)
-    dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
-    if not evol_mode:
+    
+    # %% selecting modes----------------------------------------------------------#
+    if nd == 0:
+        evol_mode = True
+    elif nd==1:
+        from navicat_volcanic.plotting2d import get_reg_targets
+        dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
         idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
         if lfesr:
             d = plot_2d_lsfer(
@@ -734,56 +782,157 @@ if __name__ == "__main__":
                 destination_file = os.path.join(
                     "lfesr/", os.path.basename(file_name))
                 shutil.move(source_file, destination_file)
-                
-    else:
-        idx = 3
-    X, tag, tags, d, d2, coeff = get_reg_targets(
-        idx, d, tags, coeff, regress, mode="k")
-    
-    lnsteps = range(d.shape[1])
-    xmax = bround(X.max() + rmargin, xbase)
-    xmin = bround(X.min() - lmargin, xbase)
+        X, tag, tags, d, d2, coeff = get_reg_targets(
+            idx, d, tags, coeff, regress, mode="k")
+        
+        lnsteps = range(d.shape[1])
+        xmax = bround(X.max() + rmargin, xbase)
+        xmin = bround(X.min() - lmargin, xbase)
 
-    if verb > 1:
-        print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
-    xint = np.linspace(xmin, xmax, npoints)
-    dgs = np.zeros((npoints, len(lnsteps)))
-    sigma_dgs = np.zeros((npoints, len(lnsteps)))
-    for i, j in enumerate(lnsteps):
-        Y = d[:, j].reshape(-1)
-        p, cov = np.polyfit(X, Y, 1, cov=True)
-        Y_pred = np.polyval(p, X)
-        n = Y.size
-        m = p.size
-        dof = n - m
-        resid = Y - Y_pred
-        with np.errstate(invalid="ignore"):
-            chi2 = np.sum((resid / Y_pred) ** 2)
-        yint = np.polyval(p, xint)
-        ci = calc_ci(resid, n, dof, X, xint, yint)
-        dgs[:, i] = yint
-        sigma_dgs[:, i] = ci
+        if verb > 1:
+            print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
+        xint = np.linspace(xmin, xmax, npoints)
+        dgs = np.zeros((npoints, len(lnsteps)))
+        sigma_dgs = np.zeros((npoints, len(lnsteps)))
+        for i, j in enumerate(lnsteps):
+            Y = d[:, j].reshape(-1)
+            p, cov = np.polyfit(X, Y, 1, cov=True)
+            Y_pred = np.polyval(p, X)
+            n = Y.size
+            m = p.size
+            dof = n - m
+            resid = Y - Y_pred
+            with np.errstate(invalid="ignore"):
+                chi2 = np.sum((resid / Y_pred) ** 2)
+            yint = np.polyval(p, xint)
+            ci = calc_ci(resid, n, dof, X, xint, yint)
+            dgs[:, i] = yint
+            sigma_dgs[:, i] = ci
+    elif nd == 2:
+        from navicat_volcanic.plotting3d import get_reg_targets
+        dvs, r2s = find_2_dv(d, tags, coeff, regress, verb)
+        idx1, idx2 = user_choose_2_dv(dvs, r2s, tags)
 
-    # %% check inp for microkinetics modelling------------------------------------------------------------------#
-    states = df_network.columns[:].tolist()
-    n_target = len([states.index(i) for i in states if "*" in i])
+        X1, X2, tag1, tag2, tags, d, d2, coeff = get_reg_targets(
+            idx1, idx2, d, tags, coeff, regress, mode="k"
+        )
+        x1base, x2base = get_bases(X1, X2)
+        lnsteps = range(d.shape[1])
+        x1max = bround(X1.max() + rmargin, x1base, "max")
+        x1min = bround(X1.min() - lmargin, x1base, "min")
+        x2max = bround(X2.max() + rmargin, x2base, "max")
+        x2min = bround(X2.min() - lmargin, x2base, "min")
+        if verb > 1:
+            print(
+                f"Range of descriptors set to [ {x1min} , {x1max} ] and [ {x2min} , {x2max} ]"
+            )
+        xint = np.linspace(x1min, x1max, npoints)
+        yint = np.linspace(x2min, x2max, npoints)
+        grids = []
+        for i, j in enumerate(lnsteps):
+            XY = np.vstack([X1, X2, d[:, j]]).T
+            X = XY[:, :2]
+            Y = XY[:, 2]
+            reg = sk.linear_model.LinearRegression().fit(X, Y)
+            Y_pred = reg.predict(X)
+            gridj = np.zeros((npoints, npoints))
+            for k, x1 in enumerate(xint):
+                for l, x2 in enumerate(yint):
+                    x1x2 = np.vstack([x1, x2]).reshape(1, -1)
+                    gridj[k, l] = reg.predict(x1x2)
+            grids.append(gridj)
 
-    try:
-        df_all = pd.read_excel(filename_xlsx)
-    except FileNotFoundError as e:
-        df_all = pd.read_csv(filename_csv)
-    species_profile = df_all.columns.values[1:]
-
-    clear = check_km_inp(df, df_network)
-    if not (clear):
-        print("\nRecheck your reaction network and your reaction data\n")
-    else:
+    # %% evol mode----------------------------------------------------------------#
+    if nd==0:
         if verb > 0:
-            print("\nKM input is clear\n")
+            print("\n------------Evol mode: plotting evolution for all profiles------------------\n")
 
-    if not evol_mode:
-        # %% volcano line------------------------------------------------------------------------------#
-        # only applicable to single profile for now
+        prod_conc_pt = []
+        result_solve_ivp_all = []
+
+        if not os.path.isdir("output_evo"):
+            os.makedirs("output_evo")
+        else:
+            if verb > 1:
+                print("The evolution output directort already exists")
+
+        for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
+            try:
+                initial_conc, energy_profile_all, dgr_all, \
+                    coeff_TS_all, rxn_network = process_data_mkm(
+                        profile, df_network, c0, tags)
+                result, result_solve_ivp = calc_km(
+                    energy_profile_all,
+                    dgr_all,
+                    temperature,
+                    coeff_TS_all,
+                    rxn_network,
+                    t_span,
+                    initial_conc,
+                    states,
+                    timeout,
+                    report_as_yield,
+                    quality)
+                if len(result) != n_target:
+                    prod_conc_pt.append(np.array([np.nan] * n_target))
+                else:
+                    prod_conc_pt.append(result)
+
+                result_solve_ivp_all.append(result_solve_ivp)
+
+                states_ = [s.replace("*", "") for s in states]
+                plot_evo(result_solve_ivp, names[i], states_, x_scale, more_species_mkm)
+                source_file = os.path.abspath(
+                    f"kinetic_modelling_{names[i]}.png")
+                destination_file = os.path.join(
+                    "output_evo/", os.path.basename(f"kinetic_modelling_{names[i]}.png"))
+                shutil.move(source_file, destination_file)
+            except Exception as e:
+                print(f"Cannot perform mkm for {names[i]}")
+                prod_conc_pt.append(np.array([np.nan] * n_target))
+                result_solve_ivp_all.append("Shiki")
+
+        prod_conc_pt = np.array(prod_conc_pt).T
+        if verb > 1:
+            prod_names = [i.replace("*", "") for i in states if "*" in i]
+            data_dict = dict()
+            data_dict["entry"] = names
+            for i in range(prod_conc_pt.shape[0]):
+                data_dict[prod_names[i]] = prod_conc_pt[i]
+
+            df = pd.DataFrame(data_dict)
+            df.to_csv('prod_conc.csv', index=False)
+            print(df.to_string(index=False))
+            source_file = os.path.abspath(
+                'prod_conc.csv')
+            destination_file = os.path.join(
+                "output_evo/", os.path.basename('prod_conc.csv'))
+            shutil.move(source_file, destination_file)
+
+        if not os.path.isdir(os.path.join(wdir, "output_evo/")):
+            shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
+        else:
+            print("Output already exist")
+            move_bool = input("Move anyway? (y/n): ")
+            if move_bool == "y":
+                shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
+            elif move_bool == "n":
+                pass
+            else:
+                move_bool = input(
+                    f"{move_bool} is invalid, please try again... (y/n): ")
+        
+        print("""\nThis is a parade
+Even if I have to drag these feet of mine
+In exchange for this seeping pain
+I'll find happiness in abundance""")
+    # %% MKM volcano plot---------------------------------------------------------#
+    elif nd==1:
+        
+        if verb > 0:
+            print("\n------------Constructing MKM volcano plot------------------\n")
+        
+        # Volcano line
         if interpolate:
             if verb > 0:
                 print(
@@ -814,7 +963,7 @@ if __name__ == "__main__":
 
         i = 0
         for batch_dgs, batch_s_dgs in tqdm(zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
-            results = Parallel(n_jobs=ncore)(delayed(process_n_calc)\
+            results = Parallel(n_jobs=ncore)(delayed(process_n_calc_2d)\
                 (profile, sigma_dgs, c0, df_network, tags, states, timeout,\
                 report_as_yield, quality, comp_ci) for profile, sigma_dgs in\
                     zip(batch_dgs, batch_s_dgs))
@@ -847,7 +996,7 @@ if __name__ == "__main__":
 
         prod_conc_ = prod_conc_.T
         ci_ = ci_.T
-        # %% volcano point------------------------------------------------------------------------------#
+        # Volcano points
         print(
             f"Performing microkinetics modelling for the volcano line ({len(d)})")
         
@@ -857,7 +1006,7 @@ if __name__ == "__main__":
         d_g = np.array_split(d, len(d)// ncore + 1)
         i = 0
         for batch_dgs in tqdm(d_g, total=len(d_g), ncols=80):
-            results = Parallel(n_jobs=ncore)(delayed(process_n_calc)\
+            results = Parallel(n_jobs=ncore)(delayed(process_n_calc_2d)\
                 (profile, 0, c0, df_network, tags, states, timeout,\
                 report_as_yield, quality, comp_ci) for profile in batch_dgs)
             for j, res in enumerate(results):
@@ -880,8 +1029,7 @@ if __name__ == "__main__":
 
         prod_conc_pt_ = prod_conc_pt_.T
 
-        # \%% plotting------------------------------------------------------------------------------#
-
+        # Plotting
         xlabel = "$ΔG_{RRS}$" + f"({tag}) [kcal/mol]"
         ylabel = "Final product concentraion (M)"
 
@@ -991,82 +1139,46 @@ if __name__ == "__main__":
             else:
                 move_bool = input(
                     f"{move_bool} is invalid, please try again... (y/n): ")
-
-    # %% evol mode----------------------------------------------------------------------------------#
-    else:
+        
+        print("""\nI won't pray anymore
+The kindness that rained on this city
+I won't rely on it anymore
+My pain and my shape
+No one else can decide it\n""")
+        
+    # %% MKM activity/selectivity map---------------------------------------------#
+    elif nd==2:
         if verb > 0:
-            print("Evol mode: plotting evolution for all points")
+            print("\n------------Constructing MKM activity/selectivity map------------------\n")
+        grid = np.zeros_like(gridj)
+        grid_d = np.array([grid]*n_target)
+        rb = np.zeros_like(gridj, dtype=int)
+        total_combinations = len(xint) * len(yint)
+        combinations = list(itertools.product(range(len(xint)), range(len(yint))))
+        num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
 
-        prod_conc_pt = []
-        result_solve_ivp_all = []
+        # MKM
+        for chunk_index in tqdm(range(num_chunks)):
+            start_index = chunk_index * ncore
+            end_index = min(start_index + ncore, total_combinations)
+            chunk = combinations[start_index:end_index]
 
-        if not os.path.isdir("output_evo"):
-            os.makedirs("output_evo")
-        else:
-            print("The evolution output directort already exists")
-
-        for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
-            try:
-                initial_conc, energy_profile_all, dgr_all, \
-                    coeff_TS_all, rxn_network = process_data_mkm(
-                        profile, df_network, c0, tags)
-                result, result_solve_ivp = calc_km(
-                    energy_profile_all,
-                    dgr_all,
-                    temperature,
-                    coeff_TS_all,
-                    rxn_network,
-                    t_span,
-                    initial_conc,
-                    states,
-                    timeout,
-                    report_as_yield,
-                    quality)
-                if len(result) != n_target:
-                    prod_conc_pt.append(np.array([np.nan] * n_target))
-                else:
-                    prod_conc_pt.append(result)
-
-                result_solve_ivp_all.append(result_solve_ivp)
-
-                states_ = [s.replace("*", "") for s in states]
-                plot_evo(result_solve_ivp, names[i], states_, x_scale, more_species_mkm)
-                source_file = os.path.abspath(
-                    f"kinetic_modelling_{names[i]}.png")
-                destination_file = os.path.join(
-                    "output_evo/", os.path.basename(f"kinetic_modelling_{names[i]}.png"))
-                shutil.move(source_file, destination_file)
-            except Exception as e:
-                print(f"Cannot perform mkm for {names[i]}")
-                prod_conc_pt.append(np.array([np.nan] * n_target))
-                result_solve_ivp_all.append("Shiki")
-
-        prod_conc_pt = np.array(prod_conc_pt).T
-        if verb > 1:
-            prod_names = [i.replace("*", "") for i in states if "*" in i]
-            data_dict = dict()
-            data_dict["entry"] = names
-            for i in range(prod_conc_pt.shape[0]):
-                data_dict[prod_names[i]] = prod_conc_pt[i]
-
-            df = pd.DataFrame(data_dict)
-            df.to_csv('prod_conc.csv', index=False)
-            print(df.to_string(index=False))
-            source_file = os.path.abspath(
-                'prod_conc.csv')
-            destination_file = os.path.join(
-                "output_evo/", os.path.basename('prod_conc.csv'))
-            shutil.move(source_file, destination_file)
-
-        if not os.path.isdir(os.path.join(wdir, "output_evo/")):
-            shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-        else:
-            print("Output already exist")
-            move_bool = input("Move anyway? (y/n): ")
-            if move_bool == "y":
-                shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-            elif move_bool == "n":
-                pass
-            else:
-                move_bool = input(
-                    f"{move_bool} is invalid, please try again... (y/n): ")
+            
+            results = Parallel(n_jobs=ncore)(delayed(process_n_calc_3d)\
+                            (coord, c0, df_network, tags, states, timeout,\
+                            report_as_yield, quality) for coord in chunk)
+            i = 0
+            for k, l in chunk:
+                for j in range(n_target):
+                    grid_d[j][k, l] = results[i][j]
+                    i+=1
+        
+        # Plotting
+        
+        #TODO 1 target: activity
+        #TODO 2 targets: activity and selectivity-2
+        #TODO >2 targets: activity and selectivity-3
+        print("""The glow of that gigantic star
+That utopia of endless happiness
+I don't care if I never reach any of those
+I don't need anything else but I\n""")
