@@ -18,8 +18,11 @@ from navicat_volcanic.dv2 import find_2_dv, find_2_dv
 from navicat_volcanic.helpers import (bround, group_data_points,
                                       user_choose_1_dv, user_choose_2_dv)
 from navicat_volcanic.plotting2d import calc_ci, plot_2d, plot_2d_lsfer
-from navicat_volcanic.plotting3d import get_bases, bround, plot_3d_lsfer
+from navicat_volcanic.plotting3d import (get_bases, bround, plot_3d_lsfer, 
+                                         plot_3d_contour, plot_3d_scatter, plot_3d_contour_regions)
 import sklearn as sk
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 from tqdm import tqdm
@@ -483,6 +486,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-id",
+        dest="idx",
+        type=int,
+        nargs='+',
+        help="Manually specify the index of descriptor varaible in LFESEs. (default: None)",
+    )
+
+    parser.add_argument(
         "-Tf",
         "-tf",
         "--Tf",
@@ -670,7 +681,8 @@ if __name__ == "__main__":
     t_span = (0, args.time)
     states = df_network.columns[:].tolist()
     n_target = len([states.index(i) for i in states if "*" in i])
-    
+    lfesrs_idx = args.idx
+    print(lfesrs_idx)
     try:
         df = pd.read_excel(filename_xlsx)
     except FileNotFoundError as e:
@@ -747,16 +759,21 @@ if __name__ == "__main__":
             coeff[i] = False
             regress[i] = True
 
+
     d, cb, ms = curate_d(d, regress, cb, ms, tags,
                          imputer_strat, nstds=3, verb=verb)
-    
+   
     # %% selecting modes----------------------------------------------------------#
     if nd == 0:
         evol_mode = True
     elif nd==1:
         from navicat_volcanic.plotting2d import get_reg_targets
         dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
-        idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
+        if lfesrs_idx:
+            idx = lfesrs_idx[0]
+            if verb > 1: print(f"\n**Manually chose {tags[idx]} as descriptor****\n")
+        else:
+            idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
         if lfesr:
             d = plot_2d_lsfer(
                 idx,
@@ -782,13 +799,14 @@ if __name__ == "__main__":
                 destination_file = os.path.join(
                     "lfesr/", os.path.basename(file_name))
                 shutil.move(source_file, destination_file)
+                
         X, tag, tags, d, d2, coeff = get_reg_targets(
             idx, d, tags, coeff, regress, mode="k")
         
         lnsteps = range(d.shape[1])
         xmax = bround(X.max() + rmargin, xbase)
         xmin = bround(X.min() - lmargin, xbase)
-
+        
         if verb > 1:
             print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
         xint = np.linspace(xmin, xmax, npoints)
@@ -811,7 +829,12 @@ if __name__ == "__main__":
     elif nd == 2:
         from navicat_volcanic.plotting3d import get_reg_targets
         dvs, r2s = find_2_dv(d, tags, coeff, regress, verb)
-        idx1, idx2 = user_choose_2_dv(dvs, r2s, tags)
+        if lfesrs_idx:
+            assert len(lfesrs_idx) == 2; "Require 2 lfesrs_idx for activity/seclectivity map"
+            idx1, idx2 = lfesrs_idx
+            if verb > 1: print(f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor****\n")
+        else:
+            idx1, idx2 = user_choose_2_dv(dvs, r2s, tags)
 
         X1, X2, tag1, tag2, tags, d, d2, coeff = get_reg_targets(
             idx1, idx2, d, tags, coeff, regress, mode="k"
@@ -1139,7 +1162,8 @@ I'll find happiness in abundance""")
             else:
                 move_bool = input(
                     f"{move_bool} is invalid, please try again... (y/n): ")
-        
+
+
         print("""\nI won't pray anymore
 The kindness that rained on this city
 I won't rely on it anymore
@@ -1172,13 +1196,230 @@ No one else can decide it\n""")
                 for j in range(n_target):
                     grid_d[j][k, l] = results[i][j]
                     i+=1
-        
+                    
+        # TODO knn imputter for now
+        if np.any(np.isnan(grid_d)):
+            grid_d_fill = np.zeros_like(grid_d)
+            for i, gridi in enumerate(grid_d):
+                knn_imputer = KNNImputer(n_neighbors=2)
+                knn_imputer.fit(gridi)
+                filled_data = knn_imputer.transform(gridi)
+                grid_d_fill[i] = filled_data
+        else:
+            grid_d_fill = grid_d
+            
+        px = np.zeros_like(d[:, 0])
+        py = np.zeros_like(d[:, 0])
+        for i in range(d.shape[0]):
+            profile = d[i, :-1]
+            px[i] = X1[i]
+            py[i] = X2[i]                  
+                                
         # Plotting
-        
         #TODO 1 target: activity
+        x1min = np.min(xint)
+        x1max = np.max(xint)
+        x2min = np.min(yint)
+        x2max = np.max(yint)
+        x1label = f"{tag1} [kcal/mol]"
+        x2label = f"{tag2} [kcal/mol]"
+
+        alabel = "Total product concentration [M]"
+        afilename = f"activity_{tag1}_{tag2}.png"
+
+        activity_grid = np.sum(grid_d_fill, axis=0)
+        amin = activity_grid.min()
+        amax = activity_grid.max()  
+
+        if plotmode > 1:
+            plot_3d_contour(
+                        xint,
+                        yint,
+                        activity_grid,
+                        px,
+                        py,
+                        amin,
+                        amax,
+                        x1min,
+                        x1max,
+                        x2min,
+                        x2max,
+                        x1base,
+                        x2base,
+                        x1label=x1label,
+                        x2label=x2label,
+                        ylabel=alabel,
+                        filename=afilename,
+                        cb=cb,
+                        ms=ms,
+                        plotmode=plotmode,
+                    )      
+        else:
+            plot_3d_scatter(
+                        xint,
+                        yint,
+                        activity_grid,
+                        px,
+                        py,
+                        amin,
+                        amax,
+                        x1min,
+                        x1max,
+                        x2min,
+                        x2max,
+                        x1base,
+                        x2base,
+                        x1label=x1label,
+                        x2label=x2label,
+                        ylabel=alabel,
+                        filename=afilename,
+                        cb=cb,
+                        ms=ms,
+                        plotmode=plotmode,
+                    )  
+        
+        cb = np.array(cb, dtype='S')
+        ms = np.array(ms, dtype='S')
+        with h5py.File('data_a.h5', 'w') as f:
+            group = f.create_group('data')
+            # save each numpy array as a dataset in the group
+            group.create_dataset('xint', data=xint)
+            group.create_dataset('yint', data=yint)
+            group.create_dataset('agrid', data=activity_grid)
+            group.create_dataset('px', data=px)
+            group.create_dataset('py', data=py)
+            group.create_dataset('cb', data=cb)
+            group.create_dataset('ms', data=ms)
+            group.create_dataset('tag1', data=[tag1.encode()])
+            group.create_dataset('tag2', data=[tag2.encode()])
+            group.create_dataset('x1label', data=[x1label.encode()])
+            group.create_dataset('x2label', data=[x2label.encode()])    
+        
         #TODO 2 targets: activity and selectivity-2
+        prod = [p for p in states if "*" in p]
+        prod = [s.replace("*", "") for s in prod]
+        if n_target == 2:
+            
+            
+            slabel = "$log_{10}$"+f"({prod[0]}/{prod[1]})"
+            sfilename = f"selectivity_{tag1}_{tag2}.png"
+
+            min_ratio = -10
+            max_ratio = 10
+            selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
+            selectivity_ratio_ = np.clip(selectivity_ratio, min_ratio, max_ratio)
+            smin = selectivity_ratio.min()
+            smax = selectivity_ratio.max()         
+            if plotmode > 1:
+                plot_3d_contour(
+                            xint,
+                            yint,
+                            selectivity_ratio_,
+                            px,
+                            py,
+                            smin,
+                            smax,
+                            x1min,
+                            x1max,
+                            x2min,
+                            x2max,
+                            x1base,
+                            x2base,
+                            x1label=x1label,
+                            x2label=x2label,
+                            ylabel=slabel,
+                            filename=sfilename,
+                            cb=cb,
+                            ms=ms,
+                            plotmode=plotmode,
+                        )      
+            else:
+                plot_3d_scatter(
+                            xint,
+                            yint,
+                            selectivity_ratio_,
+                            px,
+                            py,
+                            smin,
+                            smax,
+                            x1min,
+                            x1max,
+                            x2min,
+                            x2max,
+                            x1base,
+                            x2base,
+                            x1label=x1label,
+                            x2label=x2label,
+                            ylabel=slabel,
+                            filename=sfilename,
+                            cb=cb,
+                            ms=ms,
+                            plotmode=plotmode,
+                        )  
+            cb = np.array(cb, dtype='S')
+            ms = np.array(ms, dtype='S')
+            with h5py.File('data_a.h5', 'w') as f:
+                group = f.create_group('data')
+                # save each numpy array as a dataset in the group
+                group.create_dataset('xint', data=xint)
+                group.create_dataset('yint', data=yint)
+                group.create_dataset('sgrid', data=selectivity_ratio_)
+                group.create_dataset('px', data=px)
+                group.create_dataset('py', data=py)
+                group.create_dataset('cb', data=cb)
+                group.create_dataset('ms', data=ms)
+                group.create_dataset('tag1', data=[tag1.encode()])
+                group.create_dataset('tag2', data=[tag2.encode()])
+                group.create_dataset('x1label', data=[x1label.encode()])
+                group.create_dataset('x2label', data=[x2label.encode()])  
+                
         #TODO >2 targets: activity and selectivity-3
-        print("""The glow of that gigantic star
+        elif n_target > 2:
+            dominant_indices = np.argmax(grid_d_fill, axis=0)     
+            slabel = "Dominant product"
+            sfilename = f"selectivity_{tag1}_{tag2}.png"
+            plot_3d_contour_regions(
+                        xint,
+                        yint,
+                        dominant_indices,
+                        px,
+                        py,
+                        amin,
+                        amax,
+                        x1min,
+                        x1max,
+                        x2min,
+                        x2max,
+                        x1base,
+                        x2base,
+                        x1label=x1label,
+                        x2label=x2label,
+                        ylabel=slabel,
+                        filename=sfilename,
+                        cb=cb,
+                        ms=ms,
+                        id_labels=prod,
+                        plotmode=plotmode,
+                    )       
+            cb = np.array(cb, dtype='S')
+            ms = np.array(ms, dtype='S')
+            with h5py.File('data_a.h5', 'w') as f:
+                group = f.create_group('data')
+                # save each numpy array as a dataset in the group
+                group.create_dataset('xint', data=xint)
+                group.create_dataset('yint', data=yint)
+                group.create_dataset('dominant_indices', data=dominant_indices)
+                group.create_dataset('px', data=px)
+                group.create_dataset('py', data=py)
+                group.create_dataset('cb', data=cb)
+                group.create_dataset('ms', data=ms)
+                group.create_dataset('tag1', data=[tag1.encode()])
+                group.create_dataset('tag2', data=[tag2.encode()])
+                group.create_dataset('x1label', data=[x1label.encode()])
+                group.create_dataset('x2label', data=[x2label.encode()])    
+                
+                     
+        print("""\nThe glow of that gigantic star
 That utopia of endless happiness
 I don't care if I never reach any of those
 I don't need anything else but I\n""")
