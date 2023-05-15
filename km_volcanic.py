@@ -446,7 +446,7 @@ def process_n_calc_2d(profile, sigma_p, c0, df_network, tags, states, timeout, r
             print(f"Fail to compute at point {profile} in the volcano line due to {e}")
         return  np.array([np.nan] * n_target),  np.array([np.nan] * n_target)
 
-def process_n_calc_3d(coord, c0, df_network, tags, states, timeout, report_as_yield, quality):
+def process_n_calc_3d(coord, grids, c0, df_network, tags, states, timeout, report_as_yield, quality):
 
     try:
         profile = [gridj[coord] for gridj in grids]
@@ -826,6 +826,19 @@ if __name__ == "__main__":
             ci = calc_ci(resid, n, dof, X, xint, yint)
             dgs[:, i] = yint
             sigma_dgs[:, i] = ci
+        
+        #TODO For some reason, sometimes the volcanic drops the last state
+        #Kinda adhoc fix for now
+        if np.std(dgs[:,-1]) > 0.1:
+            print("\n***Forgot the last state******\n")
+            d_ = np.float32(df.to_numpy()[:, 1:])
+            tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
+            
+            dgs = np.column_stack((dgs, np.full((npoints, 1), d_[-1,-1])))
+            d = np.column_stack((d, np.full((d.shape[0], 1), d_[-1,-1])))
+            tags = np.append(tags, tags_[-1])
+            sigma_dgs = np.column_stack((sigma_dgs, np.full((npoints, 1), 0)))
+            
     elif nd == 2:
         from navicat_volcanic.plotting3d import get_reg_targets
         dvs, r2s = find_2_dv(d, tags, coeff, regress, verb)
@@ -864,7 +877,16 @@ if __name__ == "__main__":
                     x1x2 = np.vstack([x1, x2]).reshape(1, -1)
                     gridj[k, l] = reg.predict(x1x2)
             grids.append(gridj)
-
+            
+        tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
+        if len(grids) != len(tags_):
+            print("\n***Forgot the last state******\n")
+            d_ = np.float32(df.to_numpy()[:, 1:])
+       
+            grids.append(np.full(((npoints, npoints)), d_[-1,-1]))
+            tags = np.append(tags, tags_[-1])
+            
+            
     # %% evol mode----------------------------------------------------------------#
     if nd==0:
         if verb > 0:
@@ -1189,7 +1211,7 @@ No one else can decide it\n""")
 
             
             results = Parallel(n_jobs=ncore)(delayed(process_n_calc_3d)\
-                            (coord, c0, df_network, tags, states, timeout,\
+                            (coord, grids, c0, df_network, tags, states, timeout,\
                             report_as_yield, quality) for coord in chunk)
             i = 0
             for k, l in chunk:
