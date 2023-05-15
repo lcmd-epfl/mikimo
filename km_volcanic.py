@@ -682,7 +682,7 @@ if __name__ == "__main__":
     states = df_network.columns[:].tolist()
     n_target = len([states.index(i) for i in states if "*" in i])
     lfesrs_idx = args.idx
-    print(lfesrs_idx)
+
     try:
         df = pd.read_excel(filename_xlsx)
     except FileNotFoundError as e:
@@ -702,22 +702,23 @@ if __name__ == "__main__":
     
     if plotmode == 0 and comp_ci:
         plotmode = 1
-    
-    
-    
+
     xbase = 20
-    npoints = 200
     if p_quality == 0:
         interpolate = True
-        n_point_calc = 200
+        n_point_calc = 100
+        npoints = 150
     elif p_quality == 1:
         interpolate = True
         n_point_calc = 100
+        npoints = 200
     elif p_quality == 2:
         interpolate = True
         n_point_calc = 150
+        npoints = 250
     elif p_quality == 3:
         interpolate = False 
+        npoints = 250
     elif p_quality > 3:
         interpolate = False 
         npoints = 300
