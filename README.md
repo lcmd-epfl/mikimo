@@ -38,7 +38,7 @@ The code runs on pure python with the following dependencies:
 - `pandas`
 - `scipy`
 - `h5py`
-- `volcanic`
+- `navicat_volcanic`
 
 
 ## Usages [↑](#usages)

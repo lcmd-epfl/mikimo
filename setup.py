@@ -26,7 +26,7 @@ setup(
         'matplotlib',
         'pandas',
         'h5py',
-        'volcanic'
+        'navicat_volcanic'
     ],
     include_package_data=True,
 )
