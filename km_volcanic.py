@@ -18,8 +18,13 @@ from navicat_volcanic.dv2 import find_2_dv, find_2_dv
 from navicat_volcanic.helpers import (bround, group_data_points,
                                       user_choose_1_dv, user_choose_2_dv)
 from navicat_volcanic.plotting2d import calc_ci, plot_2d, plot_2d_lsfer
-from navicat_volcanic.plotting3d import (get_bases, bround, plot_3d_lsfer, 
-                                         plot_3d_contour, plot_3d_scatter, plot_3d_contour_regions)
+from navicat_volcanic.plotting3d import (
+    get_bases,
+    bround,
+    plot_3d_lsfer,
+    plot_3d_contour,
+    plot_3d_scatter,
+    plot_3d_contour_regions)
 import sklearn as sk
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
@@ -38,7 +43,7 @@ def check_km_inp(df, df_network):
     df_network: network dataframe
     initial_conc: initial concentration
     """
-    
+
     states_network = df_network.columns.to_numpy()[:]
     states_profile = df.columns.to_numpy()[1:]
     states_network_int = [s for s in states_network if not (
@@ -56,7 +61,8 @@ def check_km_inp(df, df_network):
             pass
         else:
             clear = False
-            print(f"""\n{state} cannot be found in the reaction data, if it is in different name, 
+            print(
+                f"""\n{state} cannot be found in the reaction data, if it is in different name,
                 change it to be the same in both reaction data and the network""")
 
     # check network sanity
@@ -85,25 +91,26 @@ def check_km_inp(df, df_network):
 
 def process_data_mkm(dg, df_network, c0, tags):
 
-    df_network.fillna(0, inplace=True)   
-    
+    df_network.fillna(0, inplace=True)
+
     # extract initial conditions
     initial_conc = np.array([])
     last_row_index = df_network.index[-1]
-    if type(last_row_index) == str:
+    if isinstance(last_row_index, str):
         if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
             initial_conc = df_network.iloc[-1:].to_numpy()[0]
             df_network = df_network.drop(df_network.index[-1])
-            
+
     # process reaction network
     rxn_network_all = df_network.to_numpy()[:, :]
     states = df_network.columns[:].tolist()
     # initial concentration not in nx, read in text instead
     if initial_conc.shape[0] == 0:
-        #print("Read Iniiial Concentration from text file")
+        # print("Read Iniiial Concentration from text file")
         initial_conc_ = np.loadtxt(c0, dtype=np.float64)
         initial_conc = np.zeros(rxn_network_all.shape[1])
-        indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+        indices = [i for i, s in enumerate(
+            states) if s.lower().startswith("r")]
         if len(initial_conc_) != rxn_network_all.shape[1]:
             indices = [i for i, s in enumerate(
                 states) if s.lower().startswith("r")]
@@ -127,18 +134,19 @@ def process_data_mkm(dg, df_network, c0, tags):
             df_ = pd.concat([df_, df_all[species_profile[i]]],
                             ignore_index=False, axis=1)
 
-    for i in range(len(all_df)-1):
+    for i in range(len(all_df) - 1):
         try:
             # step where branching is (the first 1)
             branch_step = np.where(
-                df_network[all_df[i+1].columns[1]].to_numpy() == 1)[0][0]
+                df_network[all_df[i + 1].columns[1]].to_numpy() == 1)[0][0]
         except KeyError as e:
             # due to TS as the first column of the profile
             branch_step = np.where(
-                df_network[all_df[i+1].columns[2]].to_numpy() == 1)[0][0]
+                df_network[all_df[i + 1].columns[2]].to_numpy() == 1)[0][0]
         # int to which new cycle is connected (the first -1)
 
-        if df_network.columns.to_list()[branch_step+1].lower().startswith('p'):
+        if df_network.columns.to_list()[
+                branch_step + 1].lower().startswith('p'):
             # conneting profiles
             cp_idx = branch_step
         else:
@@ -176,17 +184,17 @@ def calc_km(
         timeout: float,
         report_as_yield: bool,
         quality: int = 0,):
-    
+
     idx_target_all = [states.index(i) for i in states if "*" in i]
     k_forward_all, k_reverse_all = calc_k(
         energy_profile_all,
         dgr_all,
         coeff_TS_all,
         temperature)
-    
+
     dydt = system_KE_DE(k_forward_all, k_reverse_all,
                         rxn_network_all, initial_conc, states)
-    
+
     # first try BDF + ag with various rtol and atol
     # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
     # then LSODA + FD if all BDF attempts fail
@@ -362,11 +370,11 @@ def calc_km(
             Rp_ = np.abs([r[0] for r in Rp_])
 
             # TODO: higest conc P can be, should be refined in the future
-            upper = np.min(initial_conc[R_idx]*Rp_)
+            upper = np.min(initial_conc[R_idx] * Rp_)
 
             if report_as_yield:
 
-                c_target_yield = c_target_t/upper*100
+                c_target_yield = c_target_t / upper * 100
                 c_target_yield[c_target_yield > 100] = 100
                 c_target_yield[c_target_yield < 0] = 0
                 return c_target_yield, result_solve_ivp
@@ -377,16 +385,27 @@ def calc_km(
                 return c_target_t, result_solve_ivp
 
         else:
-            return np.array([np.NaN]*len(idx_target_all)), result_solve_ivp
+            return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
     except Exception as err:
-        return np.array([np.NaN]*len(idx_target_all)), result_solve_ivp
+        return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
 
-def process_n_calc_2d(profile, sigma_p, c0, df_network, tags, states, timeout, report_as_yield, quality, comp_ci):
+
+def process_n_calc_2d(
+        profile,
+        sigma_p,
+        c0,
+        df_network,
+        tags,
+        states,
+        timeout,
+        report_as_yield,
+        quality,
+        comp_ci):
 
     try:
         if np.isnan(profile[0]):
-            return  np.array([np.nan] * n_target),  np.array([np.nan] * n_target)
-        else: 
+            return np.array([np.nan] * n_target), np.array([np.nan] * n_target)
+        else:
             initial_conc, energy_profile_all, dgr_all, \
                 coeff_TS_all, rxn_network = process_data_mkm(
                     profile, df_network, c0, tags)
@@ -413,7 +432,7 @@ def process_n_calc_2d(profile, sigma_p, c0, df_network, tags, states, timeout, r
                 initial_conc, energy_profile_all_d, dgr_all, \
                     coeff_TS_all, rxn_network = process_data_mkm(
                         profile_d, df_network, c0, tags)
-                
+
                 result_u, _ = calc_km(
                     energy_profile_all_u,
                     dgr_all,
@@ -440,14 +459,26 @@ def process_n_calc_2d(profile, sigma_p, c0, df_network, tags, states, timeout, r
                     False,
                     1)
                 return result, np.abs(result_u - result_d) / 2
-            else:  return result, np.zeros(n_target)
+            else:
+                return result, np.zeros(n_target)
 
     except Exception as e:
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line due to {e}")
-        return  np.array([np.nan] * n_target),  np.array([np.nan] * n_target)
+            print(
+                f"Fail to compute at point {profile} in the volcano line due to {e}")
+        return np.array([np.nan] * n_target), np.array([np.nan] * n_target)
 
-def process_n_calc_3d(coord, grids, c0, df_network, tags, states, timeout, report_as_yield, quality):
+
+def process_n_calc_3d(
+        coord,
+        grids,
+        c0,
+        df_network,
+        tags,
+        states,
+        timeout,
+        report_as_yield,
+        quality):
 
     try:
         profile = [gridj[coord] for gridj in grids]
@@ -471,17 +502,19 @@ def process_n_calc_3d(coord, grids, c0, df_network, tags, states, timeout, repor
 
     except Exception as e:
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line due to {e}")
-        return  np.array([np.nan] * n_target)
+            print(
+                f"Fail to compute at point {profile} in the volcano line due to {e}")
+        return np.array([np.nan] * n_target)
+
 
 if __name__ == "__main__":
 
     # Input
     parser = argparse.ArgumentParser(
-        description='''Perform kinetic modelling of profiles in the energy input file to 
+        description='''Perform kinetic modelling of profiles in the energy input file to
         1) build MKM volcano plot
         2) build activity/seclectivity map''')
-    
+
     parser.add_argument(
         "-d",
         "--dir",
@@ -498,24 +531,20 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-Tf",
-        "-tf",
         "--Tf",
-        "--tf",
-        "--time",
         "-Time",
+        "--Time",
         dest="time",
         type=float,
         default=86400,
-        help="Total reaction time (s) (default=1d)",
+        help="Total reaction time (s) (default=1d",
     )
 
     parser.add_argument(
-        "-T",
         "-t",
-        "--T",
         "--t",
-        "--temp",
         "-temp",
+        "--temp",
         dest="temp",
         type=float,
         default=298.15,
@@ -552,9 +581,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-pm",
-        "--pm",
         "-plotmode",
-        "--plotmode",
         dest="plotmode",
         type=int,
         default=1,
@@ -569,7 +596,7 @@ if __name__ == "__main__":
         default="knn",
         help="Imputter to refill missing datapoints. Beta version. (default: knn) (simple, knn, iterative, None)",
     )
-    
+
     parser.add_argument(
         "-ci",
         "--ci",
@@ -577,7 +604,7 @@ if __name__ == "__main__":
         action="store_true",
         help="Toggle to compute confidence interval. (default: False)",
     )
-    
+
     parser.add_argument(
         "-lfesr",
         "--lfesr",
@@ -585,7 +612,7 @@ if __name__ == "__main__":
         action="store_true",
         help="""Toggle to plot LFESRs. (default: False)""",
     )
-   
+
     parser.add_argument(
         "--timeout",
         dest="timeout",
@@ -655,7 +682,6 @@ if __name__ == "__main__":
         default=1,
         help="number of cpu cores for the parallel computing (default: 1)",
     )
-   
 
     # %% loading and processing------------------------------------------------------------------------#
     args = parser.parse_args()
@@ -673,7 +699,7 @@ if __name__ == "__main__":
     more_species_mkm = args.addition
     lfesr = args.lfesr
     x_scale = args.xscale
-    comp_ci =  args.confidence_interval
+    comp_ci = args.confidence_interval
     ncore = args.ncore
     nd = args.run_mode
 
@@ -696,13 +722,12 @@ if __name__ == "__main__":
     else:
         if verb > 0:
             print("\nKM input is clear\n")
-                  
+
     if ncore == -1:
         ncore = multiprocessing.cpu_count()
     if verb > 2:
         print(f"Use {ncore} cores for parallel computing")
-        
-    
+
     if plotmode == 0 and comp_ci:
         plotmode = 1
 
@@ -720,17 +745,17 @@ if __name__ == "__main__":
         n_point_calc = 150
         npoints = 250
     elif p_quality == 3:
-        interpolate = False 
+        interpolate = False
         npoints = 250
     elif p_quality > 3:
-        interpolate = False 
+        interpolate = False
         npoints = 300
 
     names = df[df.columns[0]].values
     cb, ms = group_data_points(0, 2, names)
     tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
     d = np.float32(df.to_numpy()[:, 1:])
-    
+
     coeff = np.zeros(len(tags), dtype=bool)
     regress = np.zeros(len(tags), dtype=bool)
     for i, tag in enumerate(tags):
@@ -763,19 +788,19 @@ if __name__ == "__main__":
             coeff[i] = False
             regress[i] = True
 
-
     d, cb, ms = curate_d(d, regress, cb, ms, tags,
                          imputer_strat, nstds=3, verb=verb)
-   
+
     # %% selecting modes----------------------------------------------------------#
     if nd == 0:
         evol_mode = True
-    elif nd==1:
+    elif nd == 1:
         from navicat_volcanic.plotting2d import get_reg_targets
         dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
         if lfesrs_idx:
             idx = lfesrs_idx[0]
-            if verb > 1: print(f"\n**Manually chose {tags[idx]} as descriptor****\n")
+            if verb > 1:
+                print(f"\n**Manually chose {tags[idx]} as descriptor****\n")
         else:
             idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
         if lfesr:
@@ -793,8 +818,8 @@ if __name__ == "__main__":
                 plotmode,
                 verb,
             )
-            lfesr_csv = [s+".csv" for s in tags[1:]]
-            all_lfsers = [s+".png" for s in tags[1:]]
+            lfesr_csv = [s + ".csv" for s in tags[1:]]
+            all_lfsers = [s + ".png" for s in tags[1:]]
             all_lfsers.extend(lfesr_csv)
             if not os.path.isdir("lfesr"):
                 os.makedirs("lfesr")
@@ -803,14 +828,14 @@ if __name__ == "__main__":
                 destination_file = os.path.join(
                     "lfesr/", os.path.basename(file_name))
                 shutil.move(source_file, destination_file)
-                
+
         X, tag, tags, d, d2, coeff = get_reg_targets(
             idx, d, tags, coeff, regress, mode="k")
-        
+
         lnsteps = range(d.shape[1])
         xmax = bround(X.max() + rmargin, xbase)
         xmin = bround(X.min() - lmargin, xbase)
-        
+
         if verb > 1:
             print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
         xint = np.linspace(xmin, xmax, npoints)
@@ -830,26 +855,29 @@ if __name__ == "__main__":
             ci = calc_ci(resid, n, dof, X, xint, yint)
             dgs[:, i] = yint
             sigma_dgs[:, i] = ci
-        
-        #TODO For some reason, sometimes the volcanic drops the last state
-        #Kinda adhoc fix for now
+
+        # TODO For some reason, sometimes the volcanic drops the last state
+        # Kinda adhoc fix for now
         tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if tags_[-1] not in tags:
             print("\n***Forgot the last state******\n")
             d_ = np.float32(df.to_numpy()[:, 1:])
-            
-            dgs = np.column_stack((dgs, np.full((npoints, 1), d_[-1,-1])))
-            d = np.column_stack((d, np.full((d.shape[0], 1), d_[-1,-1])))
+
+            dgs = np.column_stack((dgs, np.full((npoints, 1), d_[-1, -1])))
+            d = np.column_stack((d, np.full((d.shape[0], 1), d_[-1, -1])))
             tags = np.append(tags, tags_[-1])
             sigma_dgs = np.column_stack((sigma_dgs, np.full((npoints, 1), 0)))
-            
+
     elif nd == 2:
         from navicat_volcanic.plotting3d import get_reg_targets
         dvs, r2s = find_2_dv(d, tags, coeff, regress, verb)
         if lfesrs_idx:
-            assert len(lfesrs_idx) == 2; "Require 2 lfesrs_idx for activity/seclectivity map"
+            assert len(lfesrs_idx) == 2
+            "Require 2 lfesrs_idx for activity/seclectivity map"
             idx1, idx2 = lfesrs_idx
-            if verb > 1: print(f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor****\n")
+            if verb > 1:
+                print(
+                    f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor****\n")
         else:
             idx1, idx2 = user_choose_2_dv(dvs, r2s, tags)
 
@@ -881,20 +909,20 @@ if __name__ == "__main__":
                     x1x2 = np.vstack([x1, x2]).reshape(1, -1)
                     gridj[k, l] = reg.predict(x1x2)
             grids.append(gridj)
-            
+
         tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if len(grids) != len(tags_):
             print("\n***Forgot the last state******\n")
             d_ = np.float32(df.to_numpy()[:, 1:])
-       
-            grids.append(np.full(((npoints, npoints)), d_[-1,-1]))
+
+            grids.append(np.full(((npoints, npoints)), d_[-1, -1]))
             tags = np.append(tags, tags_[-1])
-            
-            
+
     # %% evol mode----------------------------------------------------------------#
-    if nd==0:
+    if nd == 0:
         if verb > 0:
-            print("\n------------Evol mode: plotting evolution for all profiles------------------\n")
+            print(
+                "\n------------Evol mode: plotting evolution for all profiles------------------\n")
 
         prod_conc_pt = []
         result_solve_ivp_all = []
@@ -930,7 +958,12 @@ if __name__ == "__main__":
                 result_solve_ivp_all.append(result_solve_ivp)
 
                 states_ = [s.replace("*", "") for s in states]
-                plot_evo(result_solve_ivp, names[i], states_, x_scale, more_species_mkm)
+                plot_evo(
+                    result_solve_ivp,
+                    names[i],
+                    states_,
+                    x_scale,
+                    more_species_mkm)
                 source_file = os.path.abspath(
                     f"kinetic_modelling_{names[i]}.png")
                 destination_file = os.path.join(
@@ -970,17 +1003,17 @@ if __name__ == "__main__":
             else:
                 move_bool = input(
                     f"{move_bool} is invalid, please try again... (y/n): ")
-        
+
         print("""\nThis is a parade
 Even if I have to drag these feet of mine
 In exchange for this seeping pain
 I'll find happiness in abundance""")
     # %% MKM volcano plot---------------------------------------------------------#
-    elif nd==1:
-        
+    elif nd == 1:
+
         if verb > 0:
             print("\n------------Constructing MKM volcano plot------------------\n")
-        
+
         # Volcano line
         if interpolate:
             if verb > 0:
@@ -992,13 +1025,13 @@ I'll find happiness in abundance""")
                     len(dgs) - 1,
                     n_point_calc)).astype(int)
             trun_dgs = []
-            
+
             for i, dg in enumerate(dgs):
                 if i not in selected_indices:
-                    trun_dgs.append([np.nan]*len(dgs[0]))
+                    trun_dgs.append([np.nan] * len(dgs[0]))
                 else:
                     trun_dgs.append(dg)
-                
+
         else:
             trun_dgs = dgs
             if verb > 0:
@@ -1006,19 +1039,32 @@ I'll find happiness in abundance""")
                     f"Performing microkinetics modelling for the volcano line ({npoints})")
         prod_conc = np.zeros((len(dgs), n_target))
         ci = np.zeros((len(dgs), n_target))
-        
-        dgs_g = np.array_split(trun_dgs, len(trun_dgs)// ncore + 1)
-        sigma_dgs_g = np.array_split(sigma_dgs, len(sigma_dgs)// ncore + 1)
+
+        dgs_g = np.array_split(trun_dgs, len(trun_dgs) // ncore + 1)
+        sigma_dgs_g = np.array_split(sigma_dgs, len(sigma_dgs) // ncore + 1)
         i = 0
-        for batch_dgs, batch_s_dgs in tqdm(zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
-            results = Parallel(n_jobs=ncore)(delayed(process_n_calc_2d)\
-                (profile, sigma_dgs, c0, df_network, tags, states, timeout,\
-                report_as_yield, quality, comp_ci) for profile, sigma_dgs in\
-                    zip(batch_dgs, batch_s_dgs))
+        for batch_dgs, batch_s_dgs in tqdm(
+                zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
+            results = Parallel(
+                n_jobs=ncore)(
+                delayed(process_n_calc_2d)(
+                    profile,
+                    sigma_dgs,
+                    c0,
+                    df_network,
+                    tags,
+                    states,
+                    timeout,
+                    report_as_yield,
+                    quality,
+                    comp_ci) for profile,
+                sigma_dgs in zip(
+                    batch_dgs,
+                    batch_s_dgs))
             for j, res in enumerate(results):
-                prod_conc[i , :] = res[0]
+                prod_conc[i, :] = res[0]
                 ci[i, :] = res[1]
-                i+=1
+                i += 1
         # interpolation
         prod_conc_ = prod_conc.copy()
         ci_ = ci.copy()
@@ -1035,9 +1081,9 @@ I'll find happiness in abundance""")
 
             if comp_ci:
                 f_ci = interp1d(xint[~missing_indices],
-                            ci[:, i][~missing_indices],
-                            kind='cubic',
-                            fill_value="extrapolate")
+                                ci[:, i][~missing_indices],
+                                kind='cubic',
+                                fill_value="extrapolate")
                 y_interp_ci = f_ci(xint[missing_indices])
                 ci_[:, i][missing_indices] = y_interp_ci
 
@@ -1046,19 +1092,28 @@ I'll find happiness in abundance""")
         # Volcano points
         print(
             f"Performing microkinetics modelling for the volcano line ({len(d)})")
-        
+
         prod_conc_pt = np.zeros((len(d), n_target))
-        
-        
-        d_g = np.array_split(d, len(d)// ncore + 1)
+
+        d_g = np.array_split(d, len(d) // ncore + 1)
         i = 0
         for batch_dgs in tqdm(d_g, total=len(d_g), ncols=80):
-            results = Parallel(n_jobs=ncore)(delayed(process_n_calc_2d)\
-                (profile, 0, c0, df_network, tags, states, timeout,\
-                report_as_yield, quality, comp_ci) for profile in batch_dgs)
+            results = Parallel(
+                n_jobs=ncore)(
+                delayed(process_n_calc_2d)(
+                    profile,
+                    0,
+                    c0,
+                    df_network,
+                    tags,
+                    states,
+                    timeout,
+                    report_as_yield,
+                    quality,
+                    comp_ci) for profile in batch_dgs)
             for j, res in enumerate(results):
-                prod_conc_pt[i , :] = res[0]
-                i+=1
+                prod_conc_pt[i, :] = res[0]
+                i += 1
 
         # interpolation
         missing_indices = np.isnan(prod_conc_pt[:, 0])
@@ -1088,7 +1143,8 @@ I'll find happiness in abundance""")
             ylabel = "Final product concentraion (M)"
 
         out = []
-        if not(comp_ci): ci_ = np.full(prod_conc_.shape[0], None)
+        if not (comp_ci):
+            ci_ = np.full(prod_conc_.shape[0], None)
         if prod_conc_.shape[0] > 1:
             prod_names = [i.replace("*", "") for i in states if "*" in i]
             plot_2d_combo(
@@ -1143,7 +1199,7 @@ I'll find happiness in abundance""")
                 plotmode=plotmode)
             out.append(f"km_volcano_{tag}.png")
 
-        #TODO will save ci later
+        # TODO will save ci later
         if verb > 1:
             cb = np.array(cb, dtype='S')
             ms = np.array(ms, dtype='S')
@@ -1187,23 +1243,28 @@ I'll find happiness in abundance""")
                 move_bool = input(
                     f"{move_bool} is invalid, please try again... (y/n): ")
 
-
         print("""\nI won't pray anymore
 The kindness that rained on this city
 I won't rely on it anymore
 My pain and my shape
 No one else can decide it\n""")
-        
+
     # %% MKM activity/selectivity map---------------------------------------------#
-    elif nd==2:
+    elif nd == 2:
         if verb > 0:
-            print("\n------------Constructing MKM activity/selectivity map------------------\n")
+            print(
+                "\n------------Constructing MKM activity/selectivity map------------------\n")
         grid = np.zeros_like(gridj)
-        grid_d = np.array([grid]*n_target)
+        grid_d = np.array([grid] * n_target)
         rb = np.zeros_like(gridj, dtype=int)
         total_combinations = len(xint) * len(yint)
-        combinations = list(itertools.product(range(len(xint)), range(len(yint))))
-        num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
+        combinations = list(
+            itertools.product(
+                range(
+                    len(xint)), range(
+                    len(yint))))
+        num_chunks = total_combinations // ncore + \
+            (total_combinations % ncore > 0)
 
         # MKM
         for chunk_index in tqdm(range(num_chunks)):
@@ -1211,16 +1272,24 @@ No one else can decide it\n""")
             end_index = min(start_index + ncore, total_combinations)
             chunk = combinations[start_index:end_index]
 
-            
-            results = Parallel(n_jobs=ncore)(delayed(process_n_calc_3d)\
-                            (coord, grids, c0, df_network, tags, states, timeout,\
-                            report_as_yield, quality) for coord in chunk)
+            results = Parallel(
+                n_jobs=ncore)(
+                delayed(process_n_calc_3d)(
+                    coord,
+                    grids,
+                    c0,
+                    df_network,
+                    tags,
+                    states,
+                    timeout,
+                    report_as_yield,
+                    quality) for coord in chunk)
             i = 0
             for k, l in chunk:
                 for j in range(n_target):
                     grid_d[j][k, l] = results[i][j]
-                    i+=1
-                    
+                    i += 1
+
         # TODO knn imputter for now
         if np.any(np.isnan(grid_d)):
             grid_d_fill = np.zeros_like(grid_d)
@@ -1231,16 +1300,16 @@ No one else can decide it\n""")
                 grid_d_fill[i] = filled_data
         else:
             grid_d_fill = grid_d
-            
+
         px = np.zeros_like(d[:, 0])
         py = np.zeros_like(d[:, 0])
         for i in range(d.shape[0]):
             profile = d[i, :-1]
             px[i] = X1[i]
-            py[i] = X2[i]                  
-                                
+            py[i] = X2[i]
+
         # Plotting
-        #TODO 1 target: activity
+        # TODO 1 target: activity
         x1min = np.min(xint)
         x1max = np.max(xint)
         x2min = np.min(yint)
@@ -1253,55 +1322,55 @@ No one else can decide it\n""")
 
         activity_grid = np.sum(grid_d_fill, axis=0)
         amin = activity_grid.min()
-        amax = activity_grid.max()  
+        amax = activity_grid.max()
 
         if plotmode > 1:
             plot_3d_contour(
-                        xint,
-                        yint,
-                        activity_grid,
-                        px,
-                        py,
-                        amin,
-                        amax,
-                        x1min,
-                        x1max,
-                        x2min,
-                        x2max,
-                        x1base,
-                        x2base,
-                        x1label=x1label,
-                        x2label=x2label,
-                        ylabel=alabel,
-                        filename=afilename,
-                        cb=cb,
-                        ms=ms,
-                        plotmode=plotmode,
-                    )      
+                xint,
+                yint,
+                activity_grid,
+                px,
+                py,
+                amin,
+                amax,
+                x1min,
+                x1max,
+                x2min,
+                x2max,
+                x1base,
+                x2base,
+                x1label=x1label,
+                x2label=x2label,
+                ylabel=alabel,
+                filename=afilename,
+                cb=cb,
+                ms=ms,
+                plotmode=plotmode,
+            )
         else:
             plot_3d_scatter(
-                        xint,
-                        yint,
-                        activity_grid,
-                        px,
-                        py,
-                        amin,
-                        amax,
-                        x1min,
-                        x1max,
-                        x2min,
-                        x2max,
-                        x1base,
-                        x2base,
-                        x1label=x1label,
-                        x2label=x2label,
-                        ylabel=alabel,
-                        filename=afilename,
-                        cb=cb,
-                        ms=ms,
-                        plotmode=plotmode,
-                    )  
-        
+                xint,
+                yint,
+                activity_grid,
+                px,
+                py,
+                amin,
+                amax,
+                x1min,
+                x1max,
+                x2min,
+                x2max,
+                x1base,
+                x2base,
+                x1label=x1label,
+                x2label=x2label,
+                ylabel=alabel,
+                filename=afilename,
+                cb=cb,
+                ms=ms,
+                plotmode=plotmode,
+            )
+
         cb = np.array(cb, dtype='S')
         ms = np.array(ms, dtype='S')
         with h5py.File('data_a.h5', 'w') as f:
@@ -1317,69 +1386,69 @@ No one else can decide it\n""")
             group.create_dataset('tag1', data=[tag1.encode()])
             group.create_dataset('tag2', data=[tag2.encode()])
             group.create_dataset('x1label', data=[x1label.encode()])
-            group.create_dataset('x2label', data=[x2label.encode()])    
-        
-        #TODO 2 targets: activity and selectivity-2
+            group.create_dataset('x2label', data=[x2label.encode()])
+
+        # TODO 2 targets: activity and selectivity-2
         prod = [p for p in states if "*" in p]
         prod = [s.replace("*", "") for s in prod]
         if n_target == 2:
-            
-            
-            slabel = "$log_{10}$"+f"({prod[0]}/{prod[1]})"
+
+            slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
             sfilename = f"selectivity_{tag1}_{tag2}.png"
 
             min_ratio = -10
             max_ratio = 10
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
-            selectivity_ratio_ = np.clip(selectivity_ratio, min_ratio, max_ratio)
+            selectivity_ratio_ = np.clip(
+                selectivity_ratio, min_ratio, max_ratio)
             smin = selectivity_ratio.min()
-            smax = selectivity_ratio.max()         
+            smax = selectivity_ratio.max()
             if plotmode > 1:
                 plot_3d_contour(
-                            xint,
-                            yint,
-                            selectivity_ratio_,
-                            px,
-                            py,
-                            smin,
-                            smax,
-                            x1min,
-                            x1max,
-                            x2min,
-                            x2max,
-                            x1base,
-                            x2base,
-                            x1label=x1label,
-                            x2label=x2label,
-                            ylabel=slabel,
-                            filename=sfilename,
-                            cb=cb,
-                            ms=ms,
-                            plotmode=plotmode,
-                        )      
+                    xint,
+                    yint,
+                    selectivity_ratio_,
+                    px,
+                    py,
+                    smin,
+                    smax,
+                    x1min,
+                    x1max,
+                    x2min,
+                    x2max,
+                    x1base,
+                    x2base,
+                    x1label=x1label,
+                    x2label=x2label,
+                    ylabel=slabel,
+                    filename=sfilename,
+                    cb=cb,
+                    ms=ms,
+                    plotmode=plotmode,
+                )
             else:
                 plot_3d_scatter(
-                            xint,
-                            yint,
-                            selectivity_ratio_,
-                            px,
-                            py,
-                            smin,
-                            smax,
-                            x1min,
-                            x1max,
-                            x2min,
-                            x2max,
-                            x1base,
-                            x2base,
-                            x1label=x1label,
-                            x2label=x2label,
-                            ylabel=slabel,
-                            filename=sfilename,
-                            cb=cb,
-                            ms=ms,
-                            plotmode=plotmode,
-                        )  
+                    xint,
+                    yint,
+                    selectivity_ratio_,
+                    px,
+                    py,
+                    smin,
+                    smax,
+                    x1min,
+                    x1max,
+                    x2min,
+                    x2max,
+                    x1base,
+                    x2base,
+                    x1label=x1label,
+                    x2label=x2label,
+                    ylabel=slabel,
+                    filename=sfilename,
+                    cb=cb,
+                    ms=ms,
+                    plotmode=plotmode,
+                )
             cb = np.array(cb, dtype='S')
             ms = np.array(ms, dtype='S')
             with h5py.File('data_a.h5', 'w') as f:
@@ -1395,36 +1464,36 @@ No one else can decide it\n""")
                 group.create_dataset('tag1', data=[tag1.encode()])
                 group.create_dataset('tag2', data=[tag2.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
-                group.create_dataset('x2label', data=[x2label.encode()])  
-                
-        #TODO >2 targets: activity and selectivity-3
+                group.create_dataset('x2label', data=[x2label.encode()])
+
+        # TODO >2 targets: activity and selectivity-3
         elif n_target > 2:
-            dominant_indices = np.argmax(grid_d_fill, axis=0)     
+            dominant_indices = np.argmax(grid_d_fill, axis=0)
             slabel = "Dominant product"
             sfilename = f"selectivity_{tag1}_{tag2}.png"
             plot_3d_contour_regions(
-                        xint,
-                        yint,
-                        dominant_indices,
-                        px,
-                        py,
-                        amin,
-                        amax,
-                        x1min,
-                        x1max,
-                        x2min,
-                        x2max,
-                        x1base,
-                        x2base,
-                        x1label=x1label,
-                        x2label=x2label,
-                        ylabel=slabel,
-                        filename=sfilename,
-                        cb=cb,
-                        ms=ms,
-                        id_labels=prod,
-                        plotmode=plotmode,
-                    )       
+                xint,
+                yint,
+                dominant_indices,
+                px,
+                py,
+                amin,
+                amax,
+                x1min,
+                x1max,
+                x2min,
+                x2max,
+                x1base,
+                x2base,
+                x1label=x1label,
+                x2label=x2label,
+                ylabel=slabel,
+                filename=sfilename,
+                cb=cb,
+                ms=ms,
+                id_labels=prod,
+                plotmode=plotmode,
+            )
             cb = np.array(cb, dtype='S')
             ms = np.array(ms, dtype='S')
             with h5py.File('data_a.h5', 'w') as f:
@@ -1440,9 +1509,8 @@ No one else can decide it\n""")
                 group.create_dataset('tag1', data=[tag1.encode()])
                 group.create_dataset('tag2', data=[tag2.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
-                group.create_dataset('x2label', data=[x2label.encode()])    
-                
-                     
+                group.create_dataset('x2label', data=[x2label.encode()])
+
         print("""\nThe glow of that gigantic star
 That utopia of endless happiness
 I don't care if I never reach any of those

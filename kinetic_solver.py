@@ -34,7 +34,8 @@ def check_km_inp(df, df_network, initial_conc):
             pass
         else:
             clear = False
-            print(f"""\n{state} cannot be found in the reaction data, if it is in different name, 
+            print(
+                f"""\n{state} cannot be found in the reaction data, if it is in different name,
                 change it to be the same in both reaction data and the network""")
 
     # initial conc
@@ -65,6 +66,7 @@ def check_km_inp(df, df_network, initial_conc):
 
     return clear
 
+
 def load_data(args):
 
     rxn_data = args.i
@@ -78,22 +80,23 @@ def load_data(args):
     # extract initial conditions
     initial_conc = np.array([])
     last_row_index = df_network.index[-1]
-    if type(last_row_index) == str:
+    if isinstance(last_row_index, str):
         if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
             initial_conc = df_network.iloc[-1:].to_numpy()[0]
             df_network = df_network.drop(df_network.index[-1])
             print("Initial conditions found")
-            
+
     # process reaction network
     rxn_network_all = df_network.to_numpy()[:, :]
     states = df_network.columns[:].tolist()
-    
+
     # initial concentration not in nx, read in text instead
     if initial_conc.shape[0] == 0:
         print("Read Iniiial Concentration from text file")
         initial_conc_ = np.loadtxt(c0, dtype=np.float64)
         initial_conc = np.zeros(rxn_network_all.shape[1])
-        indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+        indices = [i for i, s in enumerate(
+            states) if s.lower().startswith("r")]
         if len(initial_conc_) != rxn_network_all.shape[1]:
             indices = [i for i, s in enumerate(
                 states) if s.lower().startswith("r")]
@@ -101,7 +104,7 @@ def load_data(args):
             initial_conc[indices] = initial_conc_[1:]
         else:
             initial_conc = initial_conc_
-            
+
     # Reaction data-----------------------------------------------------------
     try:
         df_all = pd.read_csv(rxn_data)
@@ -111,7 +114,7 @@ def load_data(args):
 
     species_profile = df_all.columns.values[1:]
     clear = check_km_inp(df_all, df_network, initial_conc)
-    
+
     if not (clear):
         print("\nRecheck your reaction network and your reaction data\n")
     else:
@@ -128,18 +131,19 @@ def load_data(args):
             df_ = pd.concat([df_, df_all[species_profile[i]]],
                             ignore_index=False, axis=1)
 
-    for i in range(len(all_df)-1):
+    for i in range(len(all_df) - 1):
         try:
             # step where branching is (the first 1)
             branch_step = np.where(
-                df_network[all_df[i+1].columns[1]].to_numpy() == 1)[0][0]
+                df_network[all_df[i + 1].columns[1]].to_numpy() == 1)[0][0]
         except KeyError as e:
             # due to TS as the first column of the profile
             branch_step = np.where(
-                df_network[all_df[i+1].columns[2]].to_numpy() == 1)[0][0]
+                df_network[all_df[i + 1].columns[2]].to_numpy() == 1)[0][0]
         # int to which new cycle is connected (the first -1)
 
-        if df_network.columns.to_list()[branch_step+1].lower().startswith('p'):
+        if df_network.columns.to_list()[
+                branch_step + 1].lower().startswith('p'):
             # conneting profiles
             cp_idx = branch_step
         else:
@@ -166,9 +170,10 @@ def load_data(args):
 
 
 def erying(dG_ddag, temperature):
-    R_ = R * (1/calorie) * (1/kilo)
-    kb_h = k/h
-    return kb_h*temperature*np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
+    R_ = R * (1 / calorie) * (1 / kilo)
+    kb_h = k / h
+    return kb_h * temperature * \
+        np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
 
 
 def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
@@ -281,10 +286,10 @@ def add_rate(
     rate = 0
     left_species = np.where(rxn_network_all[a, :] < 0)
     right_species = np.where(rxn_network_all[a, :] > 0)
-    rate += k_forward_all[a]*np.prod(y[left_species]
-                                     ** np.abs(rxn_network_all[a, left_species])[0])
-    rate -= k_reverse_all[a]*np.prod(y[right_species]
-                                     ** np.abs(rxn_network_all[a, right_species])[0])
+    rate += k_forward_all[a] * np.prod(y[left_species]
+                                       ** np.abs(rxn_network_all[a, left_species])[0])
+    rate -= k_reverse_all[a] * np.prod(y[right_species]
+                                       ** np.abs(rxn_network_all[a, right_species])[0])
 
     return rate
 
@@ -292,14 +297,23 @@ def add_rate(
 def calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a):
 
     loc_idxs = np.where(rxn_network_all[:, a] != 0)[0]
-    all_rate = [np.sign(rxn_network_all[idx, a])*add_rate(y, k_forward_all, k_reverse_all,
-                                                          rxn_network_all, idx) for idx in loc_idxs]
+    all_rate = [np.sign(rxn_network_all[idx,
+                                        a]) * add_rate(y,
+                                                       k_forward_all,
+                                                       k_reverse_all,
+                                                       rxn_network_all,
+                                                       idx) for idx in loc_idxs]
     dX_dt = np.sum(all_rate)
 
     return dX_dt
 
 
-def system_KE_DE(k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states):
+def system_KE_DE(
+        k_forward_all,
+        k_reverse_all,
+        rxn_network_all,
+        initial_conc,
+        states):
 
     boundary = np.zeros((initial_conc.shape[0], 2))
     tolerance = 1
@@ -310,13 +324,13 @@ def system_KE_DE(k_forward_all, k_reverse_all, rxn_network_all, initial_conc, st
     INT_idx = [i for i in range(1, initial_conc.shape[0])
                if i not in R_idx and i not in P_idx]
 
-    boundary[0] = [0-tolerance, initial_conc[0]+tolerance]
+    boundary[0] = [0 - tolerance, initial_conc[0] + tolerance]
     for i in R_idx:
-        boundary[i] = [0-tolerance, initial_conc[i]+tolerance]
+        boundary[i] = [0 - tolerance, initial_conc[i] + tolerance]
     for i in P_idx:
-        boundary[i] = [0-tolerance, np.max(initial_conc[R_idx])+tolerance]
+        boundary[i] = [0 - tolerance, np.max(initial_conc[R_idx]) + tolerance]
     for i in INT_idx:
-        boundary[i] = [0-tolerance, initial_conc[0]+tolerance]
+        boundary[i] = [0 - tolerance, initial_conc[0] + tolerance]
 
     def bound_decorator(boundary):
         def decorator(func):
@@ -366,7 +380,7 @@ def plot_save(result_solve_ivp, dir, name, states, x_scale, more_species_mkm):
 
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
-    
+
     if x_scale == "ls":
         t = np.log10(result_solve_ivp.t)
         xlabel = "log(time) (s)"
@@ -374,20 +388,21 @@ def plot_save(result_solve_ivp, dir, name, states, x_scale, more_species_mkm):
         t = result_solve_ivp.t
         xlabel = "time (s)"
     elif x_scale == "lmin":
-        t = np.log10(result_solve_ivp.t/60)
+        t = np.log10(result_solve_ivp.t / 60)
         xlabel = "log(time) (min)"
     elif x_scale == "min":
-        t = result_solve_ivp.t/60
+        t = result_solve_ivp.t / 60
         xlabel = "time (min)"
     elif x_scale == "h":
-        t = result_solve_ivp.t/3600
+        t = result_solve_ivp.t / 3600
         xlabel = "time (h)"
     elif x_scale == "d":
-        t = result_solve_ivp.t/86400
+        t = result_solve_ivp.t / 86400
         xlabel = "time (d)"
     else:
-        raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
-        
+        raise ValueError(
+            "x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+
     plt.rc("axes", labelsize=16)
     plt.rc("xtick", labelsize=16)
     plt.rc("ytick", labelsize=16)
@@ -450,7 +465,7 @@ def plot_save(result_solve_ivp, dir, name, states, x_scale, more_species_mkm):
         "#7159EA",
         "#15AE9B",
         "#147F58"]
-    if more_species_mkm != None:
+    if more_species_mkm is not None:
         for i in more_species_mkm:
             ax.plot(t,
                     result_solve_ivp.y[i, :],
@@ -513,14 +528,14 @@ if __name__ == "__main__":
         description='Perform kinetic modelling given the free energy profile and mechanism detail')
 
     parser.add_argument(
-        "-i",
-        help="input reaction profiles in csv"
-    )
-
-    parser.add_argument(
         "-d",
         "--dir",
         help="directory containing all required input files (profile, reaction network, initial conc)"
+    )
+
+    parser.add_argument(
+        "-i",
+        help="input reaction profiles in csv"
     )
 
     parser.add_argument(
@@ -539,11 +554,9 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-Tf",
-        "-tf",
         "--Tf",
-        "--tf",
-        "--time",
         "-Time",
+        "--Time",
         dest="time",
         type=float,
         default=86400,
@@ -551,25 +564,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-T",
         "-t",
-        "--T",
         "--t",
-        "--temp",
         "-temp",
+        "--temp",
         dest="temp",
         type=float,
         default=298.15,
         help="Temperature in K. (default: 298.15)",
-    )
-
-    parser.add_argument(
-        "-njob",
-        "--njob",
-        dest="njob",
-        type=int,
-        default=1,
-        help="number of processors you want to use",
     )
 
     parser.add_argument(
@@ -598,7 +600,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     more_species_mkm = args.addition
-    n_processors = args.njob
     w_dir = args.dir
     x_scale = args.xscale
     if w_dir:
@@ -608,7 +609,6 @@ if __name__ == "__main__":
                                   "-t", f"{args.temp}",
                                   "--time", f"{args.time}",
                                   "-de", f"{args.de}",
-                                  "-njob", f"{args.njob}",
                                   ])
 
     initial_conc, t_span, temperature, method, energy_profile_all,\
@@ -643,7 +643,7 @@ if __name__ == "__main__":
     result_solve_ivp = solve_ivp(
         dydt,
         t_span,
-        initial_conc+eps,
+        initial_conc + eps,
         method=method,
         dense_output=True,
         first_step=first_step,
@@ -653,7 +653,13 @@ if __name__ == "__main__":
         jac=jac,
     )
     states_ = [s.replace("*", "") for s in states]
-    plot_save(result_solve_ivp, w_dir, "name", states_, x_scale, more_species_mkm)
+    plot_save(
+        result_solve_ivp,
+        w_dir,
+        "name",
+        states_,
+        x_scale,
+        more_species_mkm)
 
     print("\n-------------Reactant Initial Concentration-------------\n")
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
