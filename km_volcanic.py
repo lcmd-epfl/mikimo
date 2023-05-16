@@ -402,6 +402,7 @@ def process_n_calc_2d(profile, sigma_p, c0, df_network, tags, states, timeout, r
                 timeout,
                 report_as_yield,
                 quality)
+
             if comp_ci:
                 profile_u = profile + sigma_p
                 profile_d = profile - sigma_p
@@ -477,8 +478,10 @@ if __name__ == "__main__":
 
     # Input
     parser = argparse.ArgumentParser(
-        description='Perform kinetic modelling given the free energy profile and mechanism detail')
-
+        description='''Perform kinetic modelling of profiles in the energy input file to 
+        1) build MKM volcano plot
+        2) build activity/seclectivity map''')
+    
     parser.add_argument(
         "-d",
         "--dir",
@@ -830,10 +833,10 @@ if __name__ == "__main__":
         
         #TODO For some reason, sometimes the volcanic drops the last state
         #Kinda adhoc fix for now
-        if np.std(dgs[:,-1]) > 0.1:
+        tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
+        if tags_[-1] not in tags:
             print("\n***Forgot the last state******\n")
             d_ = np.float32(df.to_numpy()[:, 1:])
-            tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
             
             dgs = np.column_stack((dgs, np.full((npoints, 1), d_[-1,-1])))
             d = np.column_stack((d, np.full((d.shape[0], 1), d_[-1,-1])))
@@ -1006,7 +1009,6 @@ I'll find happiness in abundance""")
         
         dgs_g = np.array_split(trun_dgs, len(trun_dgs)// ncore + 1)
         sigma_dgs_g = np.array_split(sigma_dgs, len(sigma_dgs)// ncore + 1)
-
         i = 0
         for batch_dgs, batch_s_dgs in tqdm(zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
             results = Parallel(n_jobs=ncore)(delayed(process_n_calc_2d)\
@@ -1017,7 +1019,6 @@ I'll find happiness in abundance""")
                 prod_conc[i , :] = res[0]
                 ci[i, :] = res[1]
                 i+=1
-
         # interpolation
         prod_conc_ = prod_conc.copy()
         ci_ = ci.copy()
