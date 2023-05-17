@@ -3,9 +3,154 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from navicat_volcanic.helpers import bround
+from navicat_volcanic.plotting2d import beautify_ax
+import shutil 
+import os
 
 matplotlib.use("Agg")
 
+
+def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mkm):
+
+    r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+    p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
+
+    if x_scale == "ls":
+        t = np.log10(result_solve_ivp.t)
+        xlabel = "log(time) (s)"
+    elif x_scale == "s":
+        t = result_solve_ivp.t
+        xlabel = "time (s)"
+    elif x_scale == "lmin":
+        t = np.log10(result_solve_ivp.t / 60)
+        xlabel = "log(time) (min)"
+    elif x_scale == "min":
+        t = result_solve_ivp.t / 60
+        xlabel = "time (min)"
+    elif x_scale == "h":
+        t = result_solve_ivp.t / 3600
+        xlabel = "time (h)"
+    elif x_scale == "d":
+        t = result_solve_ivp.t / 86400
+        xlabel = "time (d)"
+    else:
+        raise ValueError(
+            "x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+
+    fig, ax = plt.subplots(
+            frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
+        )
+    # Catalyst--------------------------
+    ax.plot(t,
+            result_solve_ivp.y[0, :],
+            "-", 
+            c="#797979",
+            linewidth=1.5,
+            alpha=0.85,
+            zorder=1,
+            label=states[0])
+
+    # Reactant--------------------------
+    color_R = [
+        "#008F73",
+        "#1AC182",
+        "#1AC145",
+        "#7FFA35",
+        "#8FD810",
+        "#ACBD0A"]
+
+    for n, i in enumerate(r_indices):
+        ax.plot(t,
+                result_solve_ivp.y[i, :],
+                "-", 
+                c=color_R[n],
+                linewidth=1.5,
+                alpha=0.85,
+                zorder=1,
+                label=states[i])
+
+    # Product--------------------------
+    color_P = [
+        "#D80828",
+        "#F57D13",
+        "#55000A",
+        "#F34DD8",
+        "#C5A806",
+        "#602AFC"]
+
+    for n, i in enumerate(p_indices):
+        ax.plot(t,
+                result_solve_ivp.y[i, :],
+                "-", 
+                c=color_P[n],
+                linewidth=1.5,
+                alpha=0.85,
+                zorder=1,
+                label=states[i])
+
+    # additional INT-----------------
+    color_INT = [
+        "#4251B3",
+        "#3977BD",
+        "#2F7794",
+        "#7159EA",
+        "#15AE9B",
+        "#147F58"]
+    if more_species_mkm is not None:
+        for i in more_species_mkm:
+            ax.plot(t,
+                    result_solve_ivp.y[i, :],
+                    linestyle="dashdot",
+                    c=color_INT[i],
+                    linewidth=1.5,
+                    alpha=0.85,
+                    zorder=1,
+                    label=states[i])
+            
+    beautify_ax(ax)
+    plt.xlabel(xlabel)
+    plt.ylabel('Concentration (mol/l)')
+    plt.legend()
+    # plt.grid(True, linestyle='--', linewidth=0.75)
+    plt.tight_layout()
+    fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
+
+    np.savetxt(f't_{name}.txt', result_solve_ivp.t)
+    np.savetxt(f'cat_{name}.txt', result_solve_ivp.y[0, :])
+    np.savetxt(
+        f'Rs_{name}.txt', result_solve_ivp.y[r_indices])
+    np.savetxt(f'Ps_{name}.txt',
+               result_solve_ivp.y[p_indices])
+
+    if wdir:
+        out = [
+            f't_{name}.txt',
+            f'cat_{name}.txt',
+            f'Rs_{name}.txt',
+            f'Ps_{name}.txt',
+            f"kinetic_modelling_{name}.png"]
+
+        if not os.path.isdir("output"):
+            os.makedirs("output")
+
+        for file_name in out:
+            source_file = os.path.abspath(file_name)
+            destination_file = os.path.join(
+                "output/", os.path.basename(file_name))
+            shutil.move(source_file, destination_file)
+
+        if not os.path.isdir(os.path.join(wdir, "output/")):
+            shutil.move("output/", os.path.join(wdir, "output"))
+        else:
+            print("Output already exist")
+            move_bool = input("Move anyway? (y/n): ")
+            if move_bool == "y":
+                shutil.move("output/", os.path.join(wdir, "output"))
+            elif move_bool == "n":
+                pass
+            else:
+                move_bool = input(
+                    f"{move_bool} is invalid, please try again... (y/n): ")
 
 def plot_ci(ci, x2, y2, ax=None):
     if ax is None:

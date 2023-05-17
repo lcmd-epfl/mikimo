@@ -11,6 +11,7 @@ import pandas as pd
 from autograd import jacobian
 from scipy.constants import R, calorie, h, k, kilo
 from scipy.integrate import solve_ivp
+from plot_function import plot_evo_save
 
 warnings.filterwarnings("ignore")
 
@@ -376,151 +377,6 @@ def system_KE_DE(
     return _dydt
 
 
-def plot_save(result_solve_ivp, dir, name, states, x_scale, more_species_mkm):
-
-    r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
-    p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
-
-    if x_scale == "ls":
-        t = np.log10(result_solve_ivp.t)
-        xlabel = "log(time) (s)"
-    elif x_scale == "s":
-        t = result_solve_ivp.t
-        xlabel = "time (s)"
-    elif x_scale == "lmin":
-        t = np.log10(result_solve_ivp.t / 60)
-        xlabel = "log(time) (min)"
-    elif x_scale == "min":
-        t = result_solve_ivp.t / 60
-        xlabel = "time (min)"
-    elif x_scale == "h":
-        t = result_solve_ivp.t / 3600
-        xlabel = "time (h)"
-    elif x_scale == "d":
-        t = result_solve_ivp.t / 86400
-        xlabel = "time (d)"
-    else:
-        raise ValueError(
-            "x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
-
-    plt.rc("axes", labelsize=16)
-    plt.rc("xtick", labelsize=16)
-    plt.rc("ytick", labelsize=16)
-    plt.rc("font", size=16)
-
-    fig = plt.figure(figsize=(8, 6))
-    ax = fig.add_subplot(1, 1, 1)
-    # Catalyst--------------------------
-    ax.plot(t,
-            result_solve_ivp.y[0, :],
-            c="#797979",
-            linewidth=2,
-            alpha=0.85,
-            zorder=1,
-            label=states[0])
-
-    # Reactant--------------------------
-    color_R = [
-        "#008F73",
-        "#1AC182",
-        "#1AC145",
-        "#7FFA35",
-        "#8FD810",
-        "#ACBD0A"]
-
-    for n, i in enumerate(r_indices):
-        ax.plot(t,
-                result_solve_ivp.y[i, :],
-                linestyle="--",
-                c=color_R[n],
-                linewidth=2,
-                alpha=0.85,
-                zorder=1,
-                label=states[i])
-
-    # Product--------------------------
-    color_P = [
-        "#D80828",
-        "#F57D13",
-        "#55000A",
-        "#F34DD8",
-        "#C5A806",
-        "#602AFC"]
-
-    for n, i in enumerate(p_indices):
-        ax.plot(t,
-                result_solve_ivp.y[i, :],
-                linestyle="dashdot",
-                c=color_P[n],
-                linewidth=2,
-                alpha=0.85,
-                zorder=1,
-                label=states[i])
-
-    # additional INT-----------------
-    color_INT = [
-        "#4251B3",
-        "#3977BD",
-        "#2F7794",
-        "#7159EA",
-        "#15AE9B",
-        "#147F58"]
-    if more_species_mkm is not None:
-        for i in more_species_mkm:
-            ax.plot(t,
-                    result_solve_ivp.y[i, :],
-                    linestyle="dashdot",
-                    c=color_INT[i],
-                    linewidth=2,
-                    alpha=0.85,
-                    zorder=1,
-                    label=states[i])
-
-    plt.xlabel(xlabel)
-    plt.ylabel('Concentration (mol/l)')
-    plt.legend()
-    plt.grid(True, linestyle='--', linewidth=0.75)
-    plt.tight_layout()
-    fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
-
-    np.savetxt(f't_{name}.txt', result_solve_ivp.t)
-    np.savetxt(f'cat_{name}.txt', result_solve_ivp.y[0, :])
-    np.savetxt(
-        f'Rs_{name}.txt', result_solve_ivp.y[r_indices])
-    np.savetxt(f'Ps_{name}.txt',
-               result_solve_ivp.y[p_indices])
-
-    if dir:
-        out = [
-            f't_{name}.txt',
-            f'cat_{name}.txt',
-            f'Rs_{name}.txt',
-            f'Ps_{name}.txt',
-            f"kinetic_modelling_{name}.png"]
-
-        if not os.path.isdir("output"):
-            os.makedirs("output")
-
-        for file_name in out:
-            source_file = os.path.abspath(file_name)
-            destination_file = os.path.join(
-                "output/", os.path.basename(file_name))
-            shutil.move(source_file, destination_file)
-
-        if not os.path.isdir(os.path.join(dir, "output/")):
-            shutil.move("output/", os.path.join(dir, "output"))
-        else:
-            print("Output already exist")
-            move_bool = input("Move anyway? (y/n): ")
-            if move_bool == "y":
-                shutil.move("output/", os.path.join(dir, "output"))
-            elif move_bool == "n":
-                pass
-            else:
-                move_bool = input(
-                    f"{move_bool} is invalid, please try again... (y/n): ")
-
-
 if __name__ == "__main__":
 
     # Input
@@ -606,8 +462,8 @@ if __name__ == "__main__":
         args = parser.parse_args(['-i', f"{w_dir}/reaction_data.csv",
                                   '-c', f"{w_dir}/c0.txt",
                                   "-rn", f"{w_dir}/rxn_network.csv",
-                                  "-t", f"{args.temp}",
-                                  "--time", f"{args.time}",
+                                  "--temp", f"{args.temp}",
+                                  "--Time", f"{args.time}",
                                   "-de", f"{args.de}",
                                   ])
 
@@ -653,10 +509,10 @@ if __name__ == "__main__":
         jac=jac,
     )
     states_ = [s.replace("*", "") for s in states]
-    plot_save(
+    plot_evo_save(
         result_solve_ivp,
         w_dir,
-        "name",
+        "",
         states_,
         x_scale,
         more_species_mkm)

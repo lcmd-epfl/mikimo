@@ -33,7 +33,7 @@ from scipy.interpolate import interp1d
 from tqdm import tqdm
 
 from kinetic_solver import calc_k, system_KE_DE
-from plot2d_mod import plot_2d_combo, plot_evo
+from plot_function import plot_2d_combo, plot_evo
 
 
 def check_km_inp(df, df_network):
