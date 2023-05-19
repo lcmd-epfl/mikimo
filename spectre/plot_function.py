@@ -1,11 +1,14 @@
 
+import os
+import shutil
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import cm
+from matplotlib.ticker import FuncFormatter
 from navicat_volcanic.helpers import bround
 from navicat_volcanic.plotting2d import beautify_ax
-import shutil 
-import os
 
 matplotlib.use("Agg")
 
@@ -201,51 +204,6 @@ def plotpoints_(ax, px, py, c, m, plotmode):
         edgecolors="black",
         zorder=2,
     )
-
-
-def beautify_ax(ax):
-    # Border
-    ax.spines["top"].set_color("black")
-    ax.spines["bottom"].set_color("black")
-    ax.spines["left"].set_color("black")
-    ax.spines["right"].set_color("black")
-    ax.get_xaxis().set_tick_params(direction="out")
-    ax.get_yaxis().set_tick_params(direction="out")
-    ax.xaxis.tick_bottom()
-    ax.yaxis.tick_left()
-    return ax
-
-
-def plotpoints(ax, px, py, cb, ms, plotmode):
-
-    if plotmode == 1:
-        s = 15
-        lw = 0.25
-        ax.scatter(
-            px,
-            py,
-            s=s,
-            c=cb,
-            marker=ms,
-            linewidths=lw,
-            edgecolors="black",
-            zorder=2,
-        )
-    elif plotmode >= 2:
-        s = 30
-        lw = 0.3
-        for i in range(len(px)):
-            ax.scatter(
-                px[i],
-                py[i],
-                s=s,
-                c=cb[i],
-                marker=ms[i],
-                linewidths=lw,
-                edgecolors="black",
-                zorder=2,
-            )
-
 
 def plot_2d_combo(
     x,
@@ -551,3 +509,180 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     plt.yticks(np.arange(0, ymax + 0.1, ybase))
 
     fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
+
+
+def plot_3d_(
+    xint,
+    yint,
+    grid,
+    px,
+    py,
+    ymin,
+    ymax,
+    x1min,
+    x1max,
+    x2min,
+    x2max,
+    x1base,
+    x2base,
+    x1label="X1-axis",
+    x2label="X2-axis",
+    ylabel="Y-axis",
+    filename="plot.png",
+    cb="white",
+    ms="o",
+):
+    fig, ax = plt.subplots(
+        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
+    )
+    grid = np.clip(grid, ymin, ymax)
+    norm = cm.colors.Normalize(vmax=ymax, vmin=ymin)
+    ax = beautify_ax(ax)
+    
+    increment = np.round((ymax - ymin)/10,1)
+    levels = np.arange(ymin, ymax + increment, increment/100)
+
+    cset = ax.contourf(
+        xint,
+        yint,
+        grid,
+        levels=levels,
+        norm=norm,
+        cmap=cm.get_cmap("jet", len(levels)),
+    )
+
+    # Labels and key
+    plt.xlabel(x1label)
+    plt.ylabel(x2label)
+    plt.xlim(x1min, x1max)
+    plt.ylim(x2max, x2min)
+    plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
+    plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
+    
+    fmt = lambda x, pos: "%.0f" % x
+    cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
+    cbar.set_label(ylabel, labelpad=15, rotation=270)
+    tick_labels = ['{:.2f}'.format(value) for value in levels]
+    cbar.set_ticklabels(tick_labels)
+    
+    for i in range(len(px)):
+        ax.scatter(
+            px[i],
+            py[i],
+            s=12.5,
+            c=cb[i],
+            marker=ms[i],
+            linewidths=0.15,
+            edgecolors="black",
+        )
+    plt.savefig(filename)
+    
+    
+def plot_3d_np(
+    xint,
+    yint,
+    grid,
+    ymin,
+    ymax,
+    x1min,
+    x1max,
+    x2min,
+    x2max,
+    x1base,
+    x2base,
+    x1label="X1-axis",
+    x2label="X2-axis",
+    ylabel="Y-axis",
+    filename="plot.png",
+):
+    fig, ax = plt.subplots(
+        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
+    )
+    grid = np.clip(grid, ymin, ymax)
+    norm = cm.colors.Normalize(vmax=ymax, vmin=ymin)
+    ax = beautify_ax(ax)
+    
+    increment = np.round((ymax - ymin)/10,1)
+    levels = np.arange(ymin, ymax + increment, increment/100)
+
+    cset = ax.contourf(
+        xint,
+        yint,
+        grid,
+        levels=levels,
+        norm=norm,
+        cmap=cm.get_cmap("jet", len(levels)),
+    )
+
+    # Labels and key
+    plt.xlabel(x1label)
+    plt.ylabel(x2label)
+    plt.xlim(x1min, x1max)
+    plt.ylim(x2max, x2min)
+    plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
+    plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
+    
+    fmt = lambda x, pos: "%.0f" % x
+    cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
+    cbar.set_label(ylabel, labelpad=15, rotation=270)
+    tick_labels = ['{:.2f}'.format(value) for value in levels]
+    cbar.set_ticklabels(tick_labels)
+    
+    plt.savefig(filename)
+    
+    
+def plot_3d_contour_regions_np(
+    xint,
+    yint,
+    grid,
+    x1min,
+    x1max,
+    x2min,
+    x2max,
+    x1base,
+    x2base,
+    x1label="X1-axis",
+    x2label="X2-axis",
+    ylabel="Y-axis",
+    filename="plot.png",
+    nunique=2,
+    id_labels=[],
+):
+    fig, ax = plt.subplots(
+        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
+    )
+    ax = beautify_ax(ax)
+    levels = np.arange(-0.1, nunique + 0.9, 1)
+    cset = ax.contourf(
+        xint,
+        yint,
+        grid,
+        levels=levels,
+        cmap=cm.get_cmap("Dark2", nunique + 1),
+    )
+
+    # Labels and key
+    plt.xlabel(x1label)
+    plt.ylabel(x2label)
+    plt.xlim(x1min, x1max)
+    plt.ylim(x2max, x2min)
+    plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
+    plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
+    ax.contour(xint, yint, grid, cset.levels, colors="black", linewidths=0.1)
+    fmt = lambda x, pos: "%.0f" % x
+    cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
+    cbar.set_ticks([])
+    cbar.set_label(ylabel, labelpad=15, rotation=270)
+    for j, tlab in enumerate(id_labels):
+        cbar.ax.text(
+            12.5,
+            0.4 + j,
+            tlab,
+            ha="center",
+            va="center",
+            weight="light",
+            fontsize=3.5,
+            rotation=-90,
+        )
+        cbar.ax.get_yaxis().labelpad = 15
+    plt.savefig(filename)
