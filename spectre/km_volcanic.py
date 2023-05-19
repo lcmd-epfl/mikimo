@@ -1,39 +1,33 @@
 #!/usr/bin/env python
 
 import argparse
-import glob
+import itertools
 import multiprocessing
 import os
 import shutil
-import itertools
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scipy.stats as stats
+import sklearn as sk
 from joblib import Parallel, delayed
 from navicat_volcanic.dv1 import curate_d, find_1_dv
-from navicat_volcanic.dv2 import find_2_dv, find_2_dv
+from navicat_volcanic.dv2 import find_2_dv
 from navicat_volcanic.helpers import (bround, group_data_points,
                                       user_choose_1_dv, user_choose_2_dv)
 from navicat_volcanic.plotting2d import calc_ci, plot_2d, plot_2d_lsfer
-from navicat_volcanic.plotting3d import (
-    get_bases,
-    bround,
-    plot_3d_lsfer,
-    plot_3d_contour,
-    plot_3d_scatter,
-    plot_3d_contour_regions)
-import sklearn as sk
-from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
+from navicat_volcanic.plotting3d import (bround, get_bases, plot_3d_contour,
+                                         plot_3d_contour_regions,
+                                         plot_3d_lsfer, plot_3d_scatter)
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from tqdm import tqdm
 
 from kinetic_solver import calc_k, system_KE_DE
-from plot_function import plot_2d_combo, plot_evo
+from plot_function import plot_2d_combo, plot_3d_, plot_evo
 
 
 def check_km_inp(df, df_network):
@@ -1288,7 +1282,7 @@ No one else can decide it\n""")
             for k, l in chunk:
                 for j in range(n_target):
                     grid_d[j][k, l] = results[i][j]
-                    i += 1
+                i += 1
 
         # TODO knn imputter for now
         if np.any(np.isnan(grid_d)):
@@ -1324,53 +1318,28 @@ No one else can decide it\n""")
         amin = activity_grid.min()
         amax = activity_grid.max()
 
-        if plotmode > 1:
-            plot_3d_contour(
-                xint,
-                yint,
-                activity_grid,
-                px,
-                py,
-                amin,
-                amax,
-                x1min,
-                x1max,
-                x2min,
-                x2max,
-                x1base,
-                x2base,
-                x1label=x1label,
-                x2label=x2label,
-                ylabel=alabel,
-                filename=afilename,
-                cb=cb,
-                ms=ms,
-                plotmode=plotmode,
-            )
-        else:
-            plot_3d_scatter(
-                xint,
-                yint,
-                activity_grid,
-                px,
-                py,
-                amin,
-                amax,
-                x1min,
-                x1max,
-                x2min,
-                x2max,
-                x1base,
-                x2base,
-                x1label=x1label,
-                x2label=x2label,
-                ylabel=alabel,
-                filename=afilename,
-                cb=cb,
-                ms=ms,
-                plotmode=plotmode,
-            )
-
+        plot_3d_(
+            xint,
+            yint,
+            activity_grid,
+            px,
+            py,
+            amin,
+            amax,
+            x1min,
+            x1max,
+            x2min,
+            x2max,
+            x1base,
+            x2base,
+            x1label=x1label,
+            x2label=x2label,
+            ylabel=alabel,
+            filename=afilename,
+            cb=cb,
+            ms=ms,
+        )
+   
         cb = np.array(cb, dtype='S')
         ms = np.array(ms, dtype='S')
         with h5py.File('data_a.h5', 'w') as f:

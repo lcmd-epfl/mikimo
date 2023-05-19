@@ -1,13 +1,14 @@
+import argparse
+import os
+import shutil
+import subprocess as sp
+import sys
+
 import h5py
 import numpy as np
 from navicat_volcanic.plotting2d import plot_2d
 from plot2d_mod import plot_2d_combo
 from scipy.signal import savgol_filter, wiener
-import argparse
-import subprocess as sp
-import sys
-import os
-import shutil
 
 if __name__ == "__main__":
 
