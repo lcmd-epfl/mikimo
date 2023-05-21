@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
+from navicat_volcanic.helpers import bround
 from scipy.integrate import solve_ivp
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
@@ -307,8 +308,8 @@ def run_mkm(grid, loc, energy_profile_all, dgr_all, coeff_TS_all,
             rxn_network_all, states, initial_conc):
 
     idx_target_all = [states.index(i) for i in states if "*" in i]
-    temperature = grid[0][loc[0],0]
-    t_span = (0, grid[1][loc[1],0])
+    temperature = grid[0][0, loc[0]]
+    t_span = (0, grid[1][loc[1], 0])
     initial_conc += 1e-9
     k_forward_all, k_reverse_all = calc_k(
         energy_profile_all, dgr_all, coeff_TS_all, temperature)
@@ -358,7 +359,7 @@ def run_mkm(grid, loc, energy_profile_all, dgr_all, coeff_TS_all,
             if rtol == last_[0] and atol == last_[1]:
                 success = True
                 cont = True
-                return np.NaN
+                return [np.NaN]*len(idx_target_all)
             continue
     return c_target_t
 
@@ -457,9 +458,22 @@ if __name__ == "__main__":
         print(f"temperature span: {temperatures} s")
     
         npoints = 200    
-        temperatures_ = np.linspace(temperatures, npoints)
-        times_ = np.linspace(t_finals, npoints)
+    
+        x1base = np.round((temperatures[1]-temperatures[0])/5)
+        if x1base == 0: x1base = 0.5
+        x2base = np.round((t_finals[1]-t_finals[0])/10)
+        if x2base == 0: x2base = 0.5     
+    
+        x1min = bround(temperatures[0], x1base, "min")
+        x1max = bround(temperatures[1], x1base, "max")
+        x2min = bround(t_finals[0], x2base, "min")
+        x2max = bround(t_finals[1], x2base, "max")
+        
+        temperatures_ = np.linspace(x1min, x1max, npoints)
+        times_ = np.linspace(x2min, x2max, npoints)
+        
         Tts = np.meshgrid(temperatures_, times_)
+          
         n_target = len([states.index(i) for i in states if "*" in i])
         grid = np.zeros((npoints, npoints))
         grid_d = np.array([grid] * n_target)
@@ -488,7 +502,6 @@ if __name__ == "__main__":
                     rxn_network_all, 
                     states, 
                     initial_conc) for loc in chunk)
-            print(len(results))
             i = 0
             for k, l in chunk:
                 for j in range(n_target):
@@ -505,14 +518,16 @@ if __name__ == "__main__":
                 grid_d_fill[i] = filled_data
         else:
             grid_d_fill = grid_d
+        
 
         times_ = np.log10(times_)
-        x1min = np.min(temperatures_)
-        x1max = np.max(temperatures_)
-        x2min = np.min(times_)
-        x2max = np.max(times_)
-        x1base = np.round((x1max-x1min)/10)
-        x2base = np.round((x2max-x2min)/10)
+        with h5py.File('data_tt.h5', 'w') as f:
+            group = f.create_group('data')
+            # save each numpy array as a dataset in the group
+            group.create_dataset('temperatures_', data=temperatures_)
+            group.create_dataset('times_', data=times_)
+            group.create_dataset('agrid', data=grid_d_fill)  
+        
         x1label = "Temperatures [K]"
         x2label = "log10(Time) [s]"
 
@@ -548,8 +563,7 @@ if __name__ == "__main__":
             ylabel=alabel,
             filename=afilename,
         )
-
-
+        
         # TODO 2 targets: activity and selectivity-2
         prod = [p for p in states if "*" in p]
         prod = [s.replace("*", "") for s in prod]
@@ -557,15 +571,15 @@ if __name__ == "__main__":
             slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
             sfilename = "Tt_selectivity_map.png"
 
-            min_ratio = -10
-            max_ratio = 10
+            min_ratio = -20
+            max_ratio = 20
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
             selectivity_ratio_ = np.clip(
                 selectivity_ratio, min_ratio, max_ratio)
             smin = selectivity_ratio.min()
             smax = selectivity_ratio.max()
             
-            with h5py.File('data_a.h5', 'w') as f:
+            with h5py.File('data_s_tt.h5', 'w') as f:
                 group = f.create_group('data')
                 group.create_dataset('temperatures_', data=temperatures_)
                 group.create_dataset('times_', data=times_)
@@ -595,7 +609,7 @@ if __name__ == "__main__":
             slabel = "Dominant product"
             sfilename = "Tt_selectivity_map.png"
             
-            with h5py.File('data_a.h5', 'w') as f:
+            with h5py.File('data_s_tt.h5', 'w') as f:
                 group = f.create_group('data')
                 group.create_dataset('temperatures_', data=temperatures_)
                 group.create_dataset('times_', data=times_)
