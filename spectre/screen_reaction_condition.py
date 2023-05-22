@@ -355,13 +355,13 @@ def run_mkm(grid, loc, energy_profile_all, dgr_all, coeff_TS_all,
             success = True
             c_target_t = np.array([result_solve_ivp.y[i][-1]
                                   for i in idx_target_all])
+            return c_target_t
         except Exception as e:
             if rtol == last_[0] and atol == last_[1]:
                 success = True
                 cont = True
-                return [np.NaN]*len(idx_target_all)
+                return np.array([np.NaN] * len(idx_target_all))
             continue
-    return c_target_t
 
 
 if __name__ == "__main__":
@@ -415,14 +415,14 @@ if __name__ == "__main__":
         action="store_true",
         help="""Toggle to plot evolution as well. (default: False)""",
     )
-    
+
     parser.add_argument(
         "-m",
         "--m",
         dest="map",
         action="store_true",
         help="""Toggle to construct time-temperature map
-        Require input of temperature range (-t temperature_1 temperature_2) and 
+        Require input of temperature range (-t temperature_1 temperature_2) and
         time (-T time_1 time_2) range in K and s respectively. (default: False)""",
     )
     parser.add_argument(
@@ -450,30 +450,34 @@ if __name__ == "__main__":
 
     idx_target_all = [states.index(i) for i in states if "*" in i]
     prod_name = [s for i, s in enumerate(states) if s.lower().startswith("p")]
-    
+
     if map_tt:
         print(f"-------Constructing time-temperature map-------\n")
-        assert len(t_finals) > 1 and len(temperatures) > 1, "Require more than 1 time and temperature input"
+        assert len(t_finals) > 1 and len(
+            temperatures) > 1, "Require more than 1 time and temperature input"
         print(f"Time span: {t_finals} s")
         print(f"temperature span: {temperatures} s")
-    
-        npoints = 200    
-    
-        x1base = np.round((temperatures[1]-temperatures[0])/5)
-        if x1base == 0: x1base = 0.5
-        x2base = np.round((t_finals[1]-t_finals[0])/10)
-        if x2base == 0: x2base = 0.5     
-    
+
+        npoints = 200
+
+        t_finals_log = np.log10(t_finals)
+        x1base = np.round((temperatures[1] - temperatures[0]) / 5)
+        if x1base == 0:
+            x1base = 0.5
+        x2base = np.round((t_finals_log[1] - t_finals_log[0]) / 10)
+        if x2base == 0:
+            x2base = 0.5
+
         x1min = bround(temperatures[0], x1base, "min")
         x1max = bround(temperatures[1], x1base, "max")
-        x2min = bround(t_finals[0], x2base, "min")
-        x2max = bround(t_finals[1], x2base, "max")
-        
+        x2min = bround(t_finals_log[0], x2base, "min")
+        x2max = bround(t_finals_log[1], x2base, "max")
+
         temperatures_ = np.linspace(x1min, x1max, npoints)
-        times_ = np.linspace(x2min, x2max, npoints)
-        
+        times_ = np.logspace(x2min, x2max, npoints)
         Tts = np.meshgrid(temperatures_, times_)
-          
+        print(Tts[0].shape, Tts[1].shape)
+
         n_target = len([states.index(i) for i in states if "*" in i])
         grid = np.zeros((npoints, npoints))
         grid_d = np.array([grid] * n_target)
@@ -490,17 +494,17 @@ if __name__ == "__main__":
             start_index = chunk_index * ncore
             end_index = min(start_index + ncore, total_combinations)
             chunk = combinations[start_index:end_index]
-            
+
             results = Parallel(
                 n_jobs=ncore)(
                 delayed(run_mkm)(
                     Tts,
                     loc,
-                    energy_profile_all, 
-                    dgr_all, 
+                    energy_profile_all,
+                    dgr_all,
                     coeff_TS_all,
-                    rxn_network_all, 
-                    states, 
+                    rxn_network_all,
+                    states,
                     initial_conc) for loc in chunk)
             i = 0
             for k, l in chunk:
@@ -518,7 +522,6 @@ if __name__ == "__main__":
                 grid_d_fill[i] = filled_data
         else:
             grid_d_fill = grid_d
-        
 
         times_ = np.log10(times_)
         with h5py.File('data_tt.h5', 'w') as f:
@@ -526,12 +529,11 @@ if __name__ == "__main__":
             # save each numpy array as a dataset in the group
             group.create_dataset('temperatures_', data=temperatures_)
             group.create_dataset('times_', data=times_)
-            group.create_dataset('agrid', data=grid_d_fill)  
-        
+            group.create_dataset('agrid', data=grid_d_fill)
+
         x1label = "Temperatures [K]"
         x2label = "log10(Time) [s]"
 
-    
         alabel = "Total product concentration [M]"
         afilename = f"Tt_activity_map.png"
 
@@ -545,7 +547,7 @@ if __name__ == "__main__":
             group.create_dataset('temperatures_', data=temperatures_)
             group.create_dataset('times_', data=times_)
             group.create_dataset('agrid', data=activity_grid)
-            
+
         plot_3d_np(
             temperatures_,
             times_,
@@ -563,7 +565,7 @@ if __name__ == "__main__":
             ylabel=alabel,
             filename=afilename,
         )
-        
+
         # TODO 2 targets: activity and selectivity-2
         prod = [p for p in states if "*" in p]
         prod = [s.replace("*", "") for s in prod]
@@ -578,13 +580,13 @@ if __name__ == "__main__":
                 selectivity_ratio, min_ratio, max_ratio)
             smin = selectivity_ratio.min()
             smax = selectivity_ratio.max()
-            
+
             with h5py.File('data_s_tt.h5', 'w') as f:
                 group = f.create_group('data')
                 group.create_dataset('temperatures_', data=temperatures_)
                 group.create_dataset('times_', data=times_)
                 group.create_dataset('sgrid', data=selectivity_ratio_)
-                
+
             plot_3d_np(
                 temperatures_,
                 times_,
@@ -608,13 +610,13 @@ if __name__ == "__main__":
             dominant_indices = np.argmax(grid_d_fill, axis=0)
             slabel = "Dominant product"
             sfilename = "Tt_selectivity_map.png"
-            
+
             with h5py.File('data_s_tt.h5', 'w') as f:
                 group = f.create_group('data')
                 group.create_dataset('temperatures_', data=temperatures_)
                 group.create_dataset('times_', data=times_)
                 group.create_dataset('dominant_indices', data=dominant_indices)
-                
+
             plot_3d_contour_regions_np(
                 temperatures_,
                 times_,
@@ -632,11 +634,12 @@ if __name__ == "__main__":
                 id_labels=prod,
                 nunique=n_target
             )
-        
+
     else:
         if len(t_finals) == 1:
 
-            print(f"-------Screening over temperature: {temperatures} K-------")
+            print(
+                f"-------Screening over temperature: {temperatures} K-------")
             Pfs = np.zeros((len(temperatures), len(idx_target_all)))
             t_final = t_finals[0]
             t_span = (0, t_final)
@@ -652,7 +655,7 @@ if __name__ == "__main__":
                     initial_conc,
                     t_span)
                 c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                    for i in idx_target_all])
+                                       for i in idx_target_all])
                 if plot_evo:
                     plot_save(
                         result_solve_ivp,
@@ -667,7 +670,8 @@ if __name__ == "__main__":
 
         elif len(temperatures) == 1:
 
-            print(f"-------Screening over reaction time: {t_finals} s-------\n")
+            print(
+                f"-------Screening over reaction time: {t_finals} s-------\n")
             Pfs = np.zeros((len(t_finals), len(idx_target_all)))
             temperature = temperatures[0]
             for i, tf in enumerate(t_finals):
@@ -682,7 +686,7 @@ if __name__ == "__main__":
                     initial_conc,
                     t_span)
                 c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                    for i in idx_target_all])
+                                       for i in idx_target_all])
                 if plot_evo:
                     plot_save(
                         result_solve_ivp,
@@ -695,7 +699,7 @@ if __name__ == "__main__":
             plot_save_cond(t_finals, Pfs.T, "Time [s]", prod_name)
 
         elif len(t_finals) > 1 and len(temperatures) > 1:
-            
+
             print(f"-------Screening over both reaction time and temperature:-------\n")
             print(f"{t_finals} s")
             print(f"{temperatures} K\n")
@@ -713,7 +717,7 @@ if __name__ == "__main__":
                     initial_conc,
                     t_span)
                 c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                    for i in idx_target_all])
+                                       for i in idx_target_all])
                 if plot_evo:
                     plot_save(
                         result_solve_ivp,

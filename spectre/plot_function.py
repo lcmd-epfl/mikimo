@@ -13,7 +13,13 @@ from navicat_volcanic.plotting2d import beautify_ax
 matplotlib.use("Agg")
 
 
-def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mkm):
+def plot_evo_save(
+        result_solve_ivp,
+        wdir,
+        name,
+        states,
+        x_scale,
+        more_species_mkm):
 
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
@@ -41,12 +47,12 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
             "x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
 
     fig, ax = plt.subplots(
-            frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
-        )
+        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
+    )
     # Catalyst--------------------------
     ax.plot(t,
             result_solve_ivp.y[0, :],
-            "-", 
+            "-",
             c="#797979",
             linewidth=1.5,
             alpha=0.85,
@@ -65,7 +71,7 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
     for n, i in enumerate(r_indices):
         ax.plot(t,
                 result_solve_ivp.y[i, :],
-                "-", 
+                "-",
                 c=color_R[n],
                 linewidth=1.5,
                 alpha=0.85,
@@ -84,7 +90,7 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
     for n, i in enumerate(p_indices):
         ax.plot(t,
                 result_solve_ivp.y[i, :],
-                "-", 
+                "-",
                 c=color_P[n],
                 linewidth=1.5,
                 alpha=0.85,
@@ -109,7 +115,7 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
                     alpha=0.85,
                     zorder=1,
                     label=states[i])
-            
+
     beautify_ax(ax)
     plt.xlabel(xlabel)
     plt.ylabel('Concentration (mol/l)')
@@ -154,6 +160,7 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
             else:
                 move_bool = input(
                     f"{move_bool} is invalid, please try again... (y/n): ")
+
 
 def plot_ci(ci, x2, y2, ax=None):
     if ax is None:
@@ -204,6 +211,7 @@ def plotpoints_(ax, px, py, c, m, plotmode):
         edgecolors="black",
         zorder=2,
     )
+
 
 def plot_2d_combo(
     x,
@@ -538,9 +546,9 @@ def plot_3d_(
     grid = np.clip(grid, ymin, ymax)
     norm = cm.colors.Normalize(vmax=ymax, vmin=ymin)
     ax = beautify_ax(ax)
-    
-    increment = np.round((ymax - ymin)/10,1)
-    levels = np.arange(ymin, ymax + increment, increment/100)
+
+    increment = np.round((ymax - ymin) / 10, 1)
+    levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
         xint,
@@ -558,13 +566,13 @@ def plot_3d_(
     plt.ylim(x2max, x2min)
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
-    
-    fmt = lambda x, pos: "%.0f" % x
+
+    def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=15, rotation=270)
     tick_labels = ['{:.2f}'.format(value) for value in levels]
     cbar.set_ticklabels(tick_labels)
-    
+
     for i in range(len(px)):
         ax.scatter(
             px[i],
@@ -576,8 +584,8 @@ def plot_3d_(
             edgecolors="black",
         )
     plt.savefig(filename)
-    
-    
+
+
 def plot_3d_np(
     xint,
     yint,
@@ -601,9 +609,9 @@ def plot_3d_np(
     grid = np.clip(grid, ymin, ymax)
     norm = cm.colors.Normalize(vmax=ymax, vmin=ymin)
     ax = beautify_ax(ax)
-    
-    increment = np.round((ymax - ymin)/10,1)
-    levels = np.arange(ymin, ymax + increment, increment/100)
+
+    increment = np.round((ymax - ymin) / 10, 1)
+    levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
         xint,
@@ -618,19 +626,19 @@ def plot_3d_np(
     plt.xlabel(x1label)
     plt.ylabel(x2label)
     plt.xlim(x1min, x1max)
-    plt.ylim(x2max, x2min)
+    plt.ylim(x2min, x2max)
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
-    
-    fmt = lambda x, pos: "%.0f" % x
+
+    def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=15, rotation=270)
     tick_labels = ['{:.2f}'.format(value) for value in levels]
     cbar.set_ticklabels(tick_labels)
-    
+
     plt.savefig(filename)
-    
-    
+
+
 def plot_3d_contour_regions_np(
     xint,
     yint,
@@ -669,7 +677,7 @@ def plot_3d_contour_regions_np(
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
     ax.contour(xint, yint, grid, cset.levels, colors="black", linewidths=0.1)
-    fmt = lambda x, pos: "%.0f" % x
+    def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_ticks([])
     cbar.set_label(ylabel, labelpad=15, rotation=270)

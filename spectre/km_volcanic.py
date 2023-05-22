@@ -853,7 +853,7 @@ if __name__ == "__main__":
         # TODO For some reason, sometimes the volcanic drops the last state
         # Kinda adhoc fix for now
         tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
-        if tags_[-1] not in tags:
+        if tags_[-1] not in tags and tags_[-1].lower().startswith("p"):
             print("\n***Forgot the last state******\n")
             d_ = np.float32(df.to_numpy()[:, 1:])
 
@@ -905,7 +905,7 @@ if __name__ == "__main__":
             grids.append(gridj)
 
         tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
-        if len(grids) != len(tags_):
+        if len(grids) != len(tags_) and tags_[-1].lower().startswith("p"):
             print("\n***Forgot the last state******\n")
             d_ = np.float32(df.to_numpy()[:, 1:])
 
@@ -1304,16 +1304,27 @@ No one else can decide it\n""")
 
         # Plotting
         # TODO 1 target: activity
-        x1min = np.min(xint)
-        x1max = np.max(xint)
-        x2min = np.min(yint)
-        x2max = np.max(yint)
         x1label = f"{tag1} [kcal/mol]"
         x2label = f"{tag2} [kcal/mol]"
-
         alabel = "Total product concentration [M]"
         afilename = f"activity_{tag1}_{tag2}.png"
-
+        if verb > 1:
+            cb = np.array(cb, dtype='S')
+            ms = np.array(ms, dtype='S')
+            with h5py.File('data_full.h5', 'w') as f:
+                group = f.create_group('data')
+                # save each numpy array as a dataset in the group
+                group.create_dataset('xint', data=xint)
+                group.create_dataset('yint', data=yint)
+                group.create_dataset('agrid', data=grid_d_fill)
+                group.create_dataset('px', data=px)
+                group.create_dataset('py', data=py)
+                group.create_dataset('cb', data=cb)
+                group.create_dataset('ms', data=ms)
+                group.create_dataset('tag1', data=[tag1.encode()])
+                group.create_dataset('tag2', data=[tag2.encode()])
+                group.create_dataset('x1label', data=[x1label.encode()])
+                group.create_dataset('x2label', data=[x2label.encode()])
         activity_grid = np.sum(grid_d_fill, axis=0)
         amin = activity_grid.min()
         amax = activity_grid.max()
@@ -1339,23 +1350,23 @@ No one else can decide it\n""")
             cb=cb,
             ms=ms,
         )
-   
-        cb = np.array(cb, dtype='S')
-        ms = np.array(ms, dtype='S')
-        with h5py.File('data_a.h5', 'w') as f:
-            group = f.create_group('data')
-            # save each numpy array as a dataset in the group
-            group.create_dataset('xint', data=xint)
-            group.create_dataset('yint', data=yint)
-            group.create_dataset('agrid', data=activity_grid)
-            group.create_dataset('px', data=px)
-            group.create_dataset('py', data=py)
-            group.create_dataset('cb', data=cb)
-            group.create_dataset('ms', data=ms)
-            group.create_dataset('tag1', data=[tag1.encode()])
-            group.create_dataset('tag2', data=[tag2.encode()])
-            group.create_dataset('x1label', data=[x1label.encode()])
-            group.create_dataset('x2label', data=[x2label.encode()])
+        if verb > 1:
+            cb = np.array(cb, dtype='S')
+            ms = np.array(ms, dtype='S')
+            with h5py.File('data_a.h5', 'w') as f:
+                group = f.create_group('data')
+                # save each numpy array as a dataset in the group
+                group.create_dataset('xint', data=xint)
+                group.create_dataset('yint', data=yint)
+                group.create_dataset('agrid', data=activity_grid)
+                group.create_dataset('px', data=px)
+                group.create_dataset('py', data=py)
+                group.create_dataset('cb', data=cb)
+                group.create_dataset('ms', data=ms)
+                group.create_dataset('tag1', data=[tag1.encode()])
+                group.create_dataset('tag2', data=[tag2.encode()])
+                group.create_dataset('x1label', data=[x1label.encode()])
+                group.create_dataset('x2label', data=[x2label.encode()])
 
         # TODO 2 targets: activity and selectivity-2
         prod = [p for p in states if "*" in p]
@@ -1365,13 +1376,32 @@ No one else can decide it\n""")
             slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
             sfilename = f"selectivity_{tag1}_{tag2}.png"
 
-            min_ratio = -10
-            max_ratio = 10
+            min_ratio = -20
+            max_ratio = 20
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
             selectivity_ratio_ = np.clip(
                 selectivity_ratio, min_ratio, max_ratio)
             smin = selectivity_ratio.min()
             smax = selectivity_ratio.max()
+
+            if verb > 1:
+                cb = np.array(cb, dtype='S')
+                ms = np.array(ms, dtype='S')
+                with h5py.File('data_s.h5', 'w') as f:
+                    group = f.create_group('data')
+                    # save each numpy array as a dataset in the group
+                    group.create_dataset('xint', data=xint)
+                    group.create_dataset('yint', data=yint)
+                    group.create_dataset('sgrid', data=selectivity_ratio_)
+                    group.create_dataset('px', data=px)
+                    group.create_dataset('py', data=py)
+                    group.create_dataset('cb', data=cb)
+                    group.create_dataset('ms', data=ms)
+                    group.create_dataset('tag1', data=[tag1.encode()])
+                    group.create_dataset('tag2', data=[tag2.encode()])
+                    group.create_dataset('x1label', data=[x1label.encode()])
+                    group.create_dataset('x2label', data=[x2label.encode()])
+
             if plotmode > 1:
                 plot_3d_contour(
                     xint,
@@ -1418,28 +1448,32 @@ No one else can decide it\n""")
                     ms=ms,
                     plotmode=plotmode,
                 )
-            cb = np.array(cb, dtype='S')
-            ms = np.array(ms, dtype='S')
-            with h5py.File('data_a.h5', 'w') as f:
-                group = f.create_group('data')
-                # save each numpy array as a dataset in the group
-                group.create_dataset('xint', data=xint)
-                group.create_dataset('yint', data=yint)
-                group.create_dataset('sgrid', data=selectivity_ratio_)
-                group.create_dataset('px', data=px)
-                group.create_dataset('py', data=py)
-                group.create_dataset('cb', data=cb)
-                group.create_dataset('ms', data=ms)
-                group.create_dataset('tag1', data=[tag1.encode()])
-                group.create_dataset('tag2', data=[tag2.encode()])
-                group.create_dataset('x1label', data=[x1label.encode()])
-                group.create_dataset('x2label', data=[x2label.encode()])
 
         # TODO >2 targets: activity and selectivity-3
         elif n_target > 2:
             dominant_indices = np.argmax(grid_d_fill, axis=0)
             slabel = "Dominant product"
             sfilename = f"selectivity_{tag1}_{tag2}.png"
+
+            if verb > 1:
+                cb = np.array(cb, dtype='S')
+                ms = np.array(ms, dtype='S')
+                with h5py.File('data_a.h5', 'w') as f:
+                    group = f.create_group('data')
+                    # save each numpy array as a dataset in the group
+                    group.create_dataset('xint', data=xint)
+                    group.create_dataset('yint', data=yint)
+                    group.create_dataset(
+                        'dominant_indices', data=dominant_indices)
+                    group.create_dataset('px', data=px)
+                    group.create_dataset('py', data=py)
+                    group.create_dataset('cb', data=cb)
+                    group.create_dataset('ms', data=ms)
+                    group.create_dataset('tag1', data=[tag1.encode()])
+                    group.create_dataset('tag2', data=[tag2.encode()])
+                    group.create_dataset('x1label', data=[x1label.encode()])
+                    group.create_dataset('x2label', data=[x2label.encode()])
+
             plot_3d_contour_regions(
                 xint,
                 yint,
@@ -1463,23 +1497,6 @@ No one else can decide it\n""")
                 id_labels=prod,
                 plotmode=plotmode,
             )
-            cb = np.array(cb, dtype='S')
-            ms = np.array(ms, dtype='S')
-            with h5py.File('data_a.h5', 'w') as f:
-                group = f.create_group('data')
-                # save each numpy array as a dataset in the group
-                group.create_dataset('xint', data=xint)
-                group.create_dataset('yint', data=yint)
-                group.create_dataset('dominant_indices', data=dominant_indices)
-                group.create_dataset('px', data=px)
-                group.create_dataset('py', data=py)
-                group.create_dataset('cb', data=cb)
-                group.create_dataset('ms', data=ms)
-                group.create_dataset('tag1', data=[tag1.encode()])
-                group.create_dataset('tag2', data=[tag2.encode()])
-                group.create_dataset('x1label', data=[x1label.encode()])
-                group.create_dataset('x2label', data=[x2label.encode()])
-
         print("""\nThe glow of that gigantic star
 That utopia of endless happiness
 I don't care if I never reach any of those
