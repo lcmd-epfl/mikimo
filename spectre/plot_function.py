@@ -673,24 +673,24 @@ def plot_3d_contour_regions_np(
     plt.xlabel(x1label)
     plt.ylabel(x2label)
     plt.xlim(x1min, x1max)
-    plt.ylim(x2max, x2min)
+    plt.ylim(x2min, x2max)
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
     ax.contour(xint, yint, grid, cset.levels, colors="black", linewidths=0.1)
     def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_ticks([])
-    cbar.set_label(ylabel, labelpad=15, rotation=270)
+    cbar.set_label(ylabel, labelpad=40, rotation=270)
     for j, tlab in enumerate(id_labels):
         cbar.ax.text(
-            12.5,
+            2,
             0.4 + j,
             tlab,
             ha="center",
             va="center",
             weight="light",
-            fontsize=3.5,
+            fontsize=8,
             rotation=-90,
         )
-        cbar.ax.get_yaxis().labelpad = 15
+        cbar.ax.get_yaxis().labelpad = 30
     plt.savefig(filename)
