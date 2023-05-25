@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 
 import argparse
+import os
+import shutil
 import warnings
 
 import autograd.numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 from autograd import jacobian
 from scipy.constants import R, calorie, h, k, kilo
@@ -135,10 +138,12 @@ def load_data(args):
             # step where branching is (the first 1)
             branch_step = np.where(
                 df_network[all_df[i + 1].columns[1]].to_numpy() == 1)[0][0]
+            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[1])[0]
         except KeyError as e:
             # due to TS as the first column of the profile
             branch_step = np.where(
                 df_network[all_df[i + 1].columns[2]].to_numpy() == 1)[0][0]
+            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
         # int to which new cycle is connected (the first -1)
 
         if df_network.columns.to_list()[
@@ -149,7 +154,12 @@ def load_data(args):
             # int to which new cycle is connected (the first -1)
             cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
 
-        state_insert = states[cp_idx]
+        # state to insert
+        if states[loc_nx[0]-1].lower().startswith('p'):
+            # conneting profiles
+            state_insert = all_df[i].columns[-1]
+        else:      
+            state_insert = states[cp_idx]
         all_df[i + 1]["R"] = df_all[state_insert].values
         all_df[i + 1].rename(columns={'R': state_insert}, inplace=True)
 
@@ -164,6 +174,7 @@ def load_data(args):
         coeff_TS_all.append(np.array(coeff_TS))
         energy_profile_all.append(np.array(energy_profile))
 
+    print(energy_profile_all)
     return initial_conc, t_span, temperature, method, energy_profile_all,\
         dgr_all, coeff_TS_all, rxn_network_all, states
 
@@ -197,7 +208,7 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
     """
 
     def get_dG_ddag(energy_profile, dgr, coeff_TS):
-
+        
         # compute all dG_ddag in the profile
         n_S = energy_profile.size
         n_TS = np.count_nonzero(coeff_TS)
@@ -232,11 +243,9 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
                         matrix_T_I[j, 1] = energy_profile[i]
 
         dG_ddag = matrix_T_I[:, 1] - matrix_T_I[:, 0]
-
         return dG_ddag
 
     dG_ddag_forward = get_dG_ddag(energy_profile, dgr, coeff_TS)
-
     coeff_TS_reverse = coeff_TS[::-1]
     coeff_TS_reverse = np.insert(coeff_TS_reverse, 0, 0)
     coeff_TS_reverse = coeff_TS_reverse[:-1]
@@ -246,7 +255,7 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
     energy_profile_reverse = np.insert(energy_profile_reverse, 0, 0)
     dG_ddag_reverse = get_dG_ddag(
         energy_profile_reverse, -dgr, coeff_TS_reverse)
-
+    
     k_forward = erying(dG_ddag_forward, temperature)
     k_reverse = erying(dG_ddag_reverse, temperature)
 
@@ -337,7 +346,7 @@ def system_KE_DE(
                 dy_dt = func(t, y)
                 violate_low_idx = np.where(y < boundary[:, 0])
                 violate_up_idx = np.where(y > boundary[:, 1])
-                if violate_up_idx[0] and violate_low_idx[0]:
+                if np.any(violate_up_idx[0]) and np.any(violate_low_idx[0]):
                     try:
                         y[violate_low_idx] = boundary[violate_low_idx, 0]
                         y[violate_up_idx] = boundary[violate_up_idx, 1]
@@ -489,10 +498,10 @@ if __name__ == "__main__":
             np.nextafter(np.float16(0), np.float16(1)),
         ]
     )
-    rtol = 1e-3
-    atol = 1e-6
+    rtol = 1e-6
+    atol = 1e-9
     jac = dydt.jac
-    eps = 1e-7  # to avoid crashing due to dividing with zeroes
+    eps = 1e-8  # to avoid crashing due to dividing with zeroes
 
     result_solve_ivp = solve_ivp(
         dydt,
