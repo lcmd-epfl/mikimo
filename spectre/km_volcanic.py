@@ -149,7 +149,7 @@ def process_data_mkm(dg, df_network, c0, tags, states):
         if all_df[i].columns[-1].lower().startswith('p'):
             # conneting profiles
             state_insert = all_df[i].columns[-1]
-        else:      
+        else:
             state_insert = states[cp_idx]
         all_df[i + 1]["R"] = df_all[state_insert].values
         all_df[i + 1].rename(columns={'R': state_insert}, inplace=True)
@@ -489,6 +489,7 @@ def process_n_calc_2d(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target), np.array([np.nan] * n_target)
 
+
 def process_n_calc_3d(
     coord: int,
     dgs: List[List[float]],
@@ -502,7 +503,6 @@ def process_n_calc_3d(
     report_as_yield: bool,
     quality: int
 ) -> np.ndarray:
-
 
     try:
         profile = [gridj[coord] for gridj in grids]
@@ -530,6 +530,7 @@ def process_n_calc_3d(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target)
 
+
 def process_n_calc_3d_ps(
         coord,
         dgs,
@@ -552,7 +553,7 @@ def process_n_calc_3d_ps(
         elif mode == 'vtemp':
             temperature = t_points[coord[1]]
             t_span = (0, fixed_condition)
-            
+
         print(coord[0], dgs[coord[0], 3], temperature)
         initial_conc, energy_profile_all, dgr_all, \
             coeff_TS_all, rxn_network = process_data_mkm(
@@ -577,7 +578,6 @@ def process_n_calc_3d_ps(
             print(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target)
-    
 
 
 if __name__ == "__main__":
@@ -802,12 +802,12 @@ if __name__ == "__main__":
     elif p_quality > 3:
         interpolate = False
         npoints = 300
-        
+
     times = args.time
     temperatures = args.temp
-    
+
     screen_cond = None
-    if times == None:
+    if times is None:
         t_span = (0, 86400)
     elif len(times) == 1:
         t_span = (0, times[0])
@@ -824,10 +824,11 @@ if __name__ == "__main__":
         x2max = bround(t_finals_log[1], x2base, "max")
         t_points = np.logspace(x2min, x2max, npoints)
         if verb > 1:
-            print("""Building actvity/selectivity map with time as the second variable, 
+            print(
+                """Building actvity/selectivity map with time as the second variable,
                   Force nd = 1""")
 
-    if temperatures == None:
+    if temperatures is None:
         temperature = 298.15
     elif len(temperatures) == 1:
         temperature = temperatures[0]
@@ -845,9 +846,10 @@ if __name__ == "__main__":
         if x2base == 0:
             x2base = 0.5
         if verb > 1:
-            print("""Building actvity/selectivity map with temperature as the second variable, 
+            print(
+                """Building actvity/selectivity map with temperature as the second variable,
                   Force nd = 1""")
-            
+
     try:
         df = pd.read_excel(filename_xlsx)
     except FileNotFoundError as e:
@@ -1183,8 +1185,10 @@ I'll find happiness in abundance""")
                 grid_d_fill = grid_d
 
             x1label = f"{tag} [kcal/mol]"
-            if screen_cond == "vtemp": x2label = "Temperature [K]"
-            elif screen_cond == "vtime": x2label = "log$_{10}$(time) [s]"    
+            if screen_cond == "vtemp":
+                x2label = "Temperature [K]"
+            elif screen_cond == "vtime":
+                x2label = "log$_{10}$(time) [s]"
 
             with h5py.File('data_tv.h5', 'w') as f:
                 group = f.create_group('data')
@@ -1197,15 +1201,15 @@ I'll find happiness in abundance""")
                 group.create_dataset('tag', data=[tag.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
                 group.create_dataset('x2label', data=[x2label.encode()])
-            
-            #TODO figure out plot later       
+
+            # TODO figure out plot later
             alabel = "Total product concentration [M]"
             afilename = f"activity_{tag1}_{tag2}.png"
 
             activity_grid = np.sum(grid_d_fill, axis=0)
             amin = activity_grid.min()
             amax = activity_grid.max()
-            
+
             if n_target == 2:
 
                 slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
@@ -1220,10 +1224,9 @@ I'll find happiness in abundance""")
                 smax = selectivity_ratio.max()
             elif n_target > 2:
                 dominant_indices = np.argmax(grid_d_fill, axis=0)
-      
-        
-        else:            
-            
+
+        else:
+
             if verb > 0:
                 print("\n------------Constructing MKM volcano plot------------------\n")
 
@@ -1254,7 +1257,8 @@ I'll find happiness in abundance""")
             ci = np.zeros((len(dgs), n_target))
 
             dgs_g = np.array_split(trun_dgs, len(trun_dgs) // ncore + 1)
-            sigma_dgs_g = np.array_split(sigma_dgs, len(sigma_dgs) // ncore + 1)
+            sigma_dgs_g = np.array_split(
+                sigma_dgs, len(sigma_dgs) // ncore + 1)
             i = 0
             for batch_dgs, batch_s_dgs in tqdm(
                     zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
@@ -1284,13 +1288,13 @@ I'll find happiness in abundance""")
             prod_conc_ = prod_conc.copy()
             ci_ = ci.copy()
             missing_indices = np.isnan(prod_conc[:, 0]
-                                    )
+                                       )
             for i in range(n_target):
 
                 f = interp1d(xint[~missing_indices],
-                            prod_conc[:, i][~missing_indices],
-                            kind='cubic',
-                            fill_value="extrapolate")
+                             prod_conc[:, i][~missing_indices],
+                             kind='cubic',
+                             fill_value="extrapolate")
                 y_interp = f(xint[missing_indices])
                 prod_conc_[:, i][missing_indices] = y_interp
 
@@ -1338,9 +1342,9 @@ I'll find happiness in abundance""")
             for i in range(n_target):
                 if np.any(np.isnan(prod_conc_pt)):
                     f = interp1d(X[~missing_indices],
-                                prod_conc_pt[:, i][~missing_indices],
-                                kind='cubic',
-                                fill_value="extrapolate")
+                                 prod_conc_pt[:, i][~missing_indices],
+                                 kind='cubic',
+                                 fill_value="extrapolate")
                     y_interp = f(X[missing_indices])
                     prod_conc_pt_[:, i][missing_indices] = y_interp
                 else:
@@ -1564,7 +1568,7 @@ I'll find happiness in abundance""")
             cb=cb,
             ms=ms,
         )
-   
+
         cb = np.array(cb, dtype='S')
         ms = np.array(ms, dtype='S')
         with h5py.File('data_a.h5', 'w') as f:
@@ -1597,7 +1601,7 @@ I'll find happiness in abundance""")
                 selectivity_ratio, min_ratio, max_ratio)
             smin = selectivity_ratio.min()
             smax = selectivity_ratio.max()
-    
+
             cb = np.array(cb, dtype='S')
             ms = np.array(ms, dtype='S')
             with h5py.File('data_a.h5', 'w') as f:
@@ -1614,7 +1618,7 @@ I'll find happiness in abundance""")
                 group.create_dataset('tag2', data=[tag2.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
                 group.create_dataset('x2label', data=[x2label.encode()])
-                
+
             if plotmode > 1:
                 plot_3d_contour(
                     xint,

@@ -155,10 +155,10 @@ def load_data(args):
             cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
 
         # state to insert
-        if states[loc_nx[0]-1].lower().startswith('p'):
+        if states[loc_nx[0] - 1].lower().startswith('p'):
             # conneting profiles
             state_insert = all_df[i].columns[-1]
-        else:      
+        else:
             state_insert = states[cp_idx]
         all_df[i + 1]["R"] = df_all[state_insert].values
         all_df[i + 1].rename(columns={'R': state_insert}, inplace=True)
@@ -174,7 +174,6 @@ def load_data(args):
         coeff_TS_all.append(np.array(coeff_TS))
         energy_profile_all.append(np.array(energy_profile))
 
-    print(energy_profile_all)
     return initial_conc, t_span, temperature, method, energy_profile_all,\
         dgr_all, coeff_TS_all, rxn_network_all, states
 
@@ -208,7 +207,7 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
     """
 
     def get_dG_ddag(energy_profile, dgr, coeff_TS):
-        
+
         # compute all dG_ddag in the profile
         n_S = energy_profile.size
         n_TS = np.count_nonzero(coeff_TS)
@@ -255,7 +254,7 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
     energy_profile_reverse = np.insert(energy_profile_reverse, 0, 0)
     dG_ddag_reverse = get_dG_ddag(
         energy_profile_reverse, -dgr, coeff_TS_reverse)
-    
+
     k_forward = erying(dG_ddag_forward, temperature)
     k_reverse = erying(dG_ddag_reverse, temperature)
 
