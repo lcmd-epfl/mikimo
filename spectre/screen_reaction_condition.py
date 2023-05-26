@@ -267,10 +267,12 @@ def load_data(args):
             # step where branching is (the first 1)
             branch_step = np.where(
                 df_network[all_df[i + 1].columns[1]].to_numpy() == 1)[0][0]
+            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[1])[0]
         except KeyError as e:
             # due to TS as the first column of the profile
             branch_step = np.where(
                 df_network[all_df[i + 1].columns[2]].to_numpy() == 1)[0][0]
+            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
         # int to which new cycle is connected (the first -1)
 
         if df_network.columns.to_list()[
@@ -281,7 +283,12 @@ def load_data(args):
             # int to which new cycle is connected (the first -1)
             cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
 
-        state_insert = states[cp_idx]
+        # state to insert
+        if states[loc_nx[0] - 1].lower().startswith('p'):
+            # conneting profiles
+            state_insert = all_df[i].columns[-1]
+        else:
+            state_insert = states[cp_idx]
         all_df[i + 1]["R"] = df_all[state_insert].values
         all_df[i + 1].rename(columns={'R': state_insert}, inplace=True)
 
@@ -721,6 +728,7 @@ if __name__ == "__main__":
                         x_scale,
                         None)
                 Pfs[i] = c_target_t
+            print(temperatures)
             plot_save_cond(temperatures, Pfs.T, "Temperature (K)", prod_name)
 
         elif len(temperatures) == 1:

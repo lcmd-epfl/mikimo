@@ -484,7 +484,7 @@ if __name__ == "__main__":
     dydt = system_KE_DE(k_forward_all, k_reverse_all,
                         rxn_network_all, initial_conc, states)
 
-    max_step = (t_span[1] - t_span[0]) / 1
+    max_step = (t_span[1] - t_span[0]) / 10
     first_step = np.min(
         [
             1e-14,
@@ -493,14 +493,14 @@ if __name__ == "__main__":
             (t_span[1] - t_span[0]) / 100.0,
             np.finfo(np.float16).eps,
             np.finfo(np.float32).eps,
-            np.finfo(np.float64).eps,
+            np.finfo(np.float128).eps,
             np.nextafter(np.float16(0), np.float16(1)),
         ]
     )
-    rtol = 1e-6
+    rtol = 1e-9
     atol = 1e-9
     jac = dydt.jac
-    eps = 1e-8  # to avoid crashing due to dividing with zeroes
+    eps = 1e-10  # to avoid crashing due to dividing with zeroes
 
     result_solve_ivp = solve_ivp(
         dydt,

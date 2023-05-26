@@ -30,6 +30,19 @@ from kinetic_solver import calc_k, system_KE_DE
 from plot_function import plot_2d_combo, plot_3d_, plot_evo
 
 
+def call_imputter(type):
+    if "knn":
+        imputer = KNNImputer(n_neighbors=5, weights="uniform")
+    elif "iterative":
+        imputer = IterativeImputer(max_iter=10, random_state=0)
+    elif "simple":
+        imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+    else:
+        print("Invalid imputer type, use KNN imputer instead")
+        imputer = KNNImputer(n_neighbors=5, weights="uniform")
+    return imputer
+
+
 def check_km_inp(df, df_network):
     """
     check if the input is correct
@@ -117,6 +130,7 @@ def process_data_mkm(dg, df_network, c0, tags, states):
     species_profile = tags  # %%
     all_df = []
     df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
+
     for i in range(1, len(species_profile)):
         if species_profile[i].lower().startswith("p"):
             df_ = pd.concat([df_, df_all[species_profile[i]]],
@@ -132,10 +146,12 @@ def process_data_mkm(dg, df_network, c0, tags, states):
             # step where branching is (the first 1)
             branch_step = np.where(
                 df_network[all_df[i + 1].columns[1]].to_numpy() == 1)[0][0]
+            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[1])[0]
         except KeyError as e:
             # due to TS as the first column of the profile
             branch_step = np.where(
                 df_network[all_df[i + 1].columns[2]].to_numpy() == 1)[0][0]
+            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
         # int to which new cycle is connected (the first -1)
 
         if df_network.columns.to_list()[
@@ -146,7 +162,8 @@ def process_data_mkm(dg, df_network, c0, tags, states):
             # int to which new cycle is connected (the first -1)
             cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
 
-        if all_df[i].columns[-1].lower().startswith('p'):
+        # state to insert
+        if states[loc_nx[0] - 1].lower().startswith('p'):
             # conneting profiles
             state_insert = all_df[i].columns[-1]
         else:
@@ -554,7 +571,6 @@ def process_n_calc_3d_ps(
             temperature = t_points[coord[1]]
             t_span = (0, fixed_condition)
 
-        print(coord[0], dgs[coord[0], 3], temperature)
         initial_conc, energy_profile_all, dgr_all, \
             coeff_TS_all, rxn_network = process_data_mkm(
                 profile, df_network, c0, tags, states)
@@ -1173,13 +1189,12 @@ I'll find happiness in abundance""")
                         grid_d[j][k, l] = results[i][j]
                     i += 1
 
-            # TODO knn imputter for now
             if np.any(np.isnan(grid_d)):
                 grid_d_fill = np.zeros_like(grid_d)
                 for i, gridi in enumerate(grid_d):
-                    knn_imputer = KNNImputer(n_neighbors=2)
-                    knn_imputer.fit(gridi)
-                    filled_data = knn_imputer.transform(gridi)
+                    impuuter = call_imputter(imputer_strat)
+                    impuuter.fit(gridi)
+                    filled_data = impuuter.transform(gridi)
                     grid_d_fill[i] = filled_data
             else:
                 grid_d_fill = grid_d
@@ -1195,9 +1210,7 @@ I'll find happiness in abundance""")
                 # save each numpy array as a dataset in the group
                 group.create_dataset('xint', data=xint)
                 group.create_dataset('t_points', data=t_points)
-                group.create_dataset('grid', data=grid_d_fill)
-                group.create_dataset('cb', data=cb)
-                group.create_dataset('ms', data=ms)
+                group.create_dataset('grid', data=grid_d)
                 group.create_dataset('tag', data=[tag.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
                 group.create_dataset('x2label', data=[x2label.encode()])
@@ -1513,13 +1526,12 @@ I'll find happiness in abundance""")
                     grid_d[j][k, l] = results[i][j]
                 i += 1
 
-        # TODO knn imputter for now
         if np.any(np.isnan(grid_d)):
             grid_d_fill = np.zeros_like(grid_d)
             for i, gridi in enumerate(grid_d):
-                knn_imputer = KNNImputer(n_neighbors=2)
-                knn_imputer.fit(gridi)
-                filled_data = knn_imputer.transform(gridi)
+                impuuter = call_imputter(imputer_strat)
+                impuuter.fit(gridi)
+                filled_data = impuuter.transform(gridi)
                 grid_d_fill[i] = filled_data
         else:
             grid_d_fill = grid_d
@@ -1531,18 +1543,28 @@ I'll find happiness in abundance""")
             px[i] = X1[i]
             py[i] = X2[i]
 
-        # Plotting
-        # TODO 1 target: activity
-        x1min = np.min(xint)
-        x1max = np.max(xint)
-        x2min = np.min(yint)
-        x2max = np.max(yint)
+        # Plotting and saving
+        cb = np.array(cb, dtype='S')
+        ms = np.array(ms, dtype='S')
+        with h5py.File('data_a.h5', 'w') as f:
+            group = f.create_group('data')
+            # save each numpy array as a dataset in the group
+            group.create_dataset('xint', data=xint)
+            group.create_dataset('yint', data=yint)
+            group.create_dataset('grids', data=grid_d_fill)
+            group.create_dataset('px', data=px)
+            group.create_dataset('py', data=py)
+            group.create_dataset('cb', data=cb)
+            group.create_dataset('ms', data=ms)
+            group.create_dataset('tag1', data=[tag1.encode()])
+            group.create_dataset('tag2', data=[tag2.encode()])
+
         x1label = f"{tag1} [kcal/mol]"
         x2label = f"{tag2} [kcal/mol]"
 
+        # activity map
         alabel = "Total product concentration [M]"
         afilename = f"activity_{tag1}_{tag2}.png"
-
         activity_grid = np.sum(grid_d_fill, axis=0)
         amin = activity_grid.min()
         amax = activity_grid.max()
@@ -1569,47 +1591,13 @@ I'll find happiness in abundance""")
             ms=ms,
         )
 
-        cb = np.array(cb, dtype='S')
-        ms = np.array(ms, dtype='S')
-        with h5py.File('data_a.h5', 'w') as f:
-            group = f.create_group('data')
-            # save each numpy array as a dataset in the group
-            group.create_dataset('xint', data=xint)
-            group.create_dataset('yint', data=yint)
-            group.create_dataset('agrid', data=activity_grid)
-            group.create_dataset('px', data=px)
-            group.create_dataset('py', data=py)
-            group.create_dataset('cb', data=cb)
-            group.create_dataset('ms', data=ms)
-            group.create_dataset('tag1', data=[tag1.encode()])
-            group.create_dataset('tag2', data=[tag2.encode()])
-            group.create_dataset('x1label', data=[x1label.encode()])
-            group.create_dataset('x2label', data=[x2label.encode()])
-
-        # TODO 2 targets: activity and selectivity-2
-        prod = [p for p in states if "*" in p]
-        prod = [s.replace("*", "") for s in prod]
-        if n_target == 2:
-
-            slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
-            sfilename = f"selectivity_{tag1}_{tag2}.png"
-
-            min_ratio = -20
-            max_ratio = 20
-            selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
-            selectivity_ratio_ = np.clip(
-                selectivity_ratio, min_ratio, max_ratio)
-            smin = selectivity_ratio.min()
-            smax = selectivity_ratio.max()
-
-            cb = np.array(cb, dtype='S')
-            ms = np.array(ms, dtype='S')
+        if verb > 2:
             with h5py.File('data_a.h5', 'w') as f:
                 group = f.create_group('data')
                 # save each numpy array as a dataset in the group
                 group.create_dataset('xint', data=xint)
                 group.create_dataset('yint', data=yint)
-                group.create_dataset('sgrid', data=selectivity_ratio_)
+                group.create_dataset('agrid', data=activity_grid)
                 group.create_dataset('px', data=px)
                 group.create_dataset('py', data=py)
                 group.create_dataset('cb', data=cb)
@@ -1618,6 +1606,35 @@ I'll find happiness in abundance""")
                 group.create_dataset('tag2', data=[tag2.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
                 group.create_dataset('x2label', data=[x2label.encode()])
+
+        # selectivity map
+        prod = [p for p in states if "*" in p]
+        prod = [s.replace("*", "") for s in prod]
+        if n_target == 2:
+            slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
+            sfilename = f"selectivity_{tag1}_{tag2}.png"
+            min_ratio = -20
+            max_ratio = 20
+            selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
+            selectivity_ratio_ = np.clip(
+                selectivity_ratio, min_ratio, max_ratio)
+            smin = selectivity_ratio.min()
+            smax = selectivity_ratio.max()
+            if verb > 2:
+                with h5py.File('data_a.h5', 'w') as f:
+                    group = f.create_group('data')
+                    # save each numpy array as a dataset in the group
+                    group.create_dataset('xint', data=xint)
+                    group.create_dataset('yint', data=yint)
+                    group.create_dataset('sgrid', data=selectivity_ratio_)
+                    group.create_dataset('px', data=px)
+                    group.create_dataset('py', data=py)
+                    group.create_dataset('cb', data=cb)
+                    group.create_dataset('ms', data=ms)
+                    group.create_dataset('tag1', data=[tag1.encode()])
+                    group.create_dataset('tag2', data=[tag2.encode()])
+                    group.create_dataset('x1label', data=[x1label.encode()])
+                    group.create_dataset('x2label', data=[x2label.encode()])
 
             if plotmode > 1:
                 plot_3d_contour(
@@ -1665,28 +1682,26 @@ I'll find happiness in abundance""")
                     ms=ms,
                     plotmode=plotmode,
                 )
-
-        # TODO >2 targets: activity and selectivity-3
         elif n_target > 2:
             dominant_indices = np.argmax(grid_d_fill, axis=0)
             slabel = "Dominant product"
             sfilename = f"selectivity_{tag1}_{tag2}.png"
-            cb = np.array(cb, dtype='S')
-            ms = np.array(ms, dtype='S')
-            with h5py.File('data_a.h5', 'w') as f:
-                group = f.create_group('data')
-                # save each numpy array as a dataset in the group
-                group.create_dataset('xint', data=xint)
-                group.create_dataset('yint', data=yint)
-                group.create_dataset('dominant_indices', data=dominant_indices)
-                group.create_dataset('px', data=px)
-                group.create_dataset('py', data=py)
-                group.create_dataset('cb', data=cb)
-                group.create_dataset('ms', data=ms)
-                group.create_dataset('tag1', data=[tag1.encode()])
-                group.create_dataset('tag2', data=[tag2.encode()])
-                group.create_dataset('x1label', data=[x1label.encode()])
-                group.create_dataset('x2label', data=[x2label.encode()])
+            if verb > 2:
+                with h5py.File('data_a.h5', 'w') as f:
+                    group = f.create_group('data')
+                    # save each numpy array as a dataset in the group
+                    group.create_dataset('xint', data=xint)
+                    group.create_dataset('yint', data=yint)
+                    group.create_dataset(
+                        'dominant_indices', data=dominant_indices)
+                    group.create_dataset('px', data=px)
+                    group.create_dataset('py', data=py)
+                    group.create_dataset('cb', data=cb)
+                    group.create_dataset('ms', data=ms)
+                    group.create_dataset('tag1', data=[tag1.encode()])
+                    group.create_dataset('tag2', data=[tag2.encode()])
+                    group.create_dataset('x1label', data=[x1label.encode()])
+                    group.create_dataset('x2label', data=[x2label.encode()])
 
             plot_3d_contour_regions(
                 xint,
