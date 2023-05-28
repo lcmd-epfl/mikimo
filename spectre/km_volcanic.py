@@ -27,7 +27,7 @@ from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from tqdm import tqdm
 
 from kinetic_solver import calc_k, system_KE_DE
-from plot_function import plot_2d_combo, plot_3d_, plot_evo
+from plot_function import plot_2d_combo, plot_3d_, plot_3d_np, plot_evo, plot_3d_contour_regions_np
 
 
 def call_imputter(type):
@@ -41,7 +41,7 @@ def call_imputter(type):
         print("Invalid imputer type, use KNN imputer instead")
         imputer = KNNImputer(n_neighbors=5, weights="uniform")
     return imputer
-
+    
 
 def check_km_inp(df, df_network):
     """
@@ -130,7 +130,7 @@ def process_data_mkm(dg, df_network, c0, tags, states):
     species_profile = tags  # %%
     all_df = []
     df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
-
+    
     for i in range(1, len(species_profile)):
         if species_profile[i].lower().startswith("p"):
             df_ = pd.concat([df_, df_all[species_profile[i]]],
@@ -162,11 +162,12 @@ def process_data_mkm(dg, df_network, c0, tags, states):
             # int to which new cycle is connected (the first -1)
             cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
 
+
         # state to insert
-        if states[loc_nx[0] - 1].lower().startswith('p'):
+        if states[loc_nx[0]-1].lower().startswith('p'):
             # conneting profiles
             state_insert = all_df[i].columns[-1]
-        else:
+        else:      
             state_insert = states[cp_idx]
         all_df[i + 1]["R"] = df_all[state_insert].values
         all_df[i + 1].rename(columns={'R': state_insert}, inplace=True)
@@ -506,7 +507,6 @@ def process_n_calc_2d(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target), np.array([np.nan] * n_target)
 
-
 def process_n_calc_3d(
     coord: int,
     dgs: List[List[float]],
@@ -520,6 +520,7 @@ def process_n_calc_3d(
     report_as_yield: bool,
     quality: int
 ) -> np.ndarray:
+
 
     try:
         profile = [gridj[coord] for gridj in grids]
@@ -547,7 +548,6 @@ def process_n_calc_3d(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target)
 
-
 def process_n_calc_3d_ps(
         coord,
         dgs,
@@ -570,7 +570,7 @@ def process_n_calc_3d_ps(
         elif mode == 'vtemp':
             temperature = t_points[coord[1]]
             t_span = (0, fixed_condition)
-
+            
         initial_conc, energy_profile_all, dgr_all, \
             coeff_TS_all, rxn_network = process_data_mkm(
                 profile, df_network, c0, tags, states)
@@ -594,6 +594,7 @@ def process_n_calc_3d_ps(
             print(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target)
+    
 
 
 if __name__ == "__main__":
@@ -818,12 +819,12 @@ if __name__ == "__main__":
     elif p_quality > 3:
         interpolate = False
         npoints = 300
-
+        
     times = args.time
     temperatures = args.temp
-
+    
     screen_cond = None
-    if times is None:
+    if times == None:
         t_span = (0, 86400)
     elif len(times) == 1:
         t_span = (0, times[0])
@@ -835,16 +836,15 @@ if __name__ == "__main__":
         screen_cond = "vtime"
         nd = 1
         t_finals_log = np.log10(times)
-        x2base = np.round((t_finals_log[1] - t_finals_log[0]) / 10)
+        x2base = np.round((t_finals_log[1] - t_finals_log[0]) / 10, 1)
         x2min = bround(t_finals_log[0], x2base, "min")
         x2max = bround(t_finals_log[1], x2base, "max")
         t_points = np.logspace(x2min, x2max, npoints)
         if verb > 1:
-            print(
-                """Building actvity/selectivity map with time as the second variable,
+            print("""Building actvity/selectivity map with time as the second variable, 
                   Force nd = 1""")
 
-    if temperatures is None:
+    if temperatures == None:
         temperature = 298.15
     elif len(temperatures) == 1:
         temperature = temperatures[0]
@@ -862,10 +862,9 @@ if __name__ == "__main__":
         if x2base == 0:
             x2base = 0.5
         if verb > 1:
-            print(
-                """Building actvity/selectivity map with temperature as the second variable,
+            print("""Building actvity/selectivity map with temperature as the second variable, 
                   Force nd = 1""")
-
+            
     try:
         df = pd.read_excel(filename_xlsx)
     except FileNotFoundError as e:
@@ -1200,10 +1199,17 @@ I'll find happiness in abundance""")
                 grid_d_fill = grid_d
 
             x1label = f"{tag} [kcal/mol]"
-            if screen_cond == "vtemp":
+            if screen_cond == "vtemp": 
                 x2label = "Temperature [K]"
-            elif screen_cond == "vtime":
-                x2label = "log$_{10}$(time) [s]"
+                x2base = np.round((t_points[-1] - t_points[0]) / 5)
+                if x2base == 0:
+                    x2base = 0.5
+            elif screen_cond == "vtime": 
+                t_points = np.log10(t_points)
+                x2label = "log$_{10}$(time) [s]"   
+                x2base = np.round((t_points[-1] - t_points[0]) / 10, 1) 
+                if x2base == 0:
+                    x2base = 0.5
 
             with h5py.File('data_tv.h5', 'w') as f:
                 group = f.create_group('data')
@@ -1214,20 +1220,34 @@ I'll find happiness in abundance""")
                 group.create_dataset('tag', data=[tag.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
                 group.create_dataset('x2label', data=[x2label.encode()])
-
-            # TODO figure out plot later
+            
+            #TODO figure out plot later       
             alabel = "Total product concentration [M]"
             afilename = f"activity_{tag1}_{tag2}.png"
-
             activity_grid = np.sum(grid_d_fill, axis=0)
             amin = activity_grid.min()
             amax = activity_grid.max()
-
+            plot_3d_np(
+                xint,
+                t_points,
+                activity_grid.T,
+                amin,
+                amax,
+                xint.min(),
+                xint.max(),
+                t_points.min(),
+                t_points.max(),
+                20,
+                x2base,
+                x1label,
+                x2label,
+                ylabel=alabel,
+                filename=afilename,
+            )
+            prod = [p for p in states if "*" in p]
+            prod = [s.replace("*", "") for s in prod]
             if n_target == 2:
-
                 slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
-                sfilename = f"selectivity_{tag1}_{tag2}.png"
-
                 min_ratio = -20
                 max_ratio = 20
                 selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
@@ -1235,11 +1255,54 @@ I'll find happiness in abundance""")
                     selectivity_ratio, min_ratio, max_ratio)
                 smin = selectivity_ratio.min()
                 smax = selectivity_ratio.max()
+                plot_3d_np(
+                    xint,
+                    yint,
+                    selectivity_ratio_,
+                    smin,
+                    smax,
+                    x1min,
+                    x1max,
+                    x2min,
+                    x2max,
+                    20,
+                    x2base,
+                    x1label=x1label,
+                    x2label=x2label,
+                    ylabel=slabel,
+                    filename=sfilename,
+                    cb=cb,
+                    ms=ms,
+                    plotmode=plotmode,
+                )    
+                
             elif n_target > 2:
+                sfilename = f"selectivity_{tag1}_{tag2}.png"
                 dominant_indices = np.argmax(grid_d_fill, axis=0)
-
-        else:
-
+                plot_3d_contour_regions_np(
+                    xint,
+                    yint,
+                    dominant_indices,
+                    amin,
+                    amax,
+                    x1min,
+                    x1max,
+                    x2min,
+                    x2max,
+                    x1base,
+                    x2base,
+                    x1label=x1label,
+                    x2label=x2label,
+                    ylabel="Dominant product",
+                    filename=sfilename,
+                    cb=cb,
+                    ms=ms,
+                    id_labels=prod,
+                    plotmode=plotmode,
+                )    
+        
+        else:            
+            
             if verb > 0:
                 print("\n------------Constructing MKM volcano plot------------------\n")
 
@@ -1270,8 +1333,7 @@ I'll find happiness in abundance""")
             ci = np.zeros((len(dgs), n_target))
 
             dgs_g = np.array_split(trun_dgs, len(trun_dgs) // ncore + 1)
-            sigma_dgs_g = np.array_split(
-                sigma_dgs, len(sigma_dgs) // ncore + 1)
+            sigma_dgs_g = np.array_split(sigma_dgs, len(sigma_dgs) // ncore + 1)
             i = 0
             for batch_dgs, batch_s_dgs in tqdm(
                     zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
@@ -1301,13 +1363,13 @@ I'll find happiness in abundance""")
             prod_conc_ = prod_conc.copy()
             ci_ = ci.copy()
             missing_indices = np.isnan(prod_conc[:, 0]
-                                       )
+                                    )
             for i in range(n_target):
 
                 f = interp1d(xint[~missing_indices],
-                             prod_conc[:, i][~missing_indices],
-                             kind='cubic',
-                             fill_value="extrapolate")
+                            prod_conc[:, i][~missing_indices],
+                            kind='cubic',
+                            fill_value="extrapolate")
                 y_interp = f(xint[missing_indices])
                 prod_conc_[:, i][missing_indices] = y_interp
 
@@ -1355,9 +1417,9 @@ I'll find happiness in abundance""")
             for i in range(n_target):
                 if np.any(np.isnan(prod_conc_pt)):
                     f = interp1d(X[~missing_indices],
-                                 prod_conc_pt[:, i][~missing_indices],
-                                 kind='cubic',
-                                 fill_value="extrapolate")
+                                prod_conc_pt[:, i][~missing_indices],
+                                kind='cubic',
+                                fill_value="extrapolate")
                     y_interp = f(X[missing_indices])
                     prod_conc_pt_[:, i][missing_indices] = y_interp
                 else:
@@ -1525,7 +1587,7 @@ I'll find happiness in abundance""")
                 for j in range(n_target):
                     grid_d[j][k, l] = results[i][j]
                 i += 1
-
+                
         if np.any(np.isnan(grid_d)):
             grid_d_fill = np.zeros_like(grid_d)
             for i, gridi in enumerate(grid_d):
@@ -1558,7 +1620,7 @@ I'll find happiness in abundance""")
             group.create_dataset('ms', data=ms)
             group.create_dataset('tag1', data=[tag1.encode()])
             group.create_dataset('tag2', data=[tag2.encode()])
-
+  
         x1label = f"{tag1} [kcal/mol]"
         x2label = f"{tag2} [kcal/mol]"
 
@@ -1635,31 +1697,30 @@ I'll find happiness in abundance""")
                     group.create_dataset('tag2', data=[tag2.encode()])
                     group.create_dataset('x1label', data=[x1label.encode()])
                     group.create_dataset('x2label', data=[x2label.encode()])
+                
+            plot_3d_contour(
+                xint,
+                yint,
+                selectivity_ratio_,
+                px,
+                py,
+                smin,
+                smax,
+                x1min,
+                x1max,
+                x2min,
+                x2max,
+                x1base,
+                x2base,
+                x1label=x1label,
+                x2label=x2label,
+                ylabel=slabel,
+                filename=sfilename,
+                cb=cb,
+                ms=ms,
+                plotmode=plotmode,
+            )
 
-            if plotmode > 1:
-                plot_3d_contour(
-                    xint,
-                    yint,
-                    selectivity_ratio_,
-                    px,
-                    py,
-                    smin,
-                    smax,
-                    x1min,
-                    x1max,
-                    x2min,
-                    x2max,
-                    x1base,
-                    x2base,
-                    x1label=x1label,
-                    x2label=x2label,
-                    ylabel=slabel,
-                    filename=sfilename,
-                    cb=cb,
-                    ms=ms,
-                    plotmode=plotmode,
-                )
-            else:
                 plot_3d_scatter(
                     xint,
                     yint,
@@ -1692,8 +1753,7 @@ I'll find happiness in abundance""")
                     # save each numpy array as a dataset in the group
                     group.create_dataset('xint', data=xint)
                     group.create_dataset('yint', data=yint)
-                    group.create_dataset(
-                        'dominant_indices', data=dominant_indices)
+                    group.create_dataset('dominant_indices', data=dominant_indices)
                     group.create_dataset('px', data=px)
                     group.create_dataset('py', data=py)
                     group.create_dataset('cb', data=cb)
