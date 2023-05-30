@@ -3,207 +3,58 @@
 import argparse
 import os
 import shutil
+import sys
 import warnings
+from typing import Callable, List, Tuple, Union
 
 import autograd.numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import scipy
 from autograd import jacobian
 from scipy.constants import R, calorie, h, k, kilo
 from scipy.integrate import solve_ivp
 
+from helper import preprocess_data_mkm, process_data_mkm
 from plot_function import plot_evo_save
 
 warnings.filterwarnings("ignore")
 
+def erying(dG_ddag: Union[float, np.ndarray], 
+           temperature: float) -> Union[float, np.ndarray]:
+    """
+    Calculates the rate constant given the energy barrier and temperature based on Eyring equation.
 
-def check_km_inp(df, df_network, initial_conc):
+    Args:
+        dG_ddag (float or array-like): Energy barrier or barriers.
+        temperature (float): Temperature in Kelvin.
 
-    states_network = df_network.columns.to_numpy()[:]
-    states_profile = df.columns.to_numpy()[1:]
-    states_network_int = [s for s in states_network if not (
-        s.lower().startswith("r")) and not (s.lower().startswith("p"))]
+    Returns:
+        float or array-like: Erying rate constant or constants.
 
-    p_indices = np.array([i for i, s in enumerate(
-        states_network) if s.lower().startswith("p")])
-    r_indices = np.array([i for i, s in enumerate(
-        states_network) if s.lower().startswith("r")])
-
-    clear = True
-    # all INT names in nx are the same as in the profile
-    for state in states_network_int:
-        if state in states_profile:
-            pass
-        else:
-            clear = False
-            print(
-                f"""\n{state} cannot be found in the reaction data, if it is in different name,
-                change it to be the same in both reaction data and the network""")
-
-    # initial conc
-    if len(states_network) != len(initial_conc):
-        clear = False
-        print("\nYour initial conc seems wrong")
-
-    # check network sanity
-    mask = (~df_network.isin([-1, 1])).all(axis=1)
-    weird_step = df_network.index[mask].to_list()
-
-    if weird_step:
-        clear = False
-        for s in weird_step:
-            print(f"\nYour step {s} is likely wrong.")
-
-    mask_R = (~df_network.iloc[:, r_indices].isin([-1])).all(axis=0).to_numpy()
-    if np.any(mask_R):
-        clear = False
-        print(
-            f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong")
-
-    mask_P = (~df_network.iloc[:, p_indices].isin([1])).all(axis=0).to_numpy()
-    if np.any(mask_P):
-        clear = False
-        print(
-            f"\nThe product location: {states_network[p_indices[mask_P]]} appears wrong")
-
-    return clear
-
-
-def load_data(args):
-
-    rxn_data = args.i
-    c0 = args.c  # in M
-    t_span = (0.0, args.time)
-    method = args.de
-    temperature = args.temp
-    df_network = pd.read_csv(args.rn, index_col=0)
-    df_network.fillna(0, inplace=True)
-
-    # extract initial conditions
-    initial_conc = np.array([])
-    last_row_index = df_network.index[-1]
-    if isinstance(last_row_index, str):
-        if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
-            initial_conc = df_network.iloc[-1:].to_numpy()[0]
-            df_network = df_network.drop(df_network.index[-1])
-            print("Initial conditions found")
-
-    # process reaction network
-    rxn_network_all = df_network.to_numpy()[:, :]
-    states = df_network.columns[:].tolist()
-
-    # initial concentration not in nx, read in text instead
-    if initial_conc.shape[0] == 0:
-        print("Read Iniiial Concentration from text file")
-        initial_conc_ = np.loadtxt(c0, dtype=np.float64)
-        initial_conc = np.zeros(rxn_network_all.shape[1])
-        indices = [i for i, s in enumerate(
-            states) if s.lower().startswith("r")]
-        if len(initial_conc_) != rxn_network_all.shape[1]:
-            indices = [i for i, s in enumerate(
-                states) if s.lower().startswith("r")]
-            initial_conc[0] = initial_conc_[0]
-            initial_conc[indices] = initial_conc_[1:]
-        else:
-            initial_conc = initial_conc_
-
-    # Reaction data-----------------------------------------------------------
-    try:
-        df_all = pd.read_csv(rxn_data)
-    except Exception as e:
-        rxn_data = rxn_data.replace(".csv", ".xlsx")
-        df_all = pd.read_excel(rxn_data)
-
-    species_profile = df_all.columns.values[1:]
-    clear = check_km_inp(df_all, df_network, initial_conc)
-
-    if not (clear):
-        print("\nRecheck your reaction network and your reaction data\n")
-    else:
-        print("\nKM input is clear\n")
-    all_df = []
-    df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
-    for i in range(1, len(species_profile)):
-        if species_profile[i].lower().startswith("p"):
-            df_ = pd.concat([df_, df_all[species_profile[i]]],
-                            ignore_index=False, axis=1)
-            all_df.append(df_)
-            df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
-        else:
-            df_ = pd.concat([df_, df_all[species_profile[i]]],
-                            ignore_index=False, axis=1)
-
-    for i in range(len(all_df) - 1):
-        try:
-            # step where branching is (the first 1)
-            branch_step = np.where(
-                df_network[all_df[i + 1].columns[1]].to_numpy() == 1)[0][0]
-            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[1])[0]
-        except KeyError as e:
-            # due to TS as the first column of the profile
-            branch_step = np.where(
-                df_network[all_df[i + 1].columns[2]].to_numpy() == 1)[0][0]
-            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
-        # int to which new cycle is connected (the first -1)
-
-        if df_network.columns.to_list()[
-                branch_step + 1].lower().startswith('p'):
-            # conneting profiles
-            cp_idx = branch_step
-        else:
-            # int to which new cycle is connected (the first -1)
-            cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
-
-        # state to insert
-        if states[loc_nx[0] - 1].lower().startswith('p'):
-            # conneting profiles
-            state_insert = all_df[i].columns[-1]
-        else:
-            state_insert = states[cp_idx]
-        all_df[i + 1]["R"] = df_all[state_insert].values
-        all_df[i + 1].rename(columns={'R': state_insert}, inplace=True)
-
-    energy_profile_all = []
-    dgr_all = []
-    coeff_TS_all = []
-    for df in all_df:
-        energy_profile = df.values[0][:-1]
-        rxn_species = df.columns.to_list()[:-1]
-        dgr_all.append(df.values[0][-1])
-        coeff_TS = [1 if "TS" in element else 0 for element in rxn_species]
-        coeff_TS_all.append(np.array(coeff_TS))
-        energy_profile_all.append(np.array(energy_profile))
-
-    return initial_conc, t_span, temperature, method, energy_profile_all,\
-        dgr_all, coeff_TS_all, rxn_network_all, states
-
-
-def erying(dG_ddag, temperature):
-    R_ = R * (1 / calorie) * (1 / kilo)
-    kb_h = k / h
+    """
+    R_: float = R * (1 / calorie) * (1 / kilo)
+    kb_h: float = k / h
     return kb_h * temperature * \
         np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
 
 
-def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
-    """Compute reaction rates(k) for a reaction profile.
+def get_k(energy_profile: Union[List[float], np.ndarray],
+          dgr: float,
+          coeff_TS: Union[List[int], np.ndarray],
+          temperature: float = 298.15) -> Tuple[Union[List[float], np.ndarray], Union[List[float], np.ndarray]]:
+    """
+    Compute reaction rates (k) for a reaction profile.
 
-    Parameters
-    ----------
-    energy_profile : array-like
-        The relative free energies profile (in kcal/mol)
-    dgr : float
-        free energy of the reaction
-    coeff_TS : one-hot array
-        one-hot encoding of the elements that are "TS" along the reaction coordinate.
-    temperature : float
+    Parameters:
+        energy_profile (array-like): The relative free energies profile (in kcal/mol).
+        dgr (float): Free energy of the reaction.
+        coeff_TS (one-hot array): One-hot encoding of the elements that are "TS" along the reaction coordinate.
+        temperature (float): Temperature in Kelvin. Default is 298.15.
 
-    Returns
-    -------
-    k_forward : array-like
-        Reaction rates of all every forward steps
-    k_reverse : array-like
-        Reaction rates of all every backward steps (order as k-1, k-2, ...)
+    Returns:
+        k_forward (array-like): Reaction rates of all forward steps.
+        k_reverse (array-like): Reaction rates of all backward steps (order as k-1, k-2, ...).
     """
 
     def get_dG_ddag(energy_profile, dgr, coeff_TS):
@@ -261,13 +112,23 @@ def get_k(energy_profile, dgr, coeff_TS, temperature=298.15):
     return k_forward, k_reverse[::-1]
 
 
-def calc_k(
-        energy_profile_all,
-        dgr_all,
-        coeff_TS_all,
-        temperature):
+def calc_k(energy_profile_all: List[Union[List[float], np.ndarray]],
+           dgr_all: List[float],
+           coeff_TS_all: List[Union[List[int], np.ndarray]],
+           temperature: float) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Calculate reaction rates (k) for all steps in the given energy profiles.
 
-    # computing the reaction rate for all steps
+    Parameters:
+        energy_profile_all (List[array-like]): List of relative free energy profiles (in kcal/mol).
+        dgr_all (List[float]): List of free energies of the reactions.
+        coeff_TS_all (List[one-hot array]): List of one-hot encodings of elements that are "TS" along the reaction coordinate.
+        temperature (float): Temperature in Kelvin.
+
+    Returns:
+        k_forward_all (np.ndarray): Reaction rates of all forward steps.
+        k_reverse_all (np.ndarray): Reaction rates of all backward steps.
+    """
     k_forward_all = []
     k_reverse_all = []
 
@@ -283,12 +144,24 @@ def calc_k(
     return k_forward_all, k_reverse_all
 
 
-def add_rate(
-        y,
-        k_forward_all,
-        k_reverse_all,
-        rxn_network_all,
-        a):
+def add_rate(y: np.ndarray,
+             k_forward_all: np.ndarray,
+             k_reverse_all: np.ndarray,
+             rxn_network_all: np.ndarray,
+             a: int) -> float:
+    """
+    Add the contribution of a specific reaction step to the overall reaction rate law.
+
+    Parameters:
+        y (np.ndarray): Array of concentrations of all species.
+        k_forward_all (np.ndarray): Array of reaction rates for all forward steps.
+        k_reverse_all (np.ndarray): Array of reaction rates for all backward steps.
+        rxn_network_all (np.ndarray): Reaction network matrix.
+        a (int): Index of the reaction step.
+
+    Returns:
+        rate (float): Contribution of the reaction step to the overall reaction rate.
+    """
 
     rate = 0
     left_species = np.where(rxn_network_all[a, :] < 0)
@@ -301,7 +174,24 @@ def add_rate(
     return rate
 
 
-def calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a):
+def calc_dX_dt(y: np.ndarray,
+               k_forward_all: np.ndarray,
+               k_reverse_all: np.ndarray,
+               rxn_network_all: np.ndarray,
+               a: int) -> float:
+    """
+    Calculate the rate of change of the concentration of a species with respect to time (rate law).
+
+    Parameters:
+        y (np.ndarray): Array of concentrations of all species.
+        k_forward_all (np.ndarray): Array of reaction rates for all forward steps.
+        k_reverse_all (np.ndarray): Array of reaction rates for all backward steps.
+        rxn_network_all (np.ndarray): Reaction network matrix.
+        a (int): Index of the chemical species.
+
+    Returns:
+        dX_dt (float): Rate of change of the concentration of a species with respect to time.
+    """
 
     loc_idxs = np.where(rxn_network_all[:, a] != 0)[0]
     all_rate = [np.sign(rxn_network_all[idx,
@@ -315,12 +205,24 @@ def calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a):
     return dX_dt
 
 
-def system_KE_DE(
-        k_forward_all,
-        k_reverse_all,
-        rxn_network_all,
-        initial_conc,
-        states):
+def system_KE_DE(k_forward_all: np.ndarray,
+                 k_reverse_all: np.ndarray,
+                 rxn_network_all: np.ndarray,
+                 initial_conc: np.ndarray,
+                 states: List[str]) -> Callable[[float, np.ndarray], np.ndarray]:
+    """
+    Define the system of kinetic equations for the reaction network.
+
+    Parameters:
+        k_forward_all (np.ndarray): Array of reaction rates for all forward steps.
+        k_reverse_all (np.ndarray): Array of reaction rates for all backward steps.
+        rxn_network_all (np.ndarray): Reaction network matrix.
+        initial_conc (np.ndarray): Array of initial concentrations of all species.
+        states (List[str]): List of state labels for all species (column of reaction network).
+
+    Returns:
+        _dydt (callable): Function representing the system of kinetic equations.
+    """
 
     boundary = np.zeros((initial_conc.shape[0], 2))
     tolerance = 1
@@ -383,141 +285,257 @@ def system_KE_DE(
     return _dydt
 
 
-if __name__ == "__main__":
+def calc_km(energy_profile_all: List,
+            dgr_all: List,
+            coeff_TS_all: List,
+            rxn_network_all: np.ndarray,
+            temperature: float,
+            t_span: Tuple,
+            initial_conc: np.ndarray,
+            states: List,
+            timeout: float,
+            report_as_yield: bool,
+            quality: int = 0) -> Tuple[np.ndarray, Union[str, scipy.integrate._ivp.ivp.OdeResult]]:
+    """
+    Calculate the kinetic model (KM) simulation.
 
-    # Input
-    parser = argparse.ArgumentParser(
-        description='Perform kinetic modelling given the free energy profile and mechanism detail')
+    Parameters:
+        energy_profile_all (List): List of energy profiles for all steps.
+        dgr_all (List): List of free energies of the reaction.
+        temperature (float): Temperature of the system.
+        coeff_TS_all (List): List of one-hot encoded arrays indicating TS elements.
+        rxn_network_all (np.ndarray): Reaction network matrix.
+        t_span (Tuple): Time span for the simulation.
+        initial_conc (np.ndarray): Array of initial concentrations of all species.
+        states (List): List of state labels for all species.
+        timeout (float): Timeout for the simulation.
+        report_as_yield (bool): Flag indicating whether to report the results as yield or concentration.
+        quality (int, optional): Quality level of the integration. Defaults to 0.
 
-    parser.add_argument(
-        "-d",
-        "--dir",
-        help="directory containing all required input files (profile, reaction network, initial conc)"
-    )
-
-    parser.add_argument(
-        "-i",
-        help="input reaction profiles in csv"
-    )
-
-    parser.add_argument(
-        "-c",
-        "--c",
-        type=str,
-        default="c0.txt",
-        help="text file containing initial concentration of all species [[INTn], [Rn], [Pn]]")
-
-    parser.add_argument(
-        "-rn",
-        "--rn",
-        type=str,
-        default="rxn_network,csv",
-        help="reaction network matrix")
-
-    parser.add_argument(
-        "-Tf",
-        "--Tf",
-        "-Time",
-        "--Time",
-        dest="time",
-        type=float,
-        default=86400,
-        help="Total reaction time (s) (default=1d",
-    )
-
-    parser.add_argument(
-        "-t",
-        "--t",
-        "-temp",
-        "--temp",
-        dest="temp",
-        type=float,
-        default=298.15,
-        help="Temperature in K. (default: 298.15)",
-    )
-
-    parser.add_argument(
-        "-de",
-        "--de",
-        type=str,
-        default="BDF",
-        help="Integration method to use (odesolver). Default=BDF")
-
-    parser.add_argument(
-        "-a",
-        "--a",
-        dest="addition",
-        type=int,
-        nargs='+',
-        help="Index of additional species to be included in the mkm plot",
-    )
-    parser.add_argument(
-        "-x",
-        "--x",
-        dest="xscale",
-        type=str,
-        default="ls",
-        help="time scale (ls (log10(s)), s, lmin, min, h, day) (default=ls)",
-    )
-
-    args = parser.parse_args()
-    more_species_mkm = args.addition
-    w_dir = args.dir
-    x_scale = args.xscale
-    if w_dir:
-        args = parser.parse_args(['-i', f"{w_dir}/reaction_data.csv",
-                                  '-c', f"{w_dir}/c0.txt",
-                                  "-rn", f"{w_dir}/rxn_network.csv",
-                                  "--temp", f"{args.temp}",
-                                  "--Time", f"{args.time}",
-                                  "-de", f"{args.de}",
-                                  ])
-
-    initial_conc, t_span, temperature, method, energy_profile_all,\
-        dgr_all, coeff_TS_all, rxn_network_all, states = load_data(args)
-
+    Returns:
+        Tuple[np.ndarray, Union[str, scipy.integrate._ivp.ivp.OdeResult]]: A tuple containing the results of the simulation
+            where the first element is an array of target concentrations or yields,
+            and the second element is either a string indicating failure or the result of the simulation.
+    """
+    idx_target_all = [states.index(i) for i in states if "*" in i]
     k_forward_all, k_reverse_all = calc_k(
-        energy_profile_all, dgr_all, coeff_TS_all, temperature)
-    assert k_forward_all.shape[0] == rxn_network_all.shape[0]
-    assert k_reverse_all.shape[0] == rxn_network_all.shape[0]
+        energy_profile_all,
+        dgr_all,
+        coeff_TS_all,
+        temperature)
 
     dydt = system_KE_DE(k_forward_all, k_reverse_all,
                         rxn_network_all, initial_conc, states)
 
-    max_step = (t_span[1] - t_span[0]) / 10
-    first_step = np.min(
-        [
-            1e-14,
-            1 / 27e9,
-            1 / 1.5e10,
-            (t_span[1] - t_span[0]) / 100.0,
-            np.finfo(np.float16).eps,
-            np.finfo(np.float32).eps,
-            np.finfo(np.float128).eps,
-            np.nextafter(np.float16(0), np.float16(1)),
-        ]
-    )
-    rtol = 1e-9
-    atol = 1e-9
-    jac = dydt.jac
-    eps = 1e-10  # to avoid crashing due to dividing with zeroes
+    # first try BDF + ag with various rtol and atol
+    # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
+    # then LSODA + FD if all BDF attempts fail
+    # the last resort is a Radau
+    # if all fail, return NaN
+    rtol_values = [1e-3, 1e-6, 1e-9]
+    atol_values = [1e-6, 1e-9, 1e-9]
+    last_ = [rtol_values[-1], atol_values[-1]]
 
-    result_solve_ivp = solve_ivp(
-        dydt,
-        t_span,
-        initial_conc + eps,
-        method=method,
-        dense_output=True,
-        first_step=first_step,
-        max_step=max_step,
-        rtol=rtol,
-        atol=atol,
-        jac=jac,
-    )
+    if quality == 0:
+        max_step = np.nan
+        first_step = None
+    elif quality == 1:
+        max_step = np.nan
+        first_step = np.min(
+            [
+                1e-14,
+                1 / 27e9,
+                np.finfo(np.float16).eps,
+                np.finfo(np.float32).eps,
+                np.nextafter(np.float16(0), np.float16(1)),
+            ]
+        )
+    elif quality == 2:
+        max_step = (t_span[1] - t_span[0]) / 10.0
+        first_step = np.min(
+            [
+                1e-14,
+                1 / 27e9,
+                1 / 1.5e10,
+                (t_span[1] - t_span[0]) / 100.0,
+                np.finfo(np.float16).eps,
+                np.finfo(np.float32).eps,
+                np.finfo(np.float64).eps,
+                np.nextafter(np.float16(0), np.float16(1)),
+            ]
+        )
+        rtol_values = [1e-6, 1e-9, 1e-10]
+        atol_values = [1e-9, 1e-9, 1e-10]
+        last_ = [rtol_values[-1], atol_values[-1]]
+    elif quality > 2:
+        max_step = (t_span[1] - t_span[0]) / 50.0
+        first_step = np.min(
+            [
+                1e-14,
+                1 / 27e9,
+                1 / 1.5e10,
+                (t_span[1] - t_span[0]) / 1000.0,
+                np.finfo(np.float64).eps,
+                np.finfo(np.float128).eps,
+                np.nextafter(np.float64(0), np.float64(1)),
+            ]
+        )
+        rtol_values = [1e-6, 1e-9, 1e-10]
+        atol_values = [1e-9, 1e-9, 1e-10]
+        last_ = [rtol_values[-1], atol_values[-1]]
+    success = False
+    cont = False
+
+    while success == False:
+        atol = atol_values.pop(0)
+        rtol = rtol_values.pop(0)
+        try:
+            result_solve_ivp = solve_ivp(
+                dydt,
+                t_span,
+                initial_conc,
+                method="BDF",
+                dense_output=True,
+                rtol=rtol,
+                atol=atol,
+                jac=dydt.jac,
+                max_step=max_step,
+                first_step=first_step,
+                timeout=timeout,
+            )
+            # timeout
+            if result_solve_ivp == "Shiki":
+                if rtol == last_[0] and atol == last_[1]:
+                    success = True
+                    cont = True
+                continue
+            else:
+                success = True
+
+        # TODO more specific error handling
+        except Exception as e:
+            if rtol == last_[0] and atol == last_[1]:
+                success = True
+                cont = True
+            continue
+
+    if cont:
+        rtol_values = [1e-6, 1e-9, 1e-10]
+        atol_values = [1e-9, 1e-9, 1e-10]
+        last_ = [rtol_values[-1], atol_values[-1]]
+        success = False
+        cont = False
+        while success == False:
+            atol = atol_values.pop(0)
+            rtol = rtol_values.pop(0)
+            try:
+                result_solve_ivp = solve_ivp(
+                    dydt,
+                    t_span,
+                    initial_conc,
+                    method="BDF",
+                    dense_output=True,
+                    rtol=rtol,
+                    atol=atol,
+                    max_step=max_step,
+                    first_step=first_step,
+                    timeout=timeout,
+                )
+                # timeout
+                if result_solve_ivp == "Shiki":
+                    if rtol == last_[0] and atol == last_[1]:
+                        success = True
+                        cont = True
+                    continue
+                else:
+                    success = True
+
+            # TODO more specific error handling
+            except Exception as e:
+                if rtol == last_[0] and atol == last_[1]:
+                    success = True
+                    cont = True
+                continue
+
+    if cont:
+        try:
+            result_solve_ivp = solve_ivp(
+                dydt,
+                t_span,
+                initial_conc,
+                method="LSODA",
+                dense_output=True,
+                rtol=1e-6,
+                atol=1e-9,
+                max_step=max_step,
+                first_step=first_step,
+                timeout=timeout,
+            )
+        except Exception as e:
+            # Last resort
+            result_solve_ivp = solve_ivp(
+                dydt,
+                t_span,
+                initial_conc,
+                method="Radau",
+                dense_output=True,
+                rtol=1e-6,
+                atol=1e-9,
+                max_step=max_step,
+                first_step=first_step,
+                jac=dydt.jac,
+                timeout=timeout + 10,
+            )
+
+    try:
+        if result_solve_ivp != "Shiki":
+            c_target_t = np.array([result_solve_ivp.y[i][-1]
+                                  for i in idx_target_all])
+
+            R_idx = [i for i, s in enumerate(
+                states) if s.lower().startswith('r') and 'INT' not in s]
+            Rp = rxn_network_all[:, R_idx]
+            Rp_ = []
+            for col in range(Rp.shape[1]):
+                non_zero_values = Rp[:, col][Rp[:, col] != 0]
+                Rp_.append(non_zero_values)
+            Rp_ = np.abs([r[0] for r in Rp_])
+
+            # TODO: higest conc P can be, should be refined in the future
+            upper = np.min(initial_conc[R_idx] * Rp_)
+
+            if report_as_yield:
+
+                c_target_yield = c_target_t / upper * 100
+                c_target_yield[c_target_yield > 100] = 100
+                c_target_yield[c_target_yield < 0] = 0
+                return c_target_yield, result_solve_ivp
+
+            else:
+                c_target_t[c_target_t < 0] = 0
+                c_target_t = np.minimum(c_target_t, upper)
+                return c_target_t, result_solve_ivp
+
+        else:
+            return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
+    except Exception as err:
+        return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
+    
+if __name__ == "__main__":
+
+    dg, df_network, tags, states, t_final, temperature, \
+            x_scale, more_species_mkm, wdir = preprocess_data_mkm(sys.argv[1:], mode="mkm_solo")
+        
+    initial_conc, energy_profile_all, dgr_all, \
+        coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
+    t_span = (0, t_final)
+    _, result_solve_ivp = calc_km(energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all, \
+        temperature, t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2)
+
     states_ = [s.replace("*", "") for s in states]
     plot_evo_save(
         result_solve_ivp,
-        w_dir,
+        wdir,
         "",
         states_,
         x_scale,

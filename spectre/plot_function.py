@@ -314,7 +314,9 @@ def plot_2d_combo(
                     )
             if ci[i] is not None:
                 plot_ci(ci[i], x, y[i], ax=ax)
-            plotpoints(ax, px, py[i], color[i], marker[i], plotmode)
+            plotpoints(ax, px, py[i], np.repeat(
+                [color[i]], len(px)), ms, plotmode)
+
 
     elif plotmode == 2:
         for i in range(y.shape[0]):

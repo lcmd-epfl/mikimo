@@ -4,12 +4,14 @@ import itertools
 import multiprocessing
 import os
 import shutil
-from typing import List, Tuple, Union
+import sys
+from typing import List, Optional, Tuple, Union
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scipy
 import sklearn as sk
 from joblib import Parallel, delayed
 from navicat_volcanic.dv1 import curate_d, find_1_dv
@@ -26,11 +28,22 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from tqdm import tqdm
 
-from kinetic_solver import calc_k, system_KE_DE
-from plot_function import plot_2d_combo, plot_3d_, plot_3d_np, plot_evo, plot_3d_contour_regions_np
+from helper import check_km_inp, preprocess_data_mkm, process_data_mkm
+from kinetic_solver import calc_km
+from plot_function import (plot_2d_combo, plot_3d_, plot_3d_contour_regions_np,
+                           plot_3d_np, plot_evo)
 
 
 def call_imputter(type):
+    """
+    Create an instance of the specified imputer type.
+
+    Parameters:
+        imputer_type: Type of imputer. Options: "knn", "iterative", "simple".
+
+    Returns:
+        An instance of the specified imputer type.
+    """
     if "knn":
         imputer = KNNImputer(n_neighbors=5, weights="uniform")
     elif "iterative":
@@ -42,373 +55,9 @@ def call_imputter(type):
         imputer = KNNImputer(n_neighbors=5, weights="uniform")
     return imputer
     
-
-def check_km_inp(df, df_network):
-    """
-    check if the input is correct
-    df: reaction data dataframe
-    df_network: network dataframe
-    initial_conc: initial concentration
-    """
-
-    states_network = df_network.columns.to_numpy()[:]
-    states_profile = df.columns.to_numpy()[1:]
-    states_network_int = [s for s in states_network if not (
-        s.lower().startswith("r")) and not (s.lower().startswith("p"))]
-
-    p_indices = np.array([i for i, s in enumerate(
-        states_network) if s.lower().startswith("p")])
-    r_indices = np.array([i for i, s in enumerate(
-        states_network) if s.lower().startswith("r")])
-
-    clear = True
-    # all INT names in nx are the same as in the profile
-    for state in states_network_int:
-        if state in states_profile:
-            pass
-        else:
-            clear = False
-            print(
-                f"""\n{state} cannot be found in the reaction data, if it is in different name,
-                change it to be the same in both reaction data and the network""")
-
-    # check network sanity
-    mask = (~df_network.isin([-1, 1])).all(axis=1)
-    weird_step = df_network.index[mask].to_list()
-
-    if weird_step:
-        clear = False
-        for s in weird_step:
-            print(f"\nYour step {s} is likely wrong.")
-
-    mask_R = (~df_network.iloc[:, r_indices].isin([-1])).all(axis=0).to_numpy()
-    if np.any(mask_R):
-        clear = False
-        print(
-            f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong")
-
-    mask_P = (~df_network.iloc[:, p_indices].isin([1])).all(axis=0).to_numpy()
-    if np.any(mask_P):
-        clear = False
-        print(
-            f"\nThe product location: {states_network[p_indices[mask_P]]} appears wrong")
-
-    return clear
-
-
-def process_data_mkm(dg, df_network, c0, tags, states):
-
-    df_network.fillna(0, inplace=True)
-
-    # extract initial conditions
-    initial_conc = np.array([])
-    last_row_index = df_network.index[-1]
-    if isinstance(last_row_index, str):
-        if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
-            initial_conc = df_network.iloc[-1:].to_numpy()[0]
-            df_network = df_network.drop(df_network.index[-1])
-
-    # process reaction network
-    rxn_network_all = df_network.to_numpy()[:, :]
-    # initial concentration not in nx, read in text instead
-    if initial_conc.shape[0] == 0:
-        # print("Read Iniiial Concentration from text file")
-        initial_conc_ = np.loadtxt(c0, dtype=np.float64)
-        initial_conc = np.zeros(rxn_network_all.shape[1])
-        indices = [i for i, s in enumerate(
-            states) if s.lower().startswith("r")]
-        if len(initial_conc_) != rxn_network_all.shape[1]:
-            indices = [i for i, s in enumerate(
-                states) if s.lower().startswith("r")]
-            initial_conc[0] = initial_conc_[0]
-            initial_conc[indices] = initial_conc_[1:]
-        else:
-            initial_conc = initial_conc_
-
-    # energy data-------------------------------------------
-    df_all = pd.DataFrame([dg], columns=tags)  # %%
-    species_profile = tags  # %%
-    all_df = []
-    df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
-    
-    for i in range(1, len(species_profile)):
-        if species_profile[i].lower().startswith("p"):
-            df_ = pd.concat([df_, df_all[species_profile[i]]],
-                            ignore_index=False, axis=1)
-            all_df.append(df_)
-            df_ = pd.DataFrame({'R': np.zeros(len(df_all))})
-        else:
-            df_ = pd.concat([df_, df_all[species_profile[i]]],
-                            ignore_index=False, axis=1)
-
-    for i in range(len(all_df) - 1):
-        try:
-            # step where branching is (the first 1)
-            branch_step = np.where(
-                df_network[all_df[i + 1].columns[1]].to_numpy() == 1)[0][0]
-            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[1])[0]
-        except KeyError as e:
-            # due to TS as the first column of the profile
-            branch_step = np.where(
-                df_network[all_df[i + 1].columns[2]].to_numpy() == 1)[0][0]
-            loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
-        # int to which new cycle is connected (the first -1)
-
-        if df_network.columns.to_list()[
-                branch_step + 1].lower().startswith('p'):
-            # conneting profiles
-            cp_idx = branch_step
-        else:
-            # int to which new cycle is connected (the first -1)
-            cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
-
-
-        # state to insert
-        if states[loc_nx[0]-1].lower().startswith('p'):
-            # conneting profiles
-            state_insert = all_df[i].columns[-1]
-        else:      
-            state_insert = states[cp_idx]
-        all_df[i + 1]["R"] = df_all[state_insert].values
-        all_df[i + 1].rename(columns={'R': state_insert}, inplace=True)
-
-    energy_profile_all = []
-    dgr_all = []
-    coeff_TS_all = []
-    for df in all_df:
-        energy_profile = df.values[0][:-1]
-        rxn_species = df.columns.to_list()[:-1]
-        dgr_all.append(df.values[0][-1])
-        coeff_TS = [1 if "TS" in element else 0 for element in rxn_species]
-        coeff_TS_all.append(np.array(coeff_TS))
-        energy_profile_all.append(np.array(energy_profile))
-
-    return initial_conc, energy_profile_all, dgr_all, \
-        coeff_TS_all, rxn_network_all
-
-
-def calc_km(
-        energy_profile_all: list,
-        dgr_all: list,
-        temperature: float,
-        coeff_TS_all: list,
-        rxn_network_all: np.ndarray,
-        t_span: tuple,
-        initial_conc: np.ndarray,
-        states: list,
-        timeout: float,
-        report_as_yield: bool,
-        quality: int = 0,):
-
-    idx_target_all = [states.index(i) for i in states if "*" in i]
-    k_forward_all, k_reverse_all = calc_k(
-        energy_profile_all,
-        dgr_all,
-        coeff_TS_all,
-        temperature)
-
-    dydt = system_KE_DE(k_forward_all, k_reverse_all,
-                        rxn_network_all, initial_conc, states)
-
-    # first try BDF + ag with various rtol and atol
-    # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
-    # then LSODA + FD if all BDF attempts fail
-    # the last resort is a Radau
-    # if all fail, return NaN
-    rtol_values = [1e-3, 1e-6, 1e-9]
-    atol_values = [1e-6, 1e-9, 1e-9]
-    last_ = [rtol_values[-1], atol_values[-1]]
-
-    if quality == 0:
-        max_step = np.nan
-        first_step = None
-    elif quality == 1:
-        max_step = np.nan
-        first_step = np.min(
-            [
-                1e-14,
-                1 / 27e9,
-                np.finfo(np.float16).eps,
-                np.finfo(np.float32).eps,
-                np.nextafter(np.float16(0), np.float16(1)),
-            ]
-        )
-    elif quality == 2:
-        max_step = (t_span[1] - t_span[0]) / 10.0
-        first_step = np.min(
-            [
-                1e-14,
-                1 / 27e9,
-                1 / 1.5e10,
-                (t_span[1] - t_span[0]) / 100.0,
-                np.finfo(np.float16).eps,
-                np.finfo(np.float32).eps,
-                np.finfo(np.float64).eps,
-                np.nextafter(np.float16(0), np.float16(1)),
-            ]
-        )
-        rtol_values = [1e-6, 1e-9, 1e-10]
-        atol_values = [1e-9, 1e-9, 1e-10]
-        last_ = [rtol_values[-1], atol_values[-1]]
-    elif quality > 2:
-        max_step = (t_span[1] - t_span[0]) / 50.0
-        first_step = np.min(
-            [
-                1e-14,
-                1 / 27e9,
-                1 / 1.5e10,
-                (t_span[1] - t_span[0]) / 1000.0,
-                np.finfo(np.float64).eps,
-                np.finfo(np.float128).eps,
-                np.nextafter(np.float64(0), np.float64(1)),
-            ]
-        )
-        rtol_values = [1e-6, 1e-9, 1e-10]
-        atol_values = [1e-9, 1e-9, 1e-10]
-        last_ = [rtol_values[-1], atol_values[-1]]
-    success = False
-    cont = False
-
-    while success == False:
-        atol = atol_values.pop(0)
-        rtol = rtol_values.pop(0)
-        try:
-            result_solve_ivp = solve_ivp(
-                dydt,
-                t_span,
-                initial_conc,
-                method="BDF",
-                dense_output=True,
-                rtol=rtol,
-                atol=atol,
-                jac=dydt.jac,
-                max_step=max_step,
-                first_step=first_step,
-                timeout=timeout,
-            )
-            # timeout
-            if result_solve_ivp == "Shiki":
-                if rtol == last_[0] and atol == last_[1]:
-                    success = True
-                    cont = True
-                continue
-            else:
-                success = True
-
-        # TODO more specific error handling
-        except Exception as e:
-            if rtol == last_[0] and atol == last_[1]:
-                success = True
-                cont = True
-            continue
-
-    if cont:
-        rtol_values = [1e-6, 1e-9, 1e-10]
-        atol_values = [1e-9, 1e-9, 1e-10]
-        last_ = [rtol_values[-1], atol_values[-1]]
-        success = False
-        cont = False
-        while success == False:
-            atol = atol_values.pop(0)
-            rtol = rtol_values.pop(0)
-            try:
-                result_solve_ivp = solve_ivp(
-                    dydt,
-                    t_span,
-                    initial_conc,
-                    method="BDF",
-                    dense_output=True,
-                    rtol=rtol,
-                    atol=atol,
-                    max_step=max_step,
-                    first_step=first_step,
-                    timeout=timeout,
-                )
-                # timeout
-                if result_solve_ivp == "Shiki":
-                    if rtol == last_[0] and atol == last_[1]:
-                        success = True
-                        cont = True
-                    continue
-                else:
-                    success = True
-
-            # TODO more specific error handling
-            except Exception as e:
-                if rtol == last_[0] and atol == last_[1]:
-                    success = True
-                    cont = True
-                continue
-
-    if cont:
-        try:
-            result_solve_ivp = solve_ivp(
-                dydt,
-                t_span,
-                initial_conc,
-                method="LSODA",
-                dense_output=True,
-                rtol=1e-6,
-                atol=1e-9,
-                max_step=max_step,
-                first_step=first_step,
-                timeout=timeout,
-            )
-        except Exception as e:
-            # Last resort
-            result_solve_ivp = solve_ivp(
-                dydt,
-                t_span,
-                initial_conc,
-                method="Radau",
-                dense_output=True,
-                rtol=1e-6,
-                atol=1e-9,
-                max_step=max_step,
-                first_step=first_step,
-                jac=dydt.jac,
-                timeout=timeout + 10,
-            )
-
-    try:
-        if result_solve_ivp != "Shiki":
-            c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                  for i in idx_target_all])
-
-            R_idx = [i for i, s in enumerate(
-                states) if s.lower().startswith('r') and 'INT' not in s]
-            Rp = rxn_network_all[:, R_idx]
-            Rp_ = []
-            for col in range(Rp.shape[1]):
-                non_zero_values = Rp[:, col][Rp[:, col] != 0]
-                Rp_.append(non_zero_values)
-            Rp_ = np.abs([r[0] for r in Rp_])
-
-            # TODO: higest conc P can be, should be refined in the future
-            upper = np.min(initial_conc[R_idx] * Rp_)
-
-            if report_as_yield:
-
-                c_target_yield = c_target_t / upper * 100
-                c_target_yield[c_target_yield > 100] = 100
-                c_target_yield[c_target_yield < 0] = 0
-                return c_target_yield, result_solve_ivp
-
-            else:
-                c_target_t[c_target_t < 0] = 0
-                c_target_t = np.minimum(c_target_t, upper)
-                return c_target_t, result_solve_ivp
-
-        else:
-            return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
-    except Exception as err:
-        return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
-
-
 def process_n_calc_2d(
     profile: List[float],
     sigma_p: float,
-    c0: float,
     temperature: float,
     t_span: Tuple[float, float],
     df_network: pd.DataFrame,
@@ -417,14 +66,12 @@ def process_n_calc_2d(
     timeout: int,
     report_as_yield: bool,
     quality: int,
-    comp_ci: bool
-) -> Tuple[np.ndarray, np.ndarray]:
+    comp_ci: bool) -> Tuple[np.ndarray, np.ndarray]:
     """Process input data and perform MKM simulation in case of 1 descriptor.
 
     Args:
         profile (List[float]): Profile values.
         sigma_p (float): Sigma value.
-        c0 (float): Initial concentration value.
         temperature (float): Temperature value.
         t_span (Tuple[float, float]): Time span.
         df_network (pd.DataFrame): Network DataFrame.
@@ -447,13 +94,13 @@ def process_n_calc_2d(
         else:
             initial_conc, energy_profile_all, dgr_all, \
                 coeff_TS_all, rxn_network = process_data_mkm(
-                    profile, df_network, c0, tags, states)
+                    profile, df_network, tags, states)
             result, result_ivp = calc_km(
                 energy_profile_all,
                 dgr_all,
-                temperature,
                 coeff_TS_all,
                 rxn_network,
+                temperature,
                 t_span,
                 initial_conc,
                 states,
@@ -467,36 +114,36 @@ def process_n_calc_2d(
 
                 initial_conc, energy_profile_all_u, dgr_all, \
                     coeff_TS_all, rxn_network = process_data_mkm(
-                        profile_u, df_network, c0, tags, states)
+                        profile_u, df_network, tags, states)
                 initial_conc, energy_profile_all_d, dgr_all, \
                     coeff_TS_all, rxn_network = process_data_mkm(
-                        profile_d, df_network, c0, tags, states)
+                        profile_d, df_network, tags, states)
 
                 result_u, _ = calc_km(
                     energy_profile_all_u,
                     dgr_all,
-                    temperature,
                     coeff_TS_all,
                     rxn_network,
+                    temperature,
                     t_span,
                     initial_conc,
                     states,
                     timeout,
-                    False,
-                    1)
-
+                    report_as_yield,
+                    quality)
                 result_d, _ = calc_km(
                     energy_profile_all_d,
                     dgr_all,
-                    temperature,
                     coeff_TS_all,
                     rxn_network,
+                    temperature,
                     t_span,
                     initial_conc,
                     states,
                     timeout,
-                    False,
-                    1)
+                    report_as_yield,
+                    quality)
+                
                 return result, np.abs(result_u - result_d) / 2
             else:
                 return result, np.zeros(n_target)
@@ -510,7 +157,6 @@ def process_n_calc_2d(
 def process_n_calc_3d(
     coord: int,
     dgs: List[List[float]],
-    c0: float,
     temperature: float,
     t_span: Tuple[float, float],
     df_network: pd.DataFrame,
@@ -518,28 +164,43 @@ def process_n_calc_3d(
     states: List[str],
     timeout: int,
     report_as_yield: bool,
-    quality: int
-) -> np.ndarray:
+    quality: int) -> np.ndarray:
+    """
+    Process and calculate the MKM in case of 2 descriptors.
 
+    Parameters:
+        coord (int): Coordinate index.
+        dgs (List[List[float]]): List of energy profiles for all coordinates.
+        temperature (float): Temperature of the system.
+        t_span (Tuple[float, float]): Time span for the simulation.
+        df_network (pd.DataFrame): Dataframe containing the reaction network information.
+        tags (List[str]): List of tags for all species.
+        states (List[str]): List of state labels for all species.
+        timeout (int): Timeout for the simulation.
+        report_as_yield (bool): Flag indicating whether to report the results as yield or concentration.
+        quality (int): Quality level of the simulation.
+
+    Returns:
+        np.ndarray: Array of target concentrations or yields.
+    """
 
     try:
         profile = [gridj[coord] for gridj in grids]
         initial_conc, energy_profile_all, dgr_all, \
             coeff_TS_all, rxn_network = process_data_mkm(
-                profile, df_network, c0, tags, states)
+                profile, df_network, tags, states)
         result, _ = calc_km(
-            energy_profile_all,
-            dgr_all,
-            temperature,
-            coeff_TS_all,
-            rxn_network,
-            t_span,
-            initial_conc,
-            states,
-            timeout,
-            report_as_yield,
-            quality)
-
+                        energy_profile_all,
+                        dgr_all,
+                        coeff_TS_all,
+                        rxn_network,
+                        temperature,
+                        t_span,
+                        initial_conc,
+                        states,
+                        timeout,
+                        report_as_yield,
+                        quality)
         return result
 
     except Exception as e:
@@ -553,7 +214,6 @@ def process_n_calc_3d_ps(
         dgs,
         t_points,
         fixed_condition,
-        c0,
         df_network,
         tags,
         states,
@@ -573,19 +233,19 @@ def process_n_calc_3d_ps(
             
         initial_conc, energy_profile_all, dgr_all, \
             coeff_TS_all, rxn_network = process_data_mkm(
-                profile, df_network, c0, tags, states)
+                profile, df_network, tags, states)
         result, _ = calc_km(
-            energy_profile_all,
-            dgr_all,
-            temperature,
-            coeff_TS_all,
-            rxn_network,
-            t_span,
-            initial_conc,
-            states,
-            timeout,
-            report_as_yield,
-            quality)
+                            energy_profile_all,
+                            dgr_all,
+                            coeff_TS_all,
+                            rxn_network,
+                            temperature,
+                            t_span,
+                            initial_conc,
+                            states,
+                            timeout,
+                            report_as_yield,
+                            quality)
 
         return result
 
@@ -596,338 +256,174 @@ def process_n_calc_3d_ps(
         return np.array([np.nan] * n_target)
     
 
+def evol_mode(d,
+              df_network,
+              tags,
+              states,
+              temperature,
+              t_span,
+              timeout,
+              report_as_yield,
+              quality,
+              verb,
+              n_target,
+              x_scale,
+              more_species_mkm):
+    """
+    Execute the evolution mode: plotting evolution for all profiles.
 
-if __name__ == "__main__":
+    Parameters:
+        d: List of profiles.
+        df_network: Dataframe containing the reaction network information.
+        tags: List of tags for all species.
+        states: List of state labels for all species.
+        temperature: Temperature for the simulation.
+        t_span: Time span for the simulation.
+        timeout: Timeout for the simulation.
+        report_as_yield: Flag indicating whether to report the results as yield or concentration.
+        quality: Quality level of the simulation.
+        verb: Verbosity level.
+        n_target: Number of target species.
+        x_scale: Scaling factor for the x-axis in the plots.
+        more_species_mkm: Additional species in the kinetic model.
 
-    # Input
-    parser = argparse.ArgumentParser(
-        description='''Perform kinetic modelling of profiles in the energy input file to
-        1) build MKM volcano plot
-        2) build activity/seclectivity map''')
+    Returns:
+        None
+    """
+    if verb > 0:
+        print(
+            "\n------------Evol mode: plotting evolution for all profiles------------------\n")
 
-    parser.add_argument(
-        "-d",
-        "--dir",
-        help="directory containing all required input files (profile, reaction network, initial conc)"
-    )
+    prod_conc_pt = []
+    result_solve_ivp_all = []
 
-    parser.add_argument(
-        "-id",
-        dest="idx",
-        type=int,
-        nargs='+',
-        help="Manually specify the index of descriptor varaible in LFESEs. (default: None)",
-    )
-
-    parser.add_argument(
-        "-Tf",
-        "--Tf",
-        "-Time",
-        "--Time",
-        dest="time",
-        type=float,
-        nargs='+',
-        help="Total reaction time (s) (default=1d",
-    )
-
-    parser.add_argument(
-        "-t",
-        "--t",
-        "-temp",
-        "--temp",
-        dest="temp",
-        type=float,
-        nargs='+',
-        help="Temperature in K. (default: 298.15)",
-    )
-
-    parser.add_argument(
-        "-lm",
-        "--lm",
-        dest="lmargin",
-        type=int,
-        default=20,
-        help="Left margin to pad for visualization, in descriptor variable units. (default: 20)",
-    )
-
-    parser.add_argument(
-        "-rm",
-        "--rm",
-        dest="rmargin",
-        type=int,
-        default=20,
-        help="Right margin to pad for visualization, in descriptor variable units. (default: 20)",
-    )
-
-    parser.add_argument(
-        "-p",
-        "--p"
-        "-percent",
-        "--percent",
-        dest="percent",
-        action="store_true",
-        help="Flag to report activity as percent yield. (default: False)",
-    )
-
-    parser.add_argument(
-        "-pm",
-        "-plotmode",
-        dest="plotmode",
-        type=int,
-        default=1,
-        help="Plot mode for volcano and activity map plotting. Higher is more detailed, lower is basic. 3 includes uncertainties. (default: 1)",
-    )
-
-    parser.add_argument(
-        "-is",
-        "--is",
-        dest="imputer_strat",
-        type=str,
-        default="knn",
-        help="Imputter to refill missing datapoints. Beta version. (default: knn) (simple, knn, iterative, None)",
-    )
-
-    parser.add_argument(
-        "-ci",
-        "--ci",
-        dest="confidence_interval",
-        action="store_true",
-        help="Toggle to compute confidence interval. (default: False)",
-    )
-
-    parser.add_argument(
-        "-lfesr",
-        "--lfesr",
-        dest="lfesr",
-        action="store_true",
-        help="""Toggle to plot LFESRs. (default: False)""",
-    )
-
-    parser.add_argument(
-        "--timeout",
-        dest="timeout",
-        type=int,
-        default=60,
-        help="""Timeout for each integration run (default = 60 s). Increase timeout if your mechanism seems complicated or multiple chemical species involved in your mechanism (default: 60)""",
-    )
-
-    parser.add_argument(
-        "-iq",
-        "--iq",
-        dest="int_quality",
-        type=int,
-        default=1,
-        help="""integration quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
-    )
-    parser.add_argument(
-        "-pq",
-        "--pq",
-        dest="plot_quality",
-        type=int,
-        default=1,
-        help="""plot quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
-    )
-    parser.add_argument(
-        "-nd",
-        "--nd",
-        dest="run_mode",
-        type=int,
-        default=1,
-        help="""run mode (default: 1)
-        0: run mkm for every profiles
-        1: construct MKM volcano plot
-        2: construct MKM activity/selectivity map
-        """,
-    )
-    parser.add_argument(
-        "-x",
-        "--x",
-        dest="xscale",
-        type=str,
-        default="ls",
-        help="time scale for evo mode (ls (log10(s)), s, lmin, min, h, day) (default=ls)",
-    )
-    parser.add_argument(
-        "-a",
-        "--a",
-        dest="addition",
-        type=int,
-        nargs='+',
-        help="Index of additional species to be included in the mkm plot",
-    )
-    parser.add_argument(
-        "-v",
-        "--v",
-        "--verb",
-        dest="verb",
-        type=int,
-        default=2,
-        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv/h5 output files (default: 1)",
-    )
-    parser.add_argument(
-        "-ncore",
-        "--ncore",
-        dest="ncore",
-        type=int,
-        default=1,
-        help="number of cpu cores for the parallel computing (default: 1)",
-    )
-
-    # %% loading and processing------------------------------------------------------------------------#
-    args = parser.parse_args()
-    lmargin = args.lmargin
-    rmargin = args.rmargin
-    verb = args.verb
-    wdir = args.dir
-    imputer_strat = args.imputer_strat
-    report_as_yield = args.percent
-    timeout = args.timeout
-    quality = args.int_quality
-    p_quality = args.plot_quality
-    plotmode = args.plotmode
-    more_species_mkm = args.addition
-    lfesr = args.lfesr
-    x_scale = args.xscale
-    comp_ci = args.confidence_interval
-    ncore = args.ncore
-    nd = args.run_mode
-
-    filename_xlsx = f"{wdir}reaction_data.xlsx"
-    filename_csv = f"{wdir}reaction_data.csv"
-    c0 = f"{wdir}c0.txt"
-    df_network = pd.read_csv(f"{wdir}rxn_network.csv", index_col=0)
-    states = df_network.columns[:].tolist()
-    n_target = len([states.index(i) for i in states if "*" in i])
-    lfesrs_idx = args.idx
-
-    xbase = 20
-    if p_quality == 0:
-        interpolate = True
-        n_point_calc = 100
-        npoints = 150
-    elif p_quality == 1:
-        interpolate = True
-        n_point_calc = 100
-        npoints = 200
-    elif p_quality == 2:
-        interpolate = True
-        n_point_calc = 150
-        npoints = 250
-    elif p_quality == 3:
-        interpolate = False
-        npoints = 250
-    elif p_quality > 3:
-        interpolate = False
-        npoints = 300
-        
-    times = args.time
-    temperatures = args.temp
-    
-    screen_cond = None
-    if times == None:
-        t_span = (0, 86400)
-    elif len(times) == 1:
-        t_span = (0, times[0])
+    if not os.path.isdir("output_evo"):
+        os.makedirs("output_evo")
     else:
-        try:
-            fixed_condition = temperatures[0]
-        except TypeError as e:
-            fixed_condition = 298.15
-        screen_cond = "vtime"
-        nd = 1
-        t_finals_log = np.log10(times)
-        x2base = np.round((t_finals_log[1] - t_finals_log[0]) / 10, 1)
-        x2min = bround(t_finals_log[0], x2base, "min")
-        x2max = bround(t_finals_log[1], x2base, "max")
-        t_points = np.logspace(x2min, x2max, npoints)
         if verb > 1:
-            print("""Building actvity/selectivity map with time as the second variable, 
-                  Force nd = 1""")
-
-    if temperatures == None:
-        temperature = 298.15
-    elif len(temperatures) == 1:
-        temperature = temperatures[0]
-    else:
+            print("The evolution output directort already exists")
+    for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
         try:
-            fixed_condition = times[0]
-        except TypeError as e:
-            fixed_condition = 86400
-        screen_cond = "vtemp"
-        nd = 1
-        x2base = np.round((temperatures[1] - temperatures[0]) / 5)
-        x2min = bround(temperatures[0], x2base, "min")
-        x2max = bround(temperatures[1], x2base, "max")
-        t_points = np.linspace(x2min, x2max, npoints)
-        if x2base == 0:
-            x2base = 0.5
-        if verb > 1:
-            print("""Building actvity/selectivity map with temperature as the second variable, 
-                  Force nd = 1""")
-            
-    try:
-        df = pd.read_excel(filename_xlsx)
-    except FileNotFoundError as e:
-        df = pd.read_csv(filename_csv)
-    clear = check_km_inp(df, df_network)
-    if not (clear):
-        print("\nRecheck your reaction network and your reaction data\n")
+            initial_conc, energy_profile_all, dgr_all, \
+                coeff_TS_all, rxn_network_all = process_data_mkm(
+                    profile, df_network, tags, states)
+            result, result_solve_ivp = calc_km(
+                energy_profile_all, 
+                dgr_all, 
+                coeff_TS_all, 
+                rxn_network_all, 
+                temperature, 
+                t_span, 
+                initial_conc, 
+                states, 
+                timeout, 
+                report_as_yield, 
+                quality=quality)
+            if len(result) != n_target:
+                prod_conc_pt.append(np.array([np.nan] * n_target))
+            else:
+                prod_conc_pt.append(result)
+
+            result_solve_ivp_all.append(result_solve_ivp)
+
+            states_ = [s.replace("*", "") for s in states]
+            plot_evo(
+                result_solve_ivp,
+                names[i],
+                states_,
+                x_scale,
+                more_species_mkm)
+            source_file = os.path.abspath(
+                f"kinetic_modelling_{names[i]}.png")
+            destination_file = os.path.join(
+                "output_evo/", os.path.basename(f"kinetic_modelling_{names[i]}.png"))
+            shutil.move(source_file, destination_file)
+        except Exception as e:
+            print(f"Cannot perform mkm for {names[i]}")
+            prod_conc_pt.append(np.array([np.nan] * n_target))
+            result_solve_ivp_all.append("Shiki")
+
+    prod_conc_pt = np.array(prod_conc_pt).T
+    if verb > 1:
+        prod_names = [i.replace("*", "") for i in states if "*" in i]
+        data_dict = dict()
+        data_dict["entry"] = names
+        for i in range(prod_conc_pt.shape[0]):
+            data_dict[prod_names[i]] = prod_conc_pt[i]
+
+        df_ev = pd.DataFrame(data_dict)
+        df_ev.to_csv('prod_conc.csv', index=False)
+        print(df_ev.to_string(index=False))
+        source_file = os.path.abspath(
+            'prod_conc.csv')
+        destination_file = os.path.join(
+            "output_evo/", os.path.basename('prod_conc.csv'))
+        shutil.move(source_file, destination_file)
+
+    if not os.path.isdir(os.path.join(wdir, "output_evo/")):
+        shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
     else:
-        if verb > 0:
-            print("\nKM input is clear\n")
-
-    if ncore == -1:
-        ncore = multiprocessing.cpu_count()
-    if verb > 2:
-        print(f"Use {ncore} cores for parallel computing")
-
-    if plotmode == 0 and comp_ci:
-        plotmode = 1
-
-    names = df[df.columns[0]].values
-    cb, ms = group_data_points(0, 2, names)
-    tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
-    d = np.float32(df.to_numpy()[:, 1:])
-
-    coeff = np.zeros(len(tags), dtype=bool)
-    regress = np.zeros(len(tags), dtype=bool)
-    for i, tag in enumerate(tags):
-        if "TS" in tag.upper():
-            if verb > 0:
-                print(f"Assuming field {tag} corresponds to a TS.")
-            coeff[i] = True
-            regress[i] = True
-        elif "DESCRIPTOR" in tag.upper():
-            if verb > 0:
-                print(
-                    f"Assuming field {tag} corresponds to a non-energy descriptor variable."
-                )
-            start_des = tag.upper().find("DESCRIPTOR")
-            tags[i] = "".join([i for i in tag[:start_des]] +
-                              [i for i in tag[start_des + 10:]])
-            coeff[i] = False
-            regress[i] = False
-        elif "PRODUCT" in tag.upper():
-            if verb > 0:
-                print(
-                    f"Assuming ΔG of the reaction(s) are given in field {tag}.")
-            dgr = d[:, i]
-            coeff[i] = False
-            regress[i] = True
+        print("Output already exist")
+        move_bool = input("Move anyway? (y/n): ")
+        if move_bool == "y":
+            shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
+        elif move_bool == "n":
+            pass
         else:
-            if verb > 0:
-                print(
-                    f"Assuming field {tag} corresponds to a non-TS stationary point.")
-            coeff[i] = False
-            regress[i] = True
+            move_bool = input(
+                f"{move_bool} is invalid, please try again... (y/n): ")
 
-    d, cb, ms = curate_d(d, regress, cb, ms, tags,
-                         imputer_strat, nstds=3, verb=verb)
+    print("""\nThis is a parade
+Even if I have to drag these feet of mine
+In exchange for this seeping pain
+I'll find happiness in abundance""") 
 
-    # %% selecting modes----------------------------------------------------------#
-    if nd == 0:
-        evol_mode = True
-    elif nd == 1:
+
+def get_srps_1d(nd: int,
+             d: np.ndarray,
+             tags: List[str],
+             coeff: np.ndarray,
+             regress: bool,
+             lfesrs_idx: Optional[List[int]],
+             cb: float,
+             ms: float,
+             lmargin: float,
+             rmargin: float,
+             npoints: int,
+             plotmode: str,
+             lfesr: bool,
+             verb: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str], np.ndarray, int]:
+    """
+    Get the simulated reaction profiles (SRP) 
+
+    Parameters:
+        nd (int): Number of dimensions.
+        d (np.ndarray): Input data.
+        tags (List[str]): List of tags for the data.
+        coeff (np.ndarray): Coefficients.
+        regress (bool): Whether to perform regression.
+        lfesrs_idx (Optional[List[int]]): Indices of manually chosen descriptors for LFESR.
+        cb (float): Cutoff value for LFESR regression.
+        ms (float): Minimum step for descriptor range.
+        lmargin (float): Left margin for descriptor range.
+        rmargin (float): Right margin for descriptor range.
+        npoints (int): Number of points.
+        plotmode (str): Plot mode for LFESR.
+        lfesr (bool): Whether to perform LFESR analysis.
+        verb (int): Verbosity level.
+
+    Returns:
+        Tuple containing:
+        - dgs (np.ndarray): Single-Reaction Potential values.
+        - d (np.ndarray): Updated input data.
+        - sigma_dgs (np.ndarray): Sigma values for the SRPs.
+        - xint (np.ndarray): Array of descriptor values.
+        - tags (List[str]): Updated list of tags.
+        - coeff (np.ndarray): Updated coefficients.
+        - idx (int): Index of chosen descriptor.
+    """
+
+    if nd == 1:
         from navicat_volcanic.plotting2d import get_reg_targets
         dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
         if lfesrs_idx:
@@ -991,7 +487,7 @@ if __name__ == "__main__":
 
         # TODO For some reason, sometimes the volcanic drops the last state
         # Kinda adhoc fix for now
-        tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
+        tags_ = np.array([str(t) for t in df.columns[1:]], dtype=object)
         if tags_[-1] not in tags and tags_[-1].lower().startswith("p"):
             print("\n***Forgot the last state******\n")
             d_ = np.float32(df.to_numpy()[:, 1:])
@@ -1000,150 +496,217 @@ if __name__ == "__main__":
             d = np.column_stack((d, np.full((d.shape[0], 1), d_[-1, -1])))
             tags = np.append(tags, tags_[-1])
             sigma_dgs = np.column_stack((sigma_dgs, np.full((npoints, 1), 0)))
+        
+    return dgs, d, sigma_dgs, X, xint, xmax, xmin, tag, tags, coeff, idx
 
-    elif nd == 2:
-        from navicat_volcanic.plotting3d import get_reg_targets
-        dvs, r2s = find_2_dv(d, tags, coeff, regress, verb)
-        if lfesrs_idx:
-            assert len(lfesrs_idx) == 2
-            "Require 2 lfesrs_idx for activity/seclectivity map"
-            idx1, idx2 = lfesrs_idx
-            if verb > 1:
-                print(
-                    f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor****\n")
-        else:
-            idx1, idx2 = user_choose_2_dv(dvs, r2s, tags)
+def get_srps_2d(
+             d: np.ndarray,
+             tags: List[str],
+             coeff: np.ndarray,
+             regress: bool,
+             lfesrs_idx: Optional[List[int]],
+             lmargin: float,
+             rmargin: float,
+             npoints: int,
+             verb: int):
 
-        X1, X2, tag1, tag2, tags, d, d2, coeff = get_reg_targets(
-            idx1, idx2, d, tags, coeff, regress, mode="k"
+    from navicat_volcanic.plotting3d import get_reg_targets
+    dvs, r2s = find_2_dv(d, tags, coeff, regress, verb)
+    if lfesrs_idx:
+        assert len(lfesrs_idx) == 2
+        "Require 2 lfesrs_idx for activity/seclectivity map"
+        idx1, idx2 = lfesrs_idx
+        if verb > 1:
+            print(
+                f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor****\n")
+    else:
+        idx1, idx2 = user_choose_2_dv(dvs, r2s, tags)
+
+    X1, X2, tag1, tag2, tags, d, d2, coeff = get_reg_targets(
+        idx1, idx2, d, tags, coeff, regress, mode="k"
+    )
+    x1base, x2base = get_bases(X1, X2)
+    lnsteps = range(d.shape[1])
+    x1max = bround(X1.max() + rmargin, x1base, "max")
+    x1min = bround(X1.min() - lmargin, x1base, "min")
+    x2max = bround(X2.max() + rmargin, x2base, "max")
+    x2min = bround(X2.min() - lmargin, x2base, "min")
+    if verb > 1:
+        print(
+            f"Range of descriptors set to [ {x1min} , {x1max} ] and [ {x2min} , {x2max} ]"
         )
-        x1base, x2base = get_bases(X1, X2)
-        lnsteps = range(d.shape[1])
-        x1max = bround(X1.max() + rmargin, x1base, "max")
-        x1min = bround(X1.min() - lmargin, x1base, "min")
-        x2max = bround(X2.max() + rmargin, x2base, "max")
-        x2min = bround(X2.min() - lmargin, x2base, "min")
+    xint = np.linspace(x1min, x1max, npoints)
+    yint = np.linspace(x2min, x2max, npoints)
+    grids = []
+    for i, j in enumerate(lnsteps):
+        XY = np.vstack([X1, X2, d[:, j]]).T
+        X = XY[:, :2]
+        Y = XY[:, 2]
+        reg = sk.linear_model.LinearRegression().fit(X, Y)
+        Y_pred = reg.predict(X)
+        gridj = np.zeros((npoints, npoints))
+        for k, x1 in enumerate(xint):
+            for l, x2 in enumerate(yint):
+                x1x2 = np.vstack([x1, x2]).reshape(1, -1)
+                gridj[k, l] = reg.predict(x1x2)
+        grids.append(gridj)
+
+    tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
+    if len(grids) != len(tags_) and tags_[-1].lower().startswith("p"):
+        print("\n***Forgot the last state******\n")
+        d_ = np.float32(df.to_numpy()[:, 1:])
+
+        grids.append(np.full(((npoints, npoints)), d_[-1, -1]))
+        tags = np.append(tags, tags_[-1])
+    
+    return d, grids, xint, yint, X1, X2, x1max, x2max, x1min, x2max, \
+        tag1, tag2, tags, coeff, idx1, idx2
+            
+if __name__ == "__main__":
+
+    # %% loading and processing------------------------------------------------------------------------#
+    df, df_network, tags, states, n_target, lmargin, rmargin, \
+            verb, wdir, imputer_strat, report_as_yield, timeout, quality, p_quality, \
+            plotmode, more_species_mkm, lfesr, x_scale, comp_ci, ncore, nd, lfesrs_idx, \
+            times, temperatures = preprocess_data_mkm(sys.argv[1:], mode="mkm_screening")
+
+    xbase = 20
+    if p_quality == 0:
+        interpolate = True
+        n_point_calc = 100
+        npoints = 150
+    elif p_quality == 1:
+        interpolate = True
+        n_point_calc = 100
+        npoints = 200
+    elif p_quality == 2:
+        interpolate = True
+        n_point_calc = 150
+        npoints = 250
+    elif p_quality == 3:
+        interpolate = False
+        npoints = 250
+    elif p_quality > 3:
+        interpolate = False
+        npoints = 300
+    
+    screen_cond = None
+    if times == None:
+        t_span = (0, 86400)
+    elif len(times) == 1:
+        t_span = (0, times[0])
+    else:
+        try:
+            fixed_condition = temperatures[0]
+        except TypeError as e:
+            fixed_condition = 298.15
+        screen_cond = "vtime"
+        nd = 1
+        t_finals_log = np.log10(times)
+        x2base = np.round((t_finals_log[1] - t_finals_log[0]) / 10, 1)
+        x2min = bround(t_finals_log[0], x2base, "min")
+        x2max = bround(t_finals_log[1], x2base, "max")
+        t_points = np.logspace(x2min, x2max, npoints)
         if verb > 1:
-            print(
-                f"Range of descriptors set to [ {x1min} , {x1max} ] and [ {x2min} , {x2max} ]"
-            )
-        xint = np.linspace(x1min, x1max, npoints)
-        yint = np.linspace(x2min, x2max, npoints)
-        grids = []
-        for i, j in enumerate(lnsteps):
-            XY = np.vstack([X1, X2, d[:, j]]).T
-            X = XY[:, :2]
-            Y = XY[:, 2]
-            reg = sk.linear_model.LinearRegression().fit(X, Y)
-            Y_pred = reg.predict(X)
-            gridj = np.zeros((npoints, npoints))
-            for k, x1 in enumerate(xint):
-                for l, x2 in enumerate(yint):
-                    x1x2 = np.vstack([x1, x2]).reshape(1, -1)
-                    gridj[k, l] = reg.predict(x1x2)
-            grids.append(gridj)
+            print("""Building actvity/selectivity map with time as the second variable, 
+                  Force nd = 1""")
 
-        tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
-        if len(grids) != len(tags_) and tags_[-1].lower().startswith("p"):
-            print("\n***Forgot the last state******\n")
-            d_ = np.float32(df.to_numpy()[:, 1:])
-
-            grids.append(np.full(((npoints, npoints)), d_[-1, -1]))
-            tags = np.append(tags, tags_[-1])
-
-    # %% evol mode----------------------------------------------------------------#
-    if nd == 0:
+    if temperatures == None:
+        temperature = 298.15
+    elif len(temperatures) == 1:
+        temperature = temperatures[0]
+    else:
+        try:
+            fixed_condition = times[0]
+        except TypeError as e:
+            fixed_condition = 86400
+        screen_cond = "vtemp"
+        nd = 1
+        x2base = np.round((temperatures[1] - temperatures[0]) / 5)
+        x2min = bround(temperatures[0], x2base, "min")
+        x2max = bround(temperatures[1], x2base, "max")
+        t_points = np.linspace(x2min, x2max, npoints)
+        if x2base == 0:
+            x2base = 0.5
+        if verb > 1:
+            print("""Building actvity/selectivity map with temperature as the second variable, 
+                  Force nd = 1""")
+            
+    clear = check_km_inp(df, df_network)
+    if not (clear):
+        print("\nRecheck your reaction network and your reaction data\n")
+    else:
         if verb > 0:
-            print(
-                "\n------------Evol mode: plotting evolution for all profiles------------------\n")
+            print("\nKM input is clear\n")
 
-        prod_conc_pt = []
-        result_solve_ivp_all = []
+    if ncore == -1:
+        ncore = multiprocessing.cpu_count()
+    if verb > 2:
+        print(f"Use {ncore} cores for parallel computing")
 
-        if not os.path.isdir("output_evo"):
-            os.makedirs("output_evo")
+    if plotmode == 0 and comp_ci:
+        plotmode = 1
+
+    names = df[df.columns[0]].values
+    cb, ms = group_data_points(0, 2, names)
+    tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
+    d = np.float32(df.to_numpy()[:, 1:])
+
+    coeff = np.zeros(len(tags), dtype=bool)
+    regress = np.zeros(len(tags), dtype=bool)
+    for i, tag in enumerate(tags):
+        if "TS" in tag.upper():
+            if verb > 0:
+                print(f"Assuming field {tag} corresponds to a TS.")
+            coeff[i] = True
+            regress[i] = True
+        elif "DESCRIPTOR" in tag.upper():
+            if verb > 0:
+                print(
+                    f"Assuming field {tag} corresponds to a non-energy descriptor variable."
+                )
+            start_des = tag.upper().find("DESCRIPTOR")
+            tags[i] = "".join([i for i in tag[:start_des]] +
+                              [i for i in tag[start_des + 10:]])
+            coeff[i] = False
+            regress[i] = False
+        elif "PRODUCT" in tag.upper():
+            if verb > 0:
+                print(
+                    f"Assuming ΔG of the reaction(s) are given in field {tag}.")
+            dgr = d[:, i]
+            coeff[i] = False
+            regress[i] = True
         else:
-            if verb > 1:
-                print("The evolution output directort already exists")
+            if verb > 0:
+                print(
+                    f"Assuming field {tag} corresponds to a non-TS stationary point.")
+            coeff[i] = False
+            regress[i] = True
 
-        for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
-            try:
-                initial_conc, energy_profile_all, dgr_all, \
-                    coeff_TS_all, rxn_network = process_data_mkm(
-                        profile, df_network, c0, tags, states)
-                result, result_solve_ivp = calc_km(
-                    energy_profile_all,
-                    dgr_all,
-                    temperature,
-                    coeff_TS_all,
-                    rxn_network,
-                    t_span,
-                    initial_conc,
-                    states,
-                    timeout,
-                    report_as_yield,
-                    quality)
-                if len(result) != n_target:
-                    prod_conc_pt.append(np.array([np.nan] * n_target))
-                else:
-                    prod_conc_pt.append(result)
+    d, cb, ms = curate_d(d, regress, cb, ms, tags,
+                         imputer_strat, nstds=3, verb=verb)
 
-                result_solve_ivp_all.append(result_solve_ivp)
-
-                states_ = [s.replace("*", "") for s in states]
-                plot_evo(
-                    result_solve_ivp,
-                    names[i],
-                    states_,
-                    x_scale,
-                    more_species_mkm)
-                source_file = os.path.abspath(
-                    f"kinetic_modelling_{names[i]}.png")
-                destination_file = os.path.join(
-                    "output_evo/", os.path.basename(f"kinetic_modelling_{names[i]}.png"))
-                shutil.move(source_file, destination_file)
-            except Exception as e:
-                print(f"Cannot perform mkm for {names[i]}")
-                prod_conc_pt.append(np.array([np.nan] * n_target))
-                result_solve_ivp_all.append("Shiki")
-
-        prod_conc_pt = np.array(prod_conc_pt).T
-        if verb > 1:
-            prod_names = [i.replace("*", "") for i in states if "*" in i]
-            data_dict = dict()
-            data_dict["entry"] = names
-            for i in range(prod_conc_pt.shape[0]):
-                data_dict[prod_names[i]] = prod_conc_pt[i]
-
-            df = pd.DataFrame(data_dict)
-            df.to_csv('prod_conc.csv', index=False)
-            print(df.to_string(index=False))
-            source_file = os.path.abspath(
-                'prod_conc.csv')
-            destination_file = os.path.join(
-                "output_evo/", os.path.basename('prod_conc.csv'))
-            shutil.move(source_file, destination_file)
-
-        if not os.path.isdir(os.path.join(wdir, "output_evo/")):
-            shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-        else:
-            print("Output already exist")
-            move_bool = input("Move anyway? (y/n): ")
-            if move_bool == "y":
-                shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-            elif move_bool == "n":
-                pass
-            else:
-                move_bool = input(
-                    f"{move_bool} is invalid, please try again... (y/n): ")
-
-        print("""\nThis is a parade
-Even if I have to drag these feet of mine
-In exchange for this seeping pain
-I'll find happiness in abundance""")
-    # %% MKM volcano plot---------------------------------------------------------#
+    # %% selecting modes----------------------------------------------------------#
+    if nd == 0:
+        evol_mode(d,
+                df_network,
+                tags,
+                states,
+                temperature,
+                t_span,
+                timeout,
+                report_as_yield,
+                quality,
+                verb,
+                n_target,
+                x_scale,
+                more_species_mkm)
+        
     elif nd == 1:
-
+        dgs, d, sigma_dgs, X, xint, xmax, xmin, tag, tags, coeff, idx = get_srps_1d(nd, d, tags, coeff, \
+            regress, lfesrs_idx, cb, ms, lmargin, rmargin, npoints, plotmode, lfesr, verb)
+        
         if screen_cond:
             if verb > 0:
                 print(
@@ -1151,7 +714,6 @@ I'll find happiness in abundance""")
             gridj = np.zeros((npoints, npoints))
             grid = np.zeros_like(gridj)
             grid_d = np.array([grid] * n_target)
-            rb = np.zeros_like(gridj, dtype=int)
             total_combinations = len(xint) * len(t_points)
             combinations = list(
                 itertools.product(
@@ -1174,7 +736,6 @@ I'll find happiness in abundance""")
                         dgs,
                         t_points,
                         fixed_condition,
-                        c0,
                         df_network,
                         tags,
                         states,
@@ -1198,6 +759,9 @@ I'll find happiness in abundance""")
             else:
                 grid_d_fill = grid_d
 
+            x1base = np.round((xint.max() - xint.min()) / 10)
+            if x1base == 0:
+                x1base = 1
             x1label = f"{tag} [kcal/mol]"
             if screen_cond == "vtemp": 
                 x2label = "Temperature [K]"
@@ -1220,13 +784,23 @@ I'll find happiness in abundance""")
                 group.create_dataset('tag', data=[tag.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
                 group.create_dataset('x2label', data=[x2label.encode()])
-            
-            #TODO figure out plot later       
+              
             alabel = "Total product concentration [M]"
-            afilename = f"activity_{tag1}_{tag2}.png"
+            afilename = f"activity_{tag}_{screen_cond}.png"
             activity_grid = np.sum(grid_d_fill, axis=0)
             amin = activity_grid.min()
             amax = activity_grid.max()
+            if verb > 2:
+                with h5py.File('data_tv_a.h5', 'w') as f:
+                    group = f.create_group('data')
+                    # save each numpy array as a dataset in the group
+                    group.create_dataset('xint', data=xint)
+                    group.create_dataset('yint', data=t_points)
+                    group.create_dataset('agrid', data=activity_grid)
+                    group.create_dataset('tag', data=[tag.encode()])
+                    group.create_dataset('x1label', data=[x1label.encode()])
+                    group.create_dataset('x2label', data=[x2label.encode()]
+                    )
             plot_3d_np(
                 xint,
                 t_points,
@@ -1237,7 +811,7 @@ I'll find happiness in abundance""")
                 xint.max(),
                 t_points.min(),
                 t_points.max(),
-                20,
+                x1base,
                 x2base,
                 x1label,
                 x2label,
@@ -1247,58 +821,75 @@ I'll find happiness in abundance""")
             prod = [p for p in states if "*" in p]
             prod = [s.replace("*", "") for s in prod]
             if n_target == 2:
+                sfilename = f"selectivity_{tag}_{screen_cond}.png"
                 slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
-                min_ratio = -20
-                max_ratio = 20
+                min_ratio = -3
+                max_ratio = 3
                 selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
                 selectivity_ratio_ = np.clip(
                     selectivity_ratio, min_ratio, max_ratio)
-                smin = selectivity_ratio.min()
-                smax = selectivity_ratio.max()
+                selectivity_ratio_ = np.nan_to_num(selectivity_ratio_, nan=-3, posinf=3, neginf=-3)
+                smin = selectivity_ratio_.min()
+                smax = selectivity_ratio_.max()   
+                if verb > 2:
+                    with h5py.File('data_tv_s.h5', 'w') as f:
+                        group = f.create_group('data')
+                        # save each numpy array as a dataset in the group
+                        group.create_dataset('xint', data=xint)
+                        group.create_dataset('yint', data=t_points)
+                        group.create_dataset('sgrid', data=selectivity_ratio_)
+                        group.create_dataset('tag', data=[tag.encode()])
+                        group.create_dataset('x1label', data=[x1label.encode()])
+                        group.create_dataset('x2label', data=[x2label.encode()]
+                        )
                 plot_3d_np(
                     xint,
-                    yint,
-                    selectivity_ratio_,
+                    t_points,
+                    selectivity_ratio_.T,
                     smin,
                     smax,
-                    x1min,
-                    x1max,
-                    x2min,
-                    x2max,
-                    20,
+                    xint.min(),
+                    xint.max(),
+                    t_points.min(),
+                    t_points.max(),
+                    x1base,
                     x2base,
                     x1label=x1label,
                     x2label=x2label,
                     ylabel=slabel,
                     filename=sfilename,
-                    cb=cb,
-                    ms=ms,
-                    plotmode=plotmode,
                 )    
                 
             elif n_target > 2:
-                sfilename = f"selectivity_{tag1}_{tag2}.png"
+                sfilename = f"selectivity_{tag}_{screen_cond}.png"
                 dominant_indices = np.argmax(grid_d_fill, axis=0)
+                if verb > 2:
+                    with h5py.File('data_tv_a.h5', 'w') as f:
+                        group = f.create_group('data')
+                        # save each numpy array as a dataset in the group
+                        group.create_dataset('xint', data=xint)
+                        group.create_dataset('yint', data=t_points)
+                        group.create_dataset('sgrid', data=dominant_indices)
+                        group.create_dataset('tag', data=[tag.encode()])
+                        group.create_dataset('x1label', data=[x1label.encode()])
+                        group.create_dataset('x2label', data=[x2label.encode()]
+                        )
                 plot_3d_contour_regions_np(
                     xint,
-                    yint,
-                    dominant_indices,
-                    amin,
-                    amax,
-                    x1min,
-                    x1max,
-                    x2min,
-                    x2max,
+                    t_points,
+                    dominant_indices.T,
+                    xint.min(),
+                    xint.max(),
+                    t_points.min(),
+                    t_points.max(),
                     x1base,
                     x2base,
                     x1label=x1label,
                     x2label=x2label,
                     ylabel="Dominant product",
                     filename=sfilename,
-                    cb=cb,
-                    ms=ms,
                     id_labels=prod,
-                    plotmode=plotmode,
+                    nunique=len(prod),
                 )    
         
         else:            
@@ -1334,6 +925,7 @@ I'll find happiness in abundance""")
 
             dgs_g = np.array_split(trun_dgs, len(trun_dgs) // ncore + 1)
             sigma_dgs_g = np.array_split(sigma_dgs, len(sigma_dgs) // ncore + 1)
+            
             i = 0
             for batch_dgs, batch_s_dgs in tqdm(
                     zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
@@ -1342,7 +934,6 @@ I'll find happiness in abundance""")
                     delayed(process_n_calc_2d)(
                         profile,
                         sigma_dgs,
-                        c0,
                         temperature,
                         t_span,
                         df_network,
@@ -1397,7 +988,6 @@ I'll find happiness in abundance""")
                     delayed(process_n_calc_2d)(
                         profile,
                         0,
-                        c0,
                         temperature,
                         t_span,
                         df_network,
@@ -1545,14 +1135,16 @@ I'll find happiness in abundance""")
     My pain and my shape
     No one else can decide it\n""")
 
-    # %% MKM activity/selectivity map---------------------------------------------#
     elif nd == 2:
+        d, grids, xint, yint, X1, X2, x1max, x2max, x1min, x2max,\
+        tag1, tag2, tags, coeff, idx1, idx2 = get_srps_2d(d, tags, coeff, regress, \
+        lfesrs_idx, lmargin, rmargin, npoints, verb)
+        
         if verb > 0:
             print(
                 "\n------------Constructing MKM activity/selectivity map------------------\n")
-        grid = np.zeros_like(gridj)
+        grid = np.zeros((npoints, npoints))
         grid_d = np.array([grid] * n_target)
-        rb = np.zeros_like(gridj, dtype=int)
         total_combinations = len(xint) * len(yint)
         combinations = list(
             itertools.product(
@@ -1573,7 +1165,6 @@ I'll find happiness in abundance""")
                 delayed(process_n_calc_3d)(
                     coord,
                     grids,
-                    c0,
                     temperature,
                     t_span,
                     df_network,
@@ -1608,7 +1199,7 @@ I'll find happiness in abundance""")
         # Plotting and saving
         cb = np.array(cb, dtype='S')
         ms = np.array(ms, dtype='S')
-        with h5py.File('data_a.h5', 'w') as f:
+        with h5py.File('data.h5', 'w') as f:
             group = f.create_group('data')
             # save each numpy array as a dataset in the group
             group.create_dataset('xint', data=xint)
@@ -1623,18 +1214,23 @@ I'll find happiness in abundance""")
   
         x1label = f"{tag1} [kcal/mol]"
         x2label = f"{tag2} [kcal/mol]"
-
+        x1base = np.round((x1max - x1min) / 10, 1)
+        if x2base == 0:
+            x2base = 0.5
+        x2base = np.round((x2max - x2min) / 10, 1) 
+        if x2base == 0:
+            x2base = 0.5
+            
         # activity map
         alabel = "Total product concentration [M]"
         afilename = f"activity_{tag1}_{tag2}.png"
         activity_grid = np.sum(grid_d_fill, axis=0)
         amin = activity_grid.min()
-        amax = activity_grid.max()
-
+        amax = activity_grid.max()       
         plot_3d_(
             xint,
             yint,
-            activity_grid,
+            activity_grid.T,
             px,
             py,
             amin,
@@ -1652,7 +1248,6 @@ I'll find happiness in abundance""")
             cb=cb,
             ms=ms,
         )
-
         if verb > 2:
             with h5py.File('data_a.h5', 'w') as f:
                 group = f.create_group('data')
@@ -1667,19 +1262,21 @@ I'll find happiness in abundance""")
                 group.create_dataset('tag1', data=[tag1.encode()])
                 group.create_dataset('tag2', data=[tag2.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
-                group.create_dataset('x2label', data=[x2label.encode()])
-
+                group.create_dataset('x2label', data=[x2label.encode()]
+                )
+        
         # selectivity map
         prod = [p for p in states if "*" in p]
         prod = [s.replace("*", "") for s in prod]
         if n_target == 2:
             slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
             sfilename = f"selectivity_{tag1}_{tag2}.png"
-            min_ratio = -20
-            max_ratio = 20
+            min_ratio = -3
+            max_ratio = 3
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
             selectivity_ratio_ = np.clip(
                 selectivity_ratio, min_ratio, max_ratio)
+            selectivity_ratio_ = np.nan_to_num(selectivity_ratio_, nan=-3, posinf=3, neginf=-3)
             smin = selectivity_ratio.min()
             smax = selectivity_ratio.max()
             if verb > 2:
@@ -1701,7 +1298,7 @@ I'll find happiness in abundance""")
             plot_3d_contour(
                 xint,
                 yint,
-                selectivity_ratio_,
+                selectivity_ratio_.T,
                 px,
                 py,
                 smin,
@@ -1721,28 +1318,6 @@ I'll find happiness in abundance""")
                 plotmode=plotmode,
             )
 
-                plot_3d_scatter(
-                    xint,
-                    yint,
-                    selectivity_ratio_,
-                    px,
-                    py,
-                    smin,
-                    smax,
-                    x1min,
-                    x1max,
-                    x2min,
-                    x2max,
-                    x1base,
-                    x2base,
-                    x1label=x1label,
-                    x2label=x2label,
-                    ylabel=slabel,
-                    filename=sfilename,
-                    cb=cb,
-                    ms=ms,
-                    plotmode=plotmode,
-                )
         elif n_target > 2:
             dominant_indices = np.argmax(grid_d_fill, axis=0)
             slabel = "Dominant product"
@@ -1766,7 +1341,7 @@ I'll find happiness in abundance""")
             plot_3d_contour_regions(
                 xint,
                 yint,
-                dominant_indices,
+                dominant_indices.T,
                 px,
                 py,
                 amin,
@@ -1790,3 +1365,5 @@ I'll find happiness in abundance""")
 That utopia of endless happiness
 I don't care if I never reach any of those
 I don't need anything else but I\n""")
+
+
