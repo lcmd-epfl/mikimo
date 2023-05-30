@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import argparse
 import itertools
 import multiprocessing
 import os
@@ -11,7 +10,6 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scipy
 import sklearn as sk
 from joblib import Parallel, delayed
 from navicat_volcanic.dv1 import curate_d, find_1_dv
@@ -19,10 +17,9 @@ from navicat_volcanic.dv2 import find_2_dv
 from navicat_volcanic.helpers import (bround, group_data_points,
                                       user_choose_1_dv, user_choose_2_dv)
 from navicat_volcanic.plotting2d import calc_ci, plot_2d, plot_2d_lsfer
-from navicat_volcanic.plotting3d import (bround, get_bases, plot_3d_contour,
+from navicat_volcanic.plotting3d import (get_bases, plot_3d_contour,
                                          plot_3d_contour_regions,
                                          plot_3d_lsfer, plot_3d_scatter)
-from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
@@ -44,11 +41,11 @@ def call_imputter(type):
     Returns:
         An instance of the specified imputer type.
     """
-    if "knn":
+    if type == "knn":
         imputer = KNNImputer(n_neighbors=5, weights="uniform")
-    elif "iterative":
+    elif type == "iterative":
         imputer = IterativeImputer(max_iter=10, random_state=0)
-    elif "simple":
+    elif type == "simple":
         imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
     else:
         print("Invalid imputer type, use KNN imputer instead")
@@ -217,7 +214,7 @@ def process_n_calc_3d_ps(coord: Tuple[int, int],
                          t_points: np.ndarray,
                          fixed_condition: Union[float, int],
                          df_network: pd.DataFrame,
-                         tags: List[str, int],
+                         tags: List[str],
                          states: List[str],
                          timeout: int,
                          report_as_yield: bool,
@@ -569,7 +566,7 @@ def get_srps_2d(
         idx2 (int): Index for the 2nd descriptor.
 
     """
-    from navicat_volcanic.plotting3d import get_reg_targets
+    from navicat_volcanic.plotting3d import bround, get_reg_targets
     dvs, r2s = find_2_dv(d, tags, coeff, regress, verb)
     if lfesrs_idx:
         assert len(lfesrs_idx) == 2

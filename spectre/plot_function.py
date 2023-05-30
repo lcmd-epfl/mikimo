@@ -5,6 +5,7 @@ import shutil
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from matplotlib import cm
 from matplotlib.ticker import FuncFormatter
 from navicat_volcanic.helpers import bround
@@ -131,23 +132,23 @@ def plot_evo_save(
     np.savetxt(f'Ps_{name}.txt',
                result_solve_ivp.y[p_indices])
 
+    out = [
+        f't_{name}.txt',
+        f'cat_{name}.txt',
+        f'Rs_{name}.txt',
+        f'Ps_{name}.txt',
+        f"kinetic_modelling_{name}.png"]
+
+    if not os.path.isdir("output"):
+        os.makedirs("output")
+
+    for file_name in out:
+        source_file = os.path.abspath(file_name)
+        destination_file = os.path.join(
+            "output/", os.path.basename(file_name))
+        shutil.move(source_file, destination_file)
+
     if wdir:
-        out = [
-            f't_{name}.txt',
-            f'cat_{name}.txt',
-            f'Rs_{name}.txt',
-            f'Ps_{name}.txt',
-            f"kinetic_modelling_{name}.png"]
-
-        if not os.path.isdir("output"):
-            os.makedirs("output")
-
-        for file_name in out:
-            source_file = os.path.abspath(file_name)
-            destination_file = os.path.join(
-                "output/", os.path.basename(file_name))
-            shutil.move(source_file, destination_file)
-
         if not os.path.isdir(os.path.join(wdir, "output/")):
             shutil.move("output/", os.path.join(wdir, "output"))
         else:
@@ -160,6 +161,61 @@ def plot_evo_save(
             else:
                 move_bool = input(
                     f"{move_bool} is invalid, please try again... (y/n): ")
+
+
+def plot_save_cond(x, Pfs, var, prod_name, verb=1):
+
+    plt.rc("axes", labelsize=10)
+    plt.rc("xtick", labelsize=10)
+    plt.rc("ytick", labelsize=10)
+    plt.rc("font", size=10)
+    fig, ax = plt.subplots(
+        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True,
+    )
+
+    color = [
+        "#FF6347",
+        "#32CD32",
+        "#4169E1",
+        "#FFD700",
+        "#8A2BE2",
+        "#00FFFF"]
+
+    for i, Pf in enumerate(Pfs):
+        ax.plot(x,
+                Pf,
+                "-",
+                linewidth=1.5,
+                color=color[i],
+                alpha=0.95,
+                label=prod_name[i])
+        ax.scatter(
+            x,
+            Pf,
+            s=50,
+            color=color[i],
+            marker="^",
+            linewidths=0.2,
+            edgecolors="black",
+            zorder=2,
+        )
+
+    # plt.xlim(xmin - (xmax-xmin)*0.1, xmax + (xmax-xmin)*0.1)
+    # plt.ylim(0, np.round(np.max(Pfs),1) + 0.15)
+    plt.legend(loc='best')
+    plt.xlabel(var)
+    plt.ylabel("Product concentration (M)")
+    plt.savefig(f"{var}_screen.png", dpi=400, transparent=True)
+
+    data_dict = dict()
+    data_dict[var] = x
+    for i, Pf in enumerate(Pfs):
+        data_dict[prod_name[i]] = Pf
+
+    df = pd.DataFrame(data_dict)
+    df.to_csv(f"{var}_screen.csv", index=False)
+    if verb > 0:
+        print(df.to_string(index=False))
 
 
 def plot_ci(ci, x2, y2, ax=None):
@@ -316,7 +372,6 @@ def plot_2d_combo(
                 plot_ci(ci[i], x, y[i], ax=ax)
             plotpoints(ax, px, py[i], np.repeat(
                 [color[i]], len(px)), ms, plotmode)
-
 
     elif plotmode == 2:
         for i in range(y.shape[0]):
