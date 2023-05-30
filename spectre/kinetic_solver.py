@@ -1,15 +1,10 @@
 #!/usr/bin/env python
 
-import argparse
-import os
-import shutil
 import sys
 import warnings
 from typing import Callable, List, Tuple, Union
 
 import autograd.numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
 import scipy
 from autograd import jacobian
 from scipy.constants import R, calorie, h, k, kilo
@@ -20,7 +15,8 @@ from plot_function import plot_evo_save
 
 warnings.filterwarnings("ignore")
 
-def erying(dG_ddag: Union[float, np.ndarray], 
+
+def erying(dG_ddag: Union[float, np.ndarray],
            temperature: float) -> Union[float, np.ndarray]:
     """
     Calculates the rate constant given the energy barrier and temperature based on Eyring equation.
@@ -39,10 +35,15 @@ def erying(dG_ddag: Union[float, np.ndarray],
         np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
 
 
-def get_k(energy_profile: Union[List[float], np.ndarray],
+def get_k(energy_profile: Union[List[float],
+                                np.ndarray],
           dgr: float,
-          coeff_TS: Union[List[int], np.ndarray],
-          temperature: float = 298.15) -> Tuple[Union[List[float], np.ndarray], Union[List[float], np.ndarray]]:
+          coeff_TS: Union[List[int],
+                          np.ndarray],
+          temperature: float = 298.15) -> Tuple[Union[List[float],
+                                                np.ndarray],
+                                                Union[List[float],
+                                                np.ndarray]]:
     """
     Compute reaction rates (k) for a reaction profile.
 
@@ -295,7 +296,9 @@ def calc_km(energy_profile_all: List,
             states: List,
             timeout: float,
             report_as_yield: bool,
-            quality: int = 0) -> Tuple[np.ndarray, Union[str, scipy.integrate._ivp.ivp.OdeResult]]:
+            quality: int = 0) -> Tuple[np.ndarray,
+                                       Union[str,
+                                             scipy.integrate._ivp.ivp.OdeResult]]:
     """
     Calculate the kinetic model (KM) simulation.
 
@@ -520,17 +523,18 @@ def calc_km(energy_profile_all: List,
             return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
     except Exception as err:
         return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
-    
+
+
 if __name__ == "__main__":
 
     dg, df_network, tags, states, t_final, temperature, \
-            x_scale, more_species_mkm, wdir = preprocess_data_mkm(sys.argv[1:], mode="mkm_solo")
-        
+        x_scale, more_species_mkm, wdir = preprocess_data_mkm(sys.argv[1:], mode="mkm_solo")
+
     initial_conc, energy_profile_all, dgr_all, \
         coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
     t_span = (0, t_final)
-    _, result_solve_ivp = calc_km(energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all, \
-        temperature, t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2)
+    _, result_solve_ivp = calc_km(energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all,
+                                  temperature, t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2)
 
     states_ = [s.replace("*", "") for s in states]
     plot_evo_save(

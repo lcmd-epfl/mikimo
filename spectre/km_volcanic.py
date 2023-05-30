@@ -54,19 +54,20 @@ def call_imputter(type):
         print("Invalid imputer type, use KNN imputer instead")
         imputer = KNNImputer(n_neighbors=5, weights="uniform")
     return imputer
-    
+
+
 def process_n_calc_2d(
-    profile: List[float],
-    sigma_p: float,
-    temperature: float,
-    t_span: Tuple[float, float],
-    df_network: pd.DataFrame,
-    tags: List[str],
-    states: List[str],
-    timeout: int,
-    report_as_yield: bool,
-    quality: int,
-    comp_ci: bool) -> Tuple[np.ndarray, np.ndarray]:
+        profile: List[float],
+        sigma_p: float,
+        temperature: float,
+        t_span: Tuple[float, float],
+        df_network: pd.DataFrame,
+        tags: List[str],
+        states: List[str],
+        timeout: int,
+        report_as_yield: bool,
+        quality: int,
+        comp_ci: bool) -> Tuple[np.ndarray, np.ndarray]:
     """Process input data and perform MKM simulation in case of 1 descriptor.
 
     Args:
@@ -75,11 +76,11 @@ def process_n_calc_2d(
         temperature (float): Temperature value.
         t_span (Tuple[float, float]): Time span.
         df_network (pd.DataFrame): Network DataFrame.
-        tags (List[str]): List of tags.
-        states (List[str]): List of states.
+        tags (List[str]): Reaction data column names.
+        states (List[str]): Reaction network column names.
         timeout (int): Timeout value.
         report_as_yield (bool): Report as yield flag.
-        quality (int): Quality value.
+        quality (int): Quality of integration.
         comp_ci (bool): Compute confidence interval flag.
 
     Returns:
@@ -143,7 +144,7 @@ def process_n_calc_2d(
                     timeout,
                     report_as_yield,
                     quality)
-                
+
                 return result, np.abs(result_u - result_d) / 2
             else:
                 return result, np.zeros(n_target)
@@ -154,31 +155,32 @@ def process_n_calc_2d(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target), np.array([np.nan] * n_target)
 
+
 def process_n_calc_3d(
-    coord: int,
-    dgs: List[List[float]],
-    temperature: float,
-    t_span: Tuple[float, float],
-    df_network: pd.DataFrame,
-    tags: List[str],
-    states: List[str],
-    timeout: int,
-    report_as_yield: bool,
-    quality: int) -> np.ndarray:
+        coord: Tuple[int, int],
+        dgs: List[List[float]],
+        temperature: float,
+        t_span: Tuple[float, float],
+        df_network: pd.DataFrame,
+        tags: List[str],
+        states: List[str],
+        timeout: int,
+        report_as_yield: bool,
+        quality: int) -> np.ndarray:
     """
     Process and calculate the MKM in case of 2 descriptors.
 
     Parameters:
-        coord (int): Coordinate index.
+        coord (Tuple[int, int]): Coordinate.
         dgs (List[List[float]]): List of energy profiles for all coordinates.
         temperature (float): Temperature of the system.
         t_span (Tuple[float, float]): Time span for the simulation.
         df_network (pd.DataFrame): Dataframe containing the reaction network information.
-        tags (List[str]): List of tags for all species.
-        states (List[str]): List of state labels for all species.
+        tags (List[str]): Reaction data column names.
+        states (List[str]): Reaction network column names.
         timeout (int): Timeout for the simulation.
         report_as_yield (bool): Flag indicating whether to report the results as yield or concentration.
-        quality (int): Quality level of the simulation.
+        quality (int): Quality of the integration.
 
     Returns:
         np.ndarray: Array of target concentrations or yields.
@@ -190,17 +192,17 @@ def process_n_calc_3d(
             coeff_TS_all, rxn_network = process_data_mkm(
                 profile, df_network, tags, states)
         result, _ = calc_km(
-                        energy_profile_all,
-                        dgr_all,
-                        coeff_TS_all,
-                        rxn_network,
-                        temperature,
-                        t_span,
-                        initial_conc,
-                        states,
-                        timeout,
-                        report_as_yield,
-                        quality)
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            rxn_network,
+            temperature,
+            t_span,
+            initial_conc,
+            states,
+            timeout,
+            report_as_yield,
+            quality)
         return result
 
     except Exception as e:
@@ -209,19 +211,37 @@ def process_n_calc_3d(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target)
 
-def process_n_calc_3d_ps(
-        coord,
-        dgs,
-        t_points,
-        fixed_condition,
-        df_network,
-        tags,
-        states,
-        timeout,
-        report_as_yield,
-        quality,
-        mode):
 
+def process_n_calc_3d_ps(coord: Tuple[int, int],
+                         dgs: np.ndarray,
+                         t_points: np.ndarray,
+                         fixed_condition: Union[float, int],
+                         df_network: pd.DataFrame,
+                         tags: List[str, int],
+                         states: List[str],
+                         timeout: int,
+                         report_as_yield: bool,
+                         quality: int,
+                         mode: str) -> np.ndarray:
+    """
+    Process and calculate the MKM in case of 1 descriptor and 1 physical variable (time, temperature).
+
+    Parameters:
+        coord (Tuple[int, int]): Coordinate of the point in the 3D space.
+        dgs (np.ndarray): Array of free energy profiles.
+        t_points (np.ndarray): Array of temperature points.
+        fixed_condition (Union[float, int]): Fixed condition (either temperature or time).
+        df_network (pd.DataFrame): DataFrame representing the reaction network.
+        tags (List[str]): Reaction data column names.
+        states (List[str]): Reaction network column names.
+        timeout (int): Timeout value for the calculation.
+        report_as_yield (bool): Flag indicating whether to report results as yield.
+        quality (int): Quality of the integration.
+        mode (str): Calculation mode ('vtime' or 'vtemp').
+
+    Returns:
+        result (np.ndarray): np.ndarray: Array of target concentrations or yields.
+    """
     try:
         profile = dgs[coord[0], :]
         if mode == 'vtime':
@@ -230,22 +250,22 @@ def process_n_calc_3d_ps(
         elif mode == 'vtemp':
             temperature = t_points[coord[1]]
             t_span = (0, fixed_condition)
-            
+
         initial_conc, energy_profile_all, dgr_all, \
             coeff_TS_all, rxn_network = process_data_mkm(
                 profile, df_network, tags, states)
         result, _ = calc_km(
-                            energy_profile_all,
-                            dgr_all,
-                            coeff_TS_all,
-                            rxn_network,
-                            temperature,
-                            t_span,
-                            initial_conc,
-                            states,
-                            timeout,
-                            report_as_yield,
-                            quality)
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            rxn_network,
+            temperature,
+            t_span,
+            initial_conc,
+            states,
+            timeout,
+            report_as_yield,
+            quality)
 
         return result
 
@@ -254,7 +274,7 @@ def process_n_calc_3d_ps(
             print(
                 f"Fail to compute at point {profile} in the volcano line due to {e}")
         return np.array([np.nan] * n_target)
-    
+
 
 def evol_mode(d,
               df_network,
@@ -275,8 +295,8 @@ def evol_mode(d,
     Parameters:
         d: List of profiles.
         df_network: Dataframe containing the reaction network information.
-        tags: List of tags for all species.
-        states: List of state labels for all species.
+        tags (List[str]): Reaction data column names.
+        states (List[str]): Reaction network column names.
         temperature: Temperature for the simulation.
         t_span: Time span for the simulation.
         timeout: Timeout for the simulation.
@@ -308,16 +328,16 @@ def evol_mode(d,
                 coeff_TS_all, rxn_network_all = process_data_mkm(
                     profile, df_network, tags, states)
             result, result_solve_ivp = calc_km(
-                energy_profile_all, 
-                dgr_all, 
-                coeff_TS_all, 
-                rxn_network_all, 
-                temperature, 
-                t_span, 
-                initial_conc, 
-                states, 
-                timeout, 
-                report_as_yield, 
+                energy_profile_all,
+                dgr_all,
+                coeff_TS_all,
+                rxn_network_all,
+                temperature,
+                t_span,
+                initial_conc,
+                states,
+                timeout,
+                report_as_yield,
                 quality=quality)
             if len(result) != n_target:
                 prod_conc_pt.append(np.array([np.nan] * n_target))
@@ -376,31 +396,37 @@ def evol_mode(d,
     print("""\nThis is a parade
 Even if I have to drag these feet of mine
 In exchange for this seeping pain
-I'll find happiness in abundance""") 
+I'll find happiness in abundance""")
 
 
 def get_srps_1d(nd: int,
-             d: np.ndarray,
-             tags: List[str],
-             coeff: np.ndarray,
-             regress: bool,
-             lfesrs_idx: Optional[List[int]],
-             cb: float,
-             ms: float,
-             lmargin: float,
-             rmargin: float,
-             npoints: int,
-             plotmode: str,
-             lfesr: bool,
-             verb: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str], np.ndarray, int]:
+                d: np.ndarray,
+                tags: List[str],
+                coeff: np.ndarray,
+                regress: bool,
+                lfesrs_idx: Optional[List[int]],
+                cb: float,
+                ms: float,
+                lmargin: float,
+                rmargin: float,
+                npoints: int,
+                plotmode: str,
+                lfesr: bool,
+                verb: int) -> Tuple[np.ndarray,
+                                    np.ndarray,
+                                    np.ndarray,
+                                    np.ndarray,
+                                    List[str],
+                                    np.ndarray,
+                                    int]:
     """
-    Get the simulated reaction profiles (SRP) 
+    Get the simulated reaction profiles (SRP) in case of 1 descriptor.
 
     Parameters:
         nd (int): Number of dimensions.
         d (np.ndarray): Input data.
         tags (List[str]): List of tags for the data.
-        coeff (np.ndarray): Coefficients.
+        coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
         regress (bool): Whether to perform regression.
         lfesrs_idx (Optional[List[int]]): Indices of manually chosen descriptors for LFESR.
         cb (float): Cutoff value for LFESR regression.
@@ -419,7 +445,7 @@ def get_srps_1d(nd: int,
         - sigma_dgs (np.ndarray): Sigma values for the SRPs.
         - xint (np.ndarray): Array of descriptor values.
         - tags (List[str]): Updated list of tags.
-        - coeff (np.ndarray): Updated coefficients.
+        - coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
         - idx (int): Index of chosen descriptor.
     """
 
@@ -496,20 +522,53 @@ def get_srps_1d(nd: int,
             d = np.column_stack((d, np.full((d.shape[0], 1), d_[-1, -1])))
             tags = np.append(tags, tags_[-1])
             sigma_dgs = np.column_stack((sigma_dgs, np.full((npoints, 1), 0)))
-        
+
     return dgs, d, sigma_dgs, X, xint, xmax, xmin, tag, tags, coeff, idx
 
-def get_srps_2d(
-             d: np.ndarray,
-             tags: List[str],
-             coeff: np.ndarray,
-             regress: bool,
-             lfesrs_idx: Optional[List[int]],
-             lmargin: float,
-             rmargin: float,
-             npoints: int,
-             verb: int):
 
+def get_srps_2d(
+        d: np.ndarray,
+        tags: List[str],
+        coeff: np.ndarray,
+        regress: bool,
+        lfesrs_idx: Optional[List[int]],
+        lmargin: float,
+        rmargin: float,
+        npoints: int,
+        verb: int):
+    """
+    Get the simulated reaction profiles (SRP) in case of 2 descriptors.
+
+    Parameters:
+        d (np.ndarray): Array of the free energy profiles.
+        tags (List[str]): Reaction data column names.
+        coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
+        regress (bool): Flag indicating whether to perform regression.
+        lfesrs_idx (Optional[List[int]]): List of indices for LFE/SRS.
+        lmargin (float): Left margin value.
+        rmargin (float): Right margin value.
+        npoints (int): Number of points to compute.
+        verb (int): Verbosity level.
+
+    Returns:
+        d (np.ndarray): Input data array.
+        grids (List[np.ndarray]): List of 2D grids.
+        xint (np.ndarray): Array of x-axis values (1st descriptor).
+        yint (np.ndarray): Array of y-axis values (2nd descriptor).
+        X1 (float): X1 value (1st descriptor points).
+        X2 (float): X2 value (1st descriptor points).
+        x1max (float): Maximum value of X1.
+        x2max (float): Maximum value of X2.
+        x1min (float): Minimum value of X1.
+        x2min (float): Minimum value of X2.
+        tag1 (str): Tag for X1 (name of the 1st descriptor).
+        tag2 (str): Tag for X2 (name of the 2nd descriptor.
+        tags (List[str]): Reaction data column names.
+        coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
+        idx1 (int): Index for the 1st descriptor.
+        idx2 (int): Index for the 2nd descriptor.
+
+    """
     from navicat_volcanic.plotting3d import get_reg_targets
     dvs, r2s = find_2_dv(d, tags, coeff, regress, verb)
     if lfesrs_idx:
@@ -558,17 +617,18 @@ def get_srps_2d(
 
         grids.append(np.full(((npoints, npoints)), d_[-1, -1]))
         tags = np.append(tags, tags_[-1])
-    
+
     return d, grids, xint, yint, X1, X2, x1max, x2max, x1min, x2max, \
         tag1, tag2, tags, coeff, idx1, idx2
-            
+
+
 if __name__ == "__main__":
 
     # %% loading and processing------------------------------------------------------------------------#
     df, df_network, tags, states, n_target, lmargin, rmargin, \
-            verb, wdir, imputer_strat, report_as_yield, timeout, quality, p_quality, \
-            plotmode, more_species_mkm, lfesr, x_scale, comp_ci, ncore, nd, lfesrs_idx, \
-            times, temperatures = preprocess_data_mkm(sys.argv[1:], mode="mkm_screening")
+        verb, wdir, imputer_strat, report_as_yield, timeout, quality, p_quality, \
+        plotmode, more_species_mkm, lfesr, x_scale, comp_ci, ncore, nd, lfesrs_idx, \
+        times, temperatures = preprocess_data_mkm(sys.argv[1:], mode="mkm_screening")
 
     xbase = 20
     if p_quality == 0:
@@ -589,9 +649,9 @@ if __name__ == "__main__":
     elif p_quality > 3:
         interpolate = False
         npoints = 300
-    
+
     screen_cond = None
-    if times == None:
+    if times is None:
         t_span = (0, 86400)
     elif len(times) == 1:
         t_span = (0, times[0])
@@ -608,10 +668,11 @@ if __name__ == "__main__":
         x2max = bround(t_finals_log[1], x2base, "max")
         t_points = np.logspace(x2min, x2max, npoints)
         if verb > 1:
-            print("""Building actvity/selectivity map with time as the second variable, 
+            print(
+                """Building actvity/selectivity map with time as the second variable,
                   Force nd = 1""")
 
-    if temperatures == None:
+    if temperatures is None:
         temperature = 298.15
     elif len(temperatures) == 1:
         temperature = temperatures[0]
@@ -629,9 +690,10 @@ if __name__ == "__main__":
         if x2base == 0:
             x2base = 0.5
         if verb > 1:
-            print("""Building actvity/selectivity map with temperature as the second variable, 
+            print(
+                """Building actvity/selectivity map with temperature as the second variable,
                   Force nd = 1""")
-            
+
     clear = check_km_inp(df, df_network)
     if not (clear):
         print("\nRecheck your reaction network and your reaction data\n")
@@ -690,23 +752,23 @@ if __name__ == "__main__":
     # %% selecting modes----------------------------------------------------------#
     if nd == 0:
         evol_mode(d,
-                df_network,
-                tags,
-                states,
-                temperature,
-                t_span,
-                timeout,
-                report_as_yield,
-                quality,
-                verb,
-                n_target,
-                x_scale,
-                more_species_mkm)
-        
+                  df_network,
+                  tags,
+                  states,
+                  temperature,
+                  t_span,
+                  timeout,
+                  report_as_yield,
+                  quality,
+                  verb,
+                  n_target,
+                  x_scale,
+                  more_species_mkm)
+
     elif nd == 1:
-        dgs, d, sigma_dgs, X, xint, xmax, xmin, tag, tags, coeff, idx = get_srps_1d(nd, d, tags, coeff, \
-            regress, lfesrs_idx, cb, ms, lmargin, rmargin, npoints, plotmode, lfesr, verb)
-        
+        dgs, d, sigma_dgs, X, xint, xmax, xmin, tag, tags, coeff, idx = get_srps_1d(
+            nd, d, tags, coeff, regress, lfesrs_idx, cb, ms, lmargin, rmargin, npoints, plotmode, lfesr, verb)
+
         if screen_cond:
             if verb > 0:
                 print(
@@ -763,15 +825,15 @@ if __name__ == "__main__":
             if x1base == 0:
                 x1base = 1
             x1label = f"{tag} [kcal/mol]"
-            if screen_cond == "vtemp": 
+            if screen_cond == "vtemp":
                 x2label = "Temperature [K]"
                 x2base = np.round((t_points[-1] - t_points[0]) / 5)
                 if x2base == 0:
                     x2base = 0.5
-            elif screen_cond == "vtime": 
+            elif screen_cond == "vtime":
                 t_points = np.log10(t_points)
-                x2label = "log$_{10}$(time) [s]"   
-                x2base = np.round((t_points[-1] - t_points[0]) / 10, 1) 
+                x2label = "log$_{10}$(time) [s]"
+                x2base = np.round((t_points[-1] - t_points[0]) / 10, 1)
                 if x2base == 0:
                     x2base = 0.5
 
@@ -784,7 +846,7 @@ if __name__ == "__main__":
                 group.create_dataset('tag', data=[tag.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
                 group.create_dataset('x2label', data=[x2label.encode()])
-              
+
             alabel = "Total product concentration [M]"
             afilename = f"activity_{tag}_{screen_cond}.png"
             activity_grid = np.sum(grid_d_fill, axis=0)
@@ -800,7 +862,7 @@ if __name__ == "__main__":
                     group.create_dataset('tag', data=[tag.encode()])
                     group.create_dataset('x1label', data=[x1label.encode()])
                     group.create_dataset('x2label', data=[x2label.encode()]
-                    )
+                                         )
             plot_3d_np(
                 xint,
                 t_points,
@@ -828,9 +890,10 @@ if __name__ == "__main__":
                 selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
                 selectivity_ratio_ = np.clip(
                     selectivity_ratio, min_ratio, max_ratio)
-                selectivity_ratio_ = np.nan_to_num(selectivity_ratio_, nan=-3, posinf=3, neginf=-3)
+                selectivity_ratio_ = np.nan_to_num(
+                    selectivity_ratio_, nan=-3, posinf=3, neginf=-3)
                 smin = selectivity_ratio_.min()
-                smax = selectivity_ratio_.max()   
+                smax = selectivity_ratio_.max()
                 if verb > 2:
                     with h5py.File('data_tv_s.h5', 'w') as f:
                         group = f.create_group('data')
@@ -839,9 +902,10 @@ if __name__ == "__main__":
                         group.create_dataset('yint', data=t_points)
                         group.create_dataset('sgrid', data=selectivity_ratio_)
                         group.create_dataset('tag', data=[tag.encode()])
-                        group.create_dataset('x1label', data=[x1label.encode()])
+                        group.create_dataset(
+                            'x1label', data=[x1label.encode()])
                         group.create_dataset('x2label', data=[x2label.encode()]
-                        )
+                                             )
                 plot_3d_np(
                     xint,
                     t_points,
@@ -858,8 +922,8 @@ if __name__ == "__main__":
                     x2label=x2label,
                     ylabel=slabel,
                     filename=sfilename,
-                )    
-                
+                )
+
             elif n_target > 2:
                 sfilename = f"selectivity_{tag}_{screen_cond}.png"
                 dominant_indices = np.argmax(grid_d_fill, axis=0)
@@ -871,9 +935,10 @@ if __name__ == "__main__":
                         group.create_dataset('yint', data=t_points)
                         group.create_dataset('sgrid', data=dominant_indices)
                         group.create_dataset('tag', data=[tag.encode()])
-                        group.create_dataset('x1label', data=[x1label.encode()])
+                        group.create_dataset(
+                            'x1label', data=[x1label.encode()])
                         group.create_dataset('x2label', data=[x2label.encode()]
-                        )
+                                             )
                 plot_3d_contour_regions_np(
                     xint,
                     t_points,
@@ -890,10 +955,10 @@ if __name__ == "__main__":
                     filename=sfilename,
                     id_labels=prod,
                     nunique=len(prod),
-                )    
-        
-        else:            
-            
+                )
+
+        else:
+
             if verb > 0:
                 print("\n------------Constructing MKM volcano plot------------------\n")
 
@@ -924,8 +989,9 @@ if __name__ == "__main__":
             ci = np.zeros((len(dgs), n_target))
 
             dgs_g = np.array_split(trun_dgs, len(trun_dgs) // ncore + 1)
-            sigma_dgs_g = np.array_split(sigma_dgs, len(sigma_dgs) // ncore + 1)
-            
+            sigma_dgs_g = np.array_split(
+                sigma_dgs, len(sigma_dgs) // ncore + 1)
+
             i = 0
             for batch_dgs, batch_s_dgs in tqdm(
                     zip(dgs_g, sigma_dgs_g), total=len(dgs_g), ncols=80):
@@ -954,13 +1020,13 @@ if __name__ == "__main__":
             prod_conc_ = prod_conc.copy()
             ci_ = ci.copy()
             missing_indices = np.isnan(prod_conc[:, 0]
-                                    )
+                                       )
             for i in range(n_target):
 
                 f = interp1d(xint[~missing_indices],
-                            prod_conc[:, i][~missing_indices],
-                            kind='cubic',
-                            fill_value="extrapolate")
+                             prod_conc[:, i][~missing_indices],
+                             kind='cubic',
+                             fill_value="extrapolate")
                 y_interp = f(xint[missing_indices])
                 prod_conc_[:, i][missing_indices] = y_interp
 
@@ -1007,9 +1073,9 @@ if __name__ == "__main__":
             for i in range(n_target):
                 if np.any(np.isnan(prod_conc_pt)):
                     f = interp1d(X[~missing_indices],
-                                prod_conc_pt[:, i][~missing_indices],
-                                kind='cubic',
-                                fill_value="extrapolate")
+                                 prod_conc_pt[:, i][~missing_indices],
+                                 kind='cubic',
+                                 fill_value="extrapolate")
                     y_interp = f(X[missing_indices])
                     prod_conc_pt_[:, i][missing_indices] = y_interp
                 else:
@@ -1137,9 +1203,9 @@ if __name__ == "__main__":
 
     elif nd == 2:
         d, grids, xint, yint, X1, X2, x1max, x2max, x1min, x2max,\
-        tag1, tag2, tags, coeff, idx1, idx2 = get_srps_2d(d, tags, coeff, regress, \
-        lfesrs_idx, lmargin, rmargin, npoints, verb)
-        
+            tag1, tag2, tags, coeff, idx1, idx2 = get_srps_2d(d, tags, coeff, regress,
+                                                              lfesrs_idx, lmargin, rmargin, npoints, verb)
+
         if verb > 0:
             print(
                 "\n------------Constructing MKM activity/selectivity map------------------\n")
@@ -1178,7 +1244,7 @@ if __name__ == "__main__":
                 for j in range(n_target):
                     grid_d[j][k, l] = results[i][j]
                 i += 1
-                
+
         if np.any(np.isnan(grid_d)):
             grid_d_fill = np.zeros_like(grid_d)
             for i, gridi in enumerate(grid_d):
@@ -1211,22 +1277,22 @@ if __name__ == "__main__":
             group.create_dataset('ms', data=ms)
             group.create_dataset('tag1', data=[tag1.encode()])
             group.create_dataset('tag2', data=[tag2.encode()])
-  
+
         x1label = f"{tag1} [kcal/mol]"
         x2label = f"{tag2} [kcal/mol]"
         x1base = np.round((x1max - x1min) / 10, 1)
         if x2base == 0:
             x2base = 0.5
-        x2base = np.round((x2max - x2min) / 10, 1) 
+        x2base = np.round((x2max - x2min) / 10, 1)
         if x2base == 0:
             x2base = 0.5
-            
+
         # activity map
         alabel = "Total product concentration [M]"
         afilename = f"activity_{tag1}_{tag2}.png"
         activity_grid = np.sum(grid_d_fill, axis=0)
         amin = activity_grid.min()
-        amax = activity_grid.max()       
+        amax = activity_grid.max()
         plot_3d_(
             xint,
             yint,
@@ -1263,8 +1329,8 @@ if __name__ == "__main__":
                 group.create_dataset('tag2', data=[tag2.encode()])
                 group.create_dataset('x1label', data=[x1label.encode()])
                 group.create_dataset('x2label', data=[x2label.encode()]
-                )
-        
+                                     )
+
         # selectivity map
         prod = [p for p in states if "*" in p]
         prod = [s.replace("*", "") for s in prod]
@@ -1276,7 +1342,8 @@ if __name__ == "__main__":
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
             selectivity_ratio_ = np.clip(
                 selectivity_ratio, min_ratio, max_ratio)
-            selectivity_ratio_ = np.nan_to_num(selectivity_ratio_, nan=-3, posinf=3, neginf=-3)
+            selectivity_ratio_ = np.nan_to_num(
+                selectivity_ratio_, nan=-3, posinf=3, neginf=-3)
             smin = selectivity_ratio.min()
             smax = selectivity_ratio.max()
             if verb > 2:
@@ -1294,7 +1361,7 @@ if __name__ == "__main__":
                     group.create_dataset('tag2', data=[tag2.encode()])
                     group.create_dataset('x1label', data=[x1label.encode()])
                     group.create_dataset('x2label', data=[x2label.encode()])
-                
+
             plot_3d_contour(
                 xint,
                 yint,
@@ -1328,7 +1395,8 @@ if __name__ == "__main__":
                     # save each numpy array as a dataset in the group
                     group.create_dataset('xint', data=xint)
                     group.create_dataset('yint', data=yint)
-                    group.create_dataset('dominant_indices', data=dominant_indices)
+                    group.create_dataset(
+                        'dominant_indices', data=dominant_indices)
                     group.create_dataset('px', data=px)
                     group.create_dataset('py', data=py)
                     group.create_dataset('cb', data=cb)
@@ -1365,5 +1433,3 @@ if __name__ == "__main__":
 That utopia of endless happiness
 I don't care if I never reach any of those
 I don't need anything else but I\n""")
-
-
