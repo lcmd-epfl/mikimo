@@ -155,7 +155,7 @@ def process_n_calc_2d(
 
 def process_n_calc_3d(
         coord: Tuple[int, int],
-        dgs: List[List[float]],
+        grids: Tuple[np.ndarray, np.ndarray],
         temperature: float,
         t_span: Tuple[float, float],
         df_network: pd.DataFrame,
@@ -273,19 +273,19 @@ def process_n_calc_3d_ps(coord: Tuple[int, int],
         return np.array([np.nan] * n_target)
 
 
-def evol_mode(d,
-              df_network,
-              tags,
-              states,
-              temperature,
-              t_span,
-              timeout,
-              report_as_yield,
-              quality,
-              verb,
-              n_target,
-              x_scale,
-              more_species_mkm):
+def evol_mode(d: List,
+              df_network: pd.DataFrame,
+              tags: List[str],
+              states: List[str],
+              temperature: float,
+              t_span: Tuple[float, float],
+              timeout: float,
+              report_as_yield: bool,
+              quality: float,
+              verb: int,
+              n_target: int,
+              x_scale: float,
+              more_species_mkm: List[str]) -> None:
     """
     Execute the evolution mode: plotting evolution for all profiles.
 

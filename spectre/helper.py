@@ -527,7 +527,8 @@ def process_data_mkm(dg: np.ndarray,
             cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
 
         # state to insert
-        if states[loc_nx[0] - 1].lower().startswith('p'):
+        if states[loc_nx[0] - 1].lower().startswith('p') and \
+                not (states[loc_nx[0]].lower().startswith('p')):
             # conneting profiles
             state_insert = all_df[i].columns[-1]
         else:
@@ -548,3 +549,99 @@ def process_data_mkm(dg: np.ndarray,
 
     return initial_conc, energy_profile_all, dgr_all, \
         coeff_TS_all, rxn_network_all
+
+
+def test_process_data_mkm():
+    # Test data
+    dg = np.array([0., 14.6, 0.5, 20.1, -1.7, 20.1, 2.2, 20.2, 0.1,
+                   20.7, 5.5, 20.7, -6.4, 27.1, -13.4])
+
+    df_network_dg = [[-1., 1., 0., 0., 0., 0., -1., 0., 0.,
+                      0.],
+                     [0., -1., 1., 0., 0., 0., 0., -1., 0.,
+                      0.],
+                     [1., 0., -1., 1., 0., 0., 0., 0., 0.,
+                      0.],
+                     [-1., 0., 0., -1., 1., 0., 0., 0., 0.,
+                      0.],
+                     [0., 0., 0., 0., -1., 1., 0., -1., 0.,
+                      0.],
+                     [1., 0., 0., 0., 0., -1., 0., 0., 1.,
+                      0.],
+                     [1., 0., 0., 0., 0., -1., 0., 0., 0.,
+                      1.],
+                     [0.05, 0., 0., 0., 0., 0., 1., 5., 0.,
+                      0.]]
+    df_network = pd.DataFrame(
+        df_network_dg,
+        columns=[
+            'INT1',
+            'INT2',
+            'INT3',
+            'P-HCOO[Si]*',
+            'INT4',
+            'INT5',
+            'R-CO$_2$',
+            'R-SiPh$H_3$',
+            'P-CH$_2$(O[Si])$_2$*',
+            'P-CH$_3$(O[Si])*'])
+    new_row_names = ["1_1", "1_2", "1_3", "2_1", "2_2", "2_3", "3_3", "c0"]
+    df_network = df_network.rename(index=dict(enumerate(new_row_names)))
+    tags = ['INT1', 'TS1', 'INT2', 'TS2', 'INT3', 'TS3', 'P-HCOO[Si]*', 'TS4',
+            'INT4', 'TS5', 'INT5', 'TS6', 'P-CH$_2$(O[Si])$_2$*', 'TS7',
+            'P-CH$_3$(O[Si])*']
+    states = [
+        'INT1',
+        'INT2',
+        'INT3',
+        'P-HCOO[Si]*',
+        'INT4',
+        'INT5',
+        'R-CO$_2$',
+        'R-SiPh$H_3$',
+        'P-CH$_2$(O[Si])$_2$*',
+        'P-CH$_3$(O[Si])*']
+
+    # Expected output
+    initial_conc_expected = np.array([0.05, 0., 0., 0., 0., 0., 1., 5., 0.,
+                                      0.])
+    energy_profile_all_expected = [np.array([0., 14.6, 0.5, 20.1, -1.7, 20.1]),
+                                   np.array([2.2, 20.2, 0.1, 20.7, 5.5, 20.7]),
+                                   np.array([5.5, 27.1])]
+    dgr_all_expected = np.array([2.2, -6.4, -13.4])
+    coeff_TS_all_expected = [np.array([0, 1, 0, 1, 0, 1]), np.array(
+        [0, 1, 0, 1, 0, 1]), np.array([0, 1])]
+    rxn_network_all_expected = np.array([[-1., 1., 0., 0., 0., 0., -1., 0., 0.,
+                                          0.],
+                                         [0., -1., 1., 0., 0., 0., 0., -1., 0.,
+                                          0.],
+                                         [1., 0., -1., 1., 0., 0., 0., 0., 0.,
+                                          0.],
+                                         [-1., 0., 0., -1., 1., 0., 0., 0., 0.,
+                                          0.],
+                                         [0., 0., 0., 0., -1., 1., 0., -1., 0.,
+                                          0.],
+                                         [1., 0., 0., 0., 0., -1., 0., 0., 1.,
+                                          0.],
+                                         [1., 0., 0., 0., 0., -1., 0., 0., 0.,
+                                          1.]])
+
+    # Test the function
+    initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all = process_data_mkm(
+        dg, df_network, tags, states)
+
+    # Compare the results
+    assert np.array_equal(initial_conc, initial_conc_expected)
+
+    assert len(energy_profile_all) == len(energy_profile_all_expected)
+    for i in range(len(energy_profile_all)):
+        assert np.array_equal(
+            energy_profile_all[i],
+            energy_profile_all_expected[i])
+    assert np.array_equal(dgr_all, dgr_all_expected)
+    assert len(coeff_TS_all) == len(coeff_TS_all_expected)
+    for i in range(len(coeff_TS_all)):
+        assert np.array_equal(coeff_TS_all[i], coeff_TS_all_expected[i])
+    assert np.array_equal(rxn_network_all, rxn_network_all_expected)
+
+    print("All tests passed!")

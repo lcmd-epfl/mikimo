@@ -7,6 +7,7 @@ from typing import Callable, List, Tuple, Union
 import autograd.numpy as np
 import scipy
 from autograd import jacobian
+from numpy.testing import assert_allclose
 from scipy.constants import R, calorie, h, k, kilo
 from scipy.integrate import solve_ivp
 
@@ -523,6 +524,183 @@ def calc_km(energy_profile_all: List,
             return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
     except Exception as err:
         return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
+
+
+def test_get_k():
+
+    # Test case 1: CoL6 pincer co2
+    energy_profile = np.array([0., 14.6, 0.5, 20.1, -1.7, 20.1])
+    dgr = 2.2
+    coeff_TS = np.array([0, 1, 0, 1, 0, 1])
+    temperature = 298.15
+
+    expected_k_forward = np.array(
+        [1.23420642e+02, 2.66908478e-02, 6.51255161e-04])
+    expected_k_reverse = np.array(
+        [2.87005583e+02, 6.51255161e-04, 4.70404010e-01])
+
+    k_forward, k_reverse = get_k(energy_profile, dgr, coeff_TS, temperature)
+
+    assert_allclose(k_forward, expected_k_forward)
+    assert_allclose(k_reverse, expected_k_reverse)
+
+    # Test case 2
+    energy_profile = np.array([0.0, 5.0, -5.0, 8.0])
+    dgr = -12.0
+    coeff_TS = np.array([0, 1, 0, 1])
+    temperature = 298.15
+
+    expected_k_forward = np.array([1.34349679e+09, 1.83736712e+03])
+    expected_k_reverse = np.array([2.90543524e+05, 1.35881500e-02])
+
+    k_forward, k_reverse = get_k(energy_profile, dgr, coeff_TS, temperature)
+
+    assert_allclose(k_forward, expected_k_forward)
+    assert_allclose(k_reverse, expected_k_reverse)
+
+
+def test_add_rate():
+    # Test case 1
+    y = np.array([1.0, 2.0, 3.0, 4.0])
+    k_forward_all = np.array([1.0, 2.0, 3.0])
+    k_reverse_all = np.array([0.5, 1.0, 1.5])
+    rxn_network_all = np.array([[-1, 1, 0, 0],
+                                [0, -1, 1, 0],
+                                [0, 0, -1, 1]])
+    a = 0
+
+    expected_rate = 1.0 * (1.0 ** np.abs(-1)) - 0.5 * (2.0 ** np.abs(1))
+
+    rate = add_rate(y, k_forward_all, k_reverse_all, rxn_network_all, a)
+
+    assert_allclose(rate, expected_rate)
+
+    # Test case 2
+    y = np.array([1.5, 2.5, 3.5, 4.5])
+    k_forward_all = np.array([2.0, 3.0])
+    k_reverse_all = np.array([1.0, 1.5])
+    rxn_network_all = np.array([[-1, 1, 0, 0],
+                                [0, -1, 1, 0]])
+    a = 1
+
+    expected_rate = 3.0 * (2.5 ** np.abs(-1)) - 1.5 * (3.5 ** np.abs(1))
+
+    rate = add_rate(y, k_forward_all, k_reverse_all, rxn_network_all, a)
+
+    assert_allclose(rate, expected_rate)
+
+    # Test case 3
+    y = np.array([1.0, 2.0, 3.0, 4.0])
+    k_forward_all = np.array([1.0, 1.0, 1.0])
+    k_reverse_all = np.array([1.0, 1.0, 1.0])
+    rxn_network_all = np.array([[-1, 1, 0, 0],
+                                [0, -1, 1, 0],
+                                [0, 0, -1, 1]])
+    a = 2
+
+    expected_rate = 1.0 * (1.0 ** np.abs(-1)) - 1.0 * (2.0 ** np.abs(1))
+
+    rate = add_rate(y, k_forward_all, k_reverse_all, rxn_network_all, a)
+
+    assert_allclose(rate, expected_rate)
+
+    # Test case 4
+    y = np.array([0.05, 0.01, 0.02, 0.01, 0.08, 0.05, 1.2, 5., 0.25, 0.15])
+    k_forward_all = np.array([1.23420642e+02,
+                              2.66908478e-02,
+                              6.51255161e-04,
+                              3.97347520e-01,
+                              4.93579691e-03,
+                              4.48316527e+01,
+                              1.72819070e-12])
+    k_reverse_all = np.array([2.87005583e+02,
+                              6.51255161e-04,
+                              4.70404010e-01,
+                              1.14778310e-02,
+                              4.48316527e+01,
+                              8.48836837e-08,
+                              1.27807417e-17])
+    rxn_network_all = np.array([[-1., 1., 0., 0., 0., 0., -1., 0., 0., 0.],
+                                [0., -1., 1., 0., 0., 0., 0., -1., 0., 0.],
+                                [1., 0., -1., 1., 0., 0., 0., 0., 0., 0.],
+                                [-1., 0., 0., -1., 1., 0., 0., 0., 0., 0.],
+                                [0., 0., 0., 0., -1., 1., 0., -1., 0., 0.],
+                                [1., 0., 0., 0., 0., -1., 0., 0., 1., 0.],
+                                [1., 0., 0., 0., 0., -1., 0., 0., 0., 1.]])
+    a = 4
+
+    expected_rate = -2.2396083183576385
+
+    rate = add_rate(y, k_forward_all, k_reverse_all, rxn_network_all, a)
+
+    assert_allclose(rate, expected_rate)
+
+    print("All test cases passed!")
+
+
+def test_calc_dX_dt():
+    # Test case 1
+    y = np.array([1.0, 2.0, 3.0, 4.0])
+    k_forward_all = np.array([1.0, 2.0, 3.0])
+    k_reverse_all = np.array([0.5, 1.0, 1.5])
+    rxn_network_all = np.array([[-1, 1, 0, 0],
+                                [0, -1, 1, 0],
+                                [0, 0, -1, 1]])
+    a = 0
+
+    expected_dX_dt = 1.0 * (1.0 ** np.abs(-1)) - 0.5 * (2.0 ** np.abs(1))
+
+    dX_dt = calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
+
+    assert_allclose(dX_dt, expected_dX_dt)
+
+    # Test case 2
+    y = np.array([1.5, 2.5, 3.5, 4.5])
+    k_forward_all = np.array([2.0, 3.0])
+    k_reverse_all = np.array([1.0, 1.5])
+    rxn_network_all = np.array([[-1, 1, 0, 0],
+                                [0, -1, 1, 0]])
+    a = 1
+
+    expected_dX_dt = -3.0 * (2.5 ** np.abs(-1)) + 1.5 * (3.5 ** np.abs(1))\
+        + 2.0 * (1.5) - 1.0 * (2.5)
+
+    dX_dt = calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
+    print(dX_dt)
+    assert_allclose(dX_dt, expected_dX_dt)
+
+    # Test case 3
+    y = np.array([0.05, 0.01, 0.02, 0.01, 0.08, 0.05, 1.2, 5., 0.25, 0.15])
+    k_forward_all = np.array([1.23420642e+02,
+                              2.66908478e-02,
+                              6.51255161e-04,
+                              3.97347520e-01,
+                              4.93579691e-03,
+                              4.48316527e+01,
+                              1.72819070e-12])
+    k_reverse_all = np.array([2.87005583e+02,
+                              6.51255161e-04,
+                              4.70404010e-01,
+                              1.14778310e-02,
+                              4.48316527e+01,
+                              8.48836837e-08,
+                              1.27807417e-17])
+    rxn_network_all = np.array([[-1., 1., 0., 0., 0., 0., -1., 0., 0., 0.],
+                                [0., -1., 1., 0., 0., 0., 0., -1., 0., 0.],
+                                [1., 0., -1., 1., 0., 0., 0., 0., 0., 0.],
+                                [-1., 0., 0., -1., 1., 0., 0., 0., 0., 0.],
+                                [0., 0., 0., 0., -1., 1., 0., -1., 0., 0.],
+                                [1., 0., 0., 0., 0., -1., 0., 0., 1., 0.],
+                                [1., 0., 0., 0., 0., -1., 0., 0., 0., 1.]])
+    a = 0
+
+    expected_dX_dt = -2.29310268633785
+
+    dX_dt = calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
+
+    assert_allclose(dX_dt, expected_dX_dt)
+
+    print("All test cases passed!")
 
 
 if __name__ == "__main__":
