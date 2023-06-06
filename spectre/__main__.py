@@ -1,0 +1,21 @@
+import sys
+
+import fire
+
+import kinetic_solver
+import km_volcanic
+import screen_reaction_condition
+
+
+def run(mode):
+    
+    if mode == "mkm":
+        sys.exit(kinetic_solver.main())
+    elif mode == "vp":
+        sys.exit(km_volcanic.main())
+    elif mode == "cond":
+        sys.exit(screen_reaction_condition.main())
+        
+if __name__ == "__main__":
+    fire.Fire(run)
+    
