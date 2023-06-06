@@ -25,6 +25,7 @@
 
 ## Contents 
 * [Dependencies](#dependencies-)
+* [Install](#install-)
 * [Usages](#usages-)
 * [Examples](#examples-)
 * [Known Limitation](#limitation-)
@@ -43,6 +44,17 @@ The code runs on pure python with the following dependencies:
 - `fire`
 - `navicat_volcanic`
 
+## Install [↑](#install)
+
+```python
+pip install .
+```
+
+or 
+
+```python
+python setup.py install
+```
 
 ## Usages [↑](#usages)
 
