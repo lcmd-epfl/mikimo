@@ -27,7 +27,9 @@
 * [Dependencies](#dependencies-)
 * [Usages](#usages-)
 * [Examples](#examples-)
+* [Known Limitation](#limitation-)
 * [Citation](#citation-)
+
 
 ## Dependencies [↑](#dependencies)
 The code runs on pure python with the following dependencies: 
@@ -109,6 +111,14 @@ competing carboamination and cyclopropanation of N -enoxyphathanalimides with al
 ```python
 python km_volcanic.py -d volcanic_test/CA_CP_selectivity/ -t 353.15 -ncore 8 -nd 2
 ```
+
+## Known Limitation [↑](#limitation)
+
+1. The overlapping states of different pathways after they converge before the referenece state (starting point).
+
+2. bridging states between pathways 
+
+3. Different TSs connecting the same 2 intermediates: just choose the lowest one
 
 ## Citation [↑](#citation)
 
