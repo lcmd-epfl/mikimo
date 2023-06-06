@@ -703,10 +703,10 @@ def test_calc_dX_dt():
     print("All test cases passed!")
 
 
-if __name__ == "__main__":
+def main():
 
     dg, df_network, tags, states, t_final, temperature, \
-        x_scale, more_species_mkm, wdir = preprocess_data_mkm(sys.argv[1:], mode="mkm_solo")
+        x_scale, more_species_mkm, wdir = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")
 
     initial_conc, energy_profile_all, dgr_all, \
         coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)

@@ -255,8 +255,7 @@ Complete and perfect. All you say is a bunch of lies""")
         help="""Toggle to plot evolution as well. (default: False)""",
     )
     parser.add_argument(
-        "-m",
-        "--m",
+        "-tt",
         dest="map",
         action="store_true",
         help="""Toggle to construct time-temperature map
@@ -406,6 +405,8 @@ Complete and perfect. All you say is a bunch of lies""")
         map_tt = args.map
         ncore = args.ncore
         more_species_mkm = args.addition
+        imputer_strat = args.imputer_strat
+        verb = args.verb
 
         rxn_data = f"{wdir}/reaction_data.csv"
         rnx = f"{wdir}/rxn_network.csv"
@@ -414,16 +415,16 @@ Complete and perfect. All you say is a bunch of lies""")
         temperatures = args.temp
 
         if t_finals is None:
-            t_finals = 54800
+            t_finals = [54800]
         elif len(t_finals) == 1:
-            t_finals = t_finals[0]
+            t_finals = [t_finals[0]]
         elif len(t_finals) > 1:
             t_finals = t_finals
 
         if temperatures is None:
-            temperatures = 298.15
+            temperatures = [298.15]
         elif len(temperatures) == 1:
-            temperatures = temperatures[0]
+            temperatures = [temperatures[0]]
         elif len(temperatures) > 1:
             temperatures = temperatures
 
@@ -449,7 +450,7 @@ Complete and perfect. All you say is a bunch of lies""")
 
         return (
             dg, df_network, tags, states, t_finals, temperatures,
-            x_scale, more_species_mkm, plot_evo, map_tt, ncore
+            x_scale, more_species_mkm, plot_evo, map_tt, ncore, imputer_strat, verb
         )
 
 

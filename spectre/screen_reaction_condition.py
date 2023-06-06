@@ -101,10 +101,10 @@ def run_mkm_3d(grid: Tuple[np.ndarray, np.ndarray],
             continue
 
 
-if __name__ == "__main__":
+def main():
 
     dg, df_network, tags, states, t_finals, temperatures, x_scale, more_species_mkm, \
-        plot_evo, map_tt, ncore, imputer_strat, verb = preprocess_data_mkm(sys.argv[1:], mode="mkm_cond")
+        plot_evo, map_tt, ncore, imputer_strat, verb = preprocess_data_mkm(sys.argv[2:], mode="mkm_cond")
 
     initial_conc, energy_profile_all, dgr_all, \
         coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
@@ -412,7 +412,7 @@ if __name__ == "__main__":
             if verb > 0:
                 print(df.to_string(index=False))
 
-print("""\nI have a heart that can't be filled
-Cast me an unbreaking spell to make these uplifting extraordinary day pours down
-Alone in the noisy neon city
-steps that feels like about to break my heels""")
+    print("""\nI have a heart that can't be filled
+    Cast me an unbreaking spell to make these uplifting extraordinary day pours down
+    Alone in the noisy neon city
+    steps that feels like about to break my heels""")

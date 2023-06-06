@@ -112,11 +112,16 @@ if __name__ == "__main__":
 
     if np.any(np.max(prod_conc_sm_all) > 10):
         print("Concentration likely reported as %yield, set y_base to 10")
-        y_base = 10
+        ybase = np.round((np.max(prod_conc_sm_all) - 0) / 8)
+        if ybase == 0: ybase = 5
+        ylabel = "%yield"
     else:
-        print("set y_base to 0.1")
-        y_base = 0.1
-
+        ybase = np.round((np.max(prod_conc_pt_) - 0) / 8, 1)
+        if ybase == 0: ybase = 0.05
+        ylabel = "Final product concentraion (M)"
+        
+    xbase = np.round((np.max(descr_all) - np.min(descr_all)) / 8)
+    if xbase == 0: xbase = 5
     out = []
     if prod_conc_.shape[0] > 1:
         plot_2d_combo(
@@ -126,7 +131,8 @@ if __name__ == "__main__":
             prod_conc_pt_,
             xmin=descr_all[0],
             xmax=descr_all[-1],
-            ybase=y_base,
+            xbase=xbase,
+            ybase=ybase,
             xlabel=xlabel,
             ylabel=ylabel,
             filename=f"km_volcano_{tag}_combo_polished.png",
@@ -141,7 +147,8 @@ if __name__ == "__main__":
                 prod_conc_pt_[i],
                 xmin=descr_all[0],
                 xmax=descr_all[-1],
-                ybase=y_base,
+                xbase=xbase,
+                ybase=ybase,
                 cb=cb,
                 ms=ms,
                 xlabel=xlabel,
@@ -157,7 +164,8 @@ if __name__ == "__main__":
             prod_conc_pt_[0],
             xmin=descr_all[0],
             xmax=descr_all[-1],
-            ybase=y_base,
+            xbase=xbase,
+            ybase=ybase,
             cb=cb,
             ms=ms,
             xlabel=xlabel,
