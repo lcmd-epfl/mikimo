@@ -1,9 +1,17 @@
-from setuptools import setup
+from glob import glob
+from os import path
+
 import setuptools
+from setuptools import setup
 
 with open("README.md", "r", encoding="utf-8") as fh:
      long_description = fh.read()
-     
+
+script_files = []
+for fname in glob("spectre/**/*", recursive=True):
+    if path.isfile(fname):
+        script_files += [fname]
+        
 setup(
     name='spectre',
     version='0.0',
@@ -26,7 +34,10 @@ setup(
         'matplotlib',
         'pandas',
         'h5py',
+        'fire',
         'navicat_volcanic'
     ],
+    keywords="computational chemistry utility",
+    entry_points={'console_scripts': ['spectre=spectre.__main__:main']},
     include_package_data=True,
 )

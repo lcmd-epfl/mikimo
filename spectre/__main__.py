@@ -15,7 +15,11 @@ def run(mode):
         sys.exit(km_volcanic.main())
     elif mode == "cond":
         sys.exit(screen_reaction_condition.main())
-        
-if __name__ == "__main__":
+
+def main():
     fire.Fire(run)
+    
+    
+if __name__ == "__main__":
+    main()
     
