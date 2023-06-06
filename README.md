@@ -45,43 +45,46 @@ The code runs on pure python with the following dependencies:
 
 ## Usages [↑](#usages)
 
-On top of the energy data which contains reaction free energy profile, user needs the reaction network and initial concentration as additional input. All should be stored in the same directory
+The user requires three essential inputs for the analysis: energy data, reaction network, and initial concentrations. All these files must be in the same directory.
 
 - energy data: reaction_data (in csv or xlsx)
 - reaction network: rxn_network (in csv or xlsx)
-- initial concentration: c0.txt
 
-In the reaction network, each row corresponds to an elementary step, and the columns represent the chemical species (excluding transition states) in the mechanism. To fill in the reaction network, we consider the reaction proceeding in the direction leading to the product. It is important to ensure that the species names in the reaction network match those in the energy data.
+The reaction network should be presented as a CSV or XLSX file named "rxn_network". Each row in the network represents an elementary step, while the columns represent the chemical species involved in the mechanism, excluding transition states. When filling in the reaction network, it is crucial to ensure that the species names match those in the energy data.
 
-For step *i*, assign a value of -n for the species on the left side of the equation and +n (or just n) for the species on the right side of the equation, where n is the stoichiometric coefficient. For chemical species not in step *i*, simply leave the cell empty (or fill in with 0). 
+For each step (denoted as *i*) in the reaction network, assign a value of *-n* to the species on the left side of the equation and *+n* (or simply *n*) to the species on the right side, where *n* represents the stoichiometric coefficient. If a chemical species is not involved in step i, leave the corresponding cell empty or fill it with 0.
 
-Additionally, the user has the flexibility to specify the initial concentration in the last row of the reaction network file. This row can be named c0, initial_conc, or initial conc. If the initial concentration row is not detected in the reaction network, the program proceeds to read the information from c0.txt.
 
-Regarding the initial concentration, the user has two options. They can either specify the concentration of all species in the text file or only provide the concentrations of reactants and catalysts.
+The initial concentrations should be specified in the last row of the reaction network file. This row can be named "c0", "initial_conc," or "initial conc." 
 
 
 Once all input are ready
 
 1. Call just kinetic solver
 ```python
-python kinetic_solver.py -d [DIR]
+python -m spectre mkm -d [DIR]
 ```
 2. MKM for all reaction profiles
 ```python
-python km_volcanic.py -d [DIR] -nd 0
+python -m spectre vp -d [DIR] -nd 0
 ```
 
 3. To construct MKM volcano plot
 ```python
-python km_volcanic.py -d [DIR] -nd 1
+python -m spectre vp -d [DIR] -nd 1
 ```
 
 3. To construct MKM activity/selectivity map
 ```python
-python km_volcanic.py -d [DIR] -nd 2
+python -m spectre vp -d [DIR] -nd 2
 ```
 
-4. To smoothen the volcano 
+4. To screen over reaction time and temperature
+```python
+python -m spectre cond -d [DIR] 
+```
+
+5. To smoothen the volcano 
 ```python
 python replot.py [i]
 ```
@@ -91,25 +94,31 @@ python replot.py [i]
 1. Performing MKM for Pd-catalyzed carbocyclization-borylation of enallene in the
 presence of chiral phosphoric acid at room temperature for 1 min of reaction time: 
 ```python
-python kinetic_solver.py -d test_cases/Pd_OCB/ -t 298.15 -tf 60
+python -m spectre mkm -d test_cases/pd_carbocylic_borylation/ -t 298.15 -Tf 60
 ```
 
 2. Performing MKM for all profiles of the catalytic 
 competing carboamination and cyclopropanation of N -enoxyphathanalimides with alkenes (353.15 K, 1 d):
 ```python
-python kinetic_solver.py -d test_cases/Pd_OCB/ -t 298.15 -tf 60
+python -m spectre vp -d volcanic_test/CA_CP_selectivity/ -t 353.15 -nd 0
 ```
 
 3. Constructing MKM volcano plot for the catalytic
 competing carboamination and cyclopropanation of N -enoxyphathanalimides with alkenes (353.15 K, 1 d):
 ```python
-python km_volcanic.py -d volcanic_test/CA_CP_selectivity/ -t 353.15 -ncore 8
+python -m spectre vp -d volcanic_test/CA_CP_selectivity/ -t 353.15 -nd 1 -ncore 24
 ```
 
 4. Constructing MKM activity/selectivity map for the catalytic
 competing carboamination and cyclopropanation of N -enoxyphathanalimides with alkenes (353.15 K, 1 d):
 ```python
-python km_volcanic.py -d volcanic_test/CA_CP_selectivity/ -t 353.15 -ncore 8 -nd 2
+python -m spectre vp -d volcanic_test/CA_CP_selectivity/ -t 353.15 -nd 2 -ncore 24
+```
+
+5. Construct activity/selectivity map with time [2-24 hr] and temperature [273.15-423.15 K] as descriptors
+
+```python
+python -m spectre cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 -t 273.15 423.15 -ncore 24
 ```
 
 ## Known Limitation [↑](#limitation)
