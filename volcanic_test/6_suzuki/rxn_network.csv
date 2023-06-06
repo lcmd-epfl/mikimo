@@ -1,4 +1,4 @@
-,INT1,INT2,INT3,INT4,INT5,R-ArBr,R-OH,R-ArB,R-L,P-BOH3,prod*
+,INT1,INT2,INT3,INT4,INT5,R-ArBr,R-OH,R-ArB,L,P-BOH3,Prod*
 INT1,,1,,,-1,-1,,,,,
 INT2,-1,,1,,,,-1,,,,
 INT3,,-1,,1,,,,-1,1,,
