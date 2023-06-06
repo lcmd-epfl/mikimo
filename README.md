@@ -40,6 +40,7 @@ The code runs on pure python with the following dependencies:
 - `pandas`
 - `scipy`
 - `h5py`
+- `fire`
 - `navicat_volcanic`
 
 
