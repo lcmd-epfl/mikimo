@@ -134,6 +134,14 @@ python -m spectre vp -d volcanic_test/CA_CP_selectivity/ -t 353.15 -nd 2 -ncore 
 python -m spectre cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 -t 273.15 423.15 -ncore 24
 ```
 
+6. Use filter algorithm to smoothen the plot
+
+```python
+python replot.py examples/data/data.h5 -p 3 3 3 -w 20 20 20
+```
+
+You can also find examples of reading h5 files and regenerating plots in the "examples" folder.
+
 ## Known Limitation [↑](#limitation)
 
 1. The overlapping states of different pathways after they converge before the referenece state (starting point).
