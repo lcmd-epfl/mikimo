@@ -1,13 +1,58 @@
 import argparse
 import logging
 import multiprocessing
+import os
+import sys
 from typing import List, Tuple
 
 import autograd.numpy as np
 import pandas as pd
 
 
-# TODO logger this
+def yesno(question):
+    """Simple Yes/No Function, Ruben's code"""
+    prompt = f"{question} ? (y/n): "
+    ans = input(prompt).strip().lower()
+    if ans not in ["y", "n"]:
+        print(f"{ans} is invalid, please try again...")
+        return yesno(question)
+    if ans == "y":
+        return True
+    return False
+
+def check_existence(wdir, verb):
+    rows_to_search = ["c0", "initial_conc", "initial conc"]
+    columns_to_search = ["k_forward", "k_reverse"]
+    if os.path.exists(f"{wdir}rxn_network.csv"):
+        if verb > 2:
+            print("rxn_network.csv exists")
+        df = pd.read_csv(f"{wdir}rxn_network.csv", index_col=0)
+        last_row_index = df.index[-1]
+        c0_exist = any([last_row_index.lower() in rows_to_search])
+        k_exist = all([column in df.columns for column in columns_to_search])
+        if not(c0_exist): logging.critical("Initial concentration not found in rxn_network.csv")
+
+    else: logging.critical("rxn_network.csv not found")
+
+    filename = f"{wdir}reaction_data"
+    extensions = [".csv", ".xls", ".xlsx"]
+
+    energy_exist = any(
+        os.path.isfile(filename + extension)
+        for extension in extensions
+    )
+
+    if energy_exist:
+        if verb > 2:
+            print("reaction_data file exists")
+        if k_exist: 
+            print("Both energy data and rate constants are provided")
+    else:
+        if k_exist:
+            print("reaction_data file not found, but rate constants are provided")
+        else:
+            logging.critical("reaction_data file not found and rate constants are not provided")
+            
 def check_km_inp(df, df_network):
     """
     Checks the validity of inputs for kinetic modeling.
@@ -269,7 +314,8 @@ Complete and perfect. All you say is a bunch of lies""")
         wdir = args.dir
         x_scale = args.xscale
         more_species_mkm = args.addition
-
+        check_existence(wdir, verb=verb)
+        
         rxn_data = f"{wdir}/reaction_data.csv"
         rnx = f"{wdir}/rxn_network.csv"
 
@@ -298,29 +344,46 @@ Complete and perfect. All you say is a bunch of lies""")
                 print("temperature is a range, use the first value")
             temperatures = temperatures[0]
 
-        try:
-            df_all = pd.read_csv(rxn_data)
-        except Exception as e:
-            rxn_data = rxn_data.replace(".csv", ".xlsx")
-            df_all = pd.read_excel(rxn_data)
-        dg = df_all.iloc[0].to_numpy()[1:]
-        dg = dg.astype(float)
-
         df_network = pd.read_csv(rnx, index_col=0)
         df_network.fillna(0, inplace=True)
-        tags = df_all.columns.values[1:]
         states = df_network.columns[:].tolist()
 
-        clear = check_km_inp(df_all, df_network)
-
-        if not (clear):
-            print("\nRecheck your reaction network and your reaction data\n")
+        if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
+            print("""Detect k_forward and k_reverse in the reaction network file,
+                  Note that temperature is not considered after this point""")
+            extracted_columns = df_network[['k_forward', 'k_reverse']]
+            df_network.drop(['k_forward', 'k_reverse'], axis=1, inplace=True)
+            use_extracted = yesno("Use the extracted k_forward and k_reverse?")
+            if use_extracted:
+                ks = extracted_columns.to_numpy()
+                return None, df_network, None, states, t_finals, temperatures, \
+                    x_scale, more_species_mkm, wdir, ks
+            else:
+                ks = None
+                cont = True
+       
         else:
-            if verb > 0:
-                print("\nKM input is clear\n")
+            ks = None
+        
+        if cont or ks is None:
+            try:
+                df_all = pd.read_csv(rxn_data)
+            except Exception as e:
+                rxn_data = rxn_data.replace(".csv", ".xlsx")
+                df_all = pd.read_excel(rxn_data)
+            dg = df_all.iloc[0].to_numpy()[1:]
+            dg = dg.astype(float)
+            tags = df_all.columns.values[1:]
+            
+            clear = check_km_inp(df_all, df_network)
 
-        return dg, df_network, tags, states, t_finals, temperatures, \
-            x_scale, more_species_mkm, wdir
+            if not (clear):
+                    print("\nRecheck your reaction network and your reaction data\n")
+            else:
+                if verb > 0:
+                    print("\nKM input is clear\n")
+            return dg, df_network, tags, states, t_finals, temperatures, \
+                x_scale, more_species_mkm, wdir, ks
 
     elif mode == "mkm_screening":
         lmargin = args.lmargin
@@ -349,7 +412,10 @@ Complete and perfect. All you say is a bunch of lies""")
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])
-
+        
+        if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
+            extracted_columns = df_network[['k_forward', 'k_reverse']]
+            df_network.drop(['k_forward', 'k_reverse'], axis=1, inplace=True)
         try:
             df = pd.read_excel(filename_xlsx)
         except FileNotFoundError as e:
@@ -407,6 +473,7 @@ Complete and perfect. All you say is a bunch of lies""")
         more_species_mkm = args.addition
         imputer_strat = args.imputer_strat
         verb = args.verb
+        check_existence(wdir, verb=verb)
 
         rxn_data = f"{wdir}/reaction_data.csv"
         rnx = f"{wdir}/rxn_network.csv"
@@ -428,30 +495,53 @@ Complete and perfect. All you say is a bunch of lies""")
         elif len(temperatures) > 1:
             temperatures = temperatures
 
-        try:
-            df_all = pd.read_csv(rxn_data)
-        except Exception as e:
-            rxn_data = rxn_data.replace(".csv", ".xlsx")
-            df_all = pd.read_excel(rxn_data)
-        dg = df_all.iloc[0].to_numpy()[1:]
-        dg = dg.astype(float)
-
         df_network = pd.read_csv(rnx, index_col=0)
         df_network.fillna(0, inplace=True)
-        tags = df_all.columns.values[1:]
         states = df_network.columns[:].tolist()
 
-        clear = check_km_inp(df_all, df_network)
-
-        if not (clear):
-            print("\nRecheck your reaction network and your reaction data\n")
+        if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
+            print("""Detect k_forward and k_reverse in the reaction network file,
+                  Note that temperature is not considered after this point""")
+            extracted_columns = df_network[['k_forward', 'k_reverse']]
+            df_network.drop(['k_forward', 'k_reverse'], axis=1, inplace=True)
+            use_extracted = yesno("Use the extracted k_forward and k_reverse?")
+            if use_extracted:
+                ks = extracted_columns.to_numpy()
+                if len(temperatures) > 1:
+                    print("Cannot screen over temperature range when reading k_forward and k_reverse from the reaction network file")
+                    sys.exit()
+                else:
+                    return (
+                        None, df_network, None, states, t_finals, [0],
+                        x_scale, more_species_mkm, plot_evo, map_tt, ncore, imputer_strat, verb, ks
+                    )
+            else:
+                ks = None
+                cont = True
+      
         else:
-            print("\nKM input is clear\n")
+            ks = None
 
-        return (
-            dg, df_network, tags, states, t_finals, temperatures,
-            x_scale, more_species_mkm, plot_evo, map_tt, ncore, imputer_strat, verb
-        )
+        if cont or ks is None:
+            try:
+                df_all = pd.read_csv(rxn_data)
+            except Exception as e:
+                rxn_data = rxn_data.replace(".csv", ".xlsx")
+                df_all = pd.read_excel(rxn_data)
+            dg = df_all.iloc[0].to_numpy()[1:]
+            dg = dg.astype(float)
+            tags = df_all.columns.values[1:]
+            clear = check_km_inp(df_all, df_network)
+
+            if not (clear):
+                print("\nRecheck your reaction network and your reaction data\n")
+            else:
+                print("\nKM input is clear\n")
+
+            return (
+                dg, df_network, tags, states, t_finals, temperatures,
+                x_scale, more_species_mkm, plot_evo, map_tt, ncore, imputer_strat, verb, ks
+            )
 
 
 def process_data_mkm(dg: np.ndarray,

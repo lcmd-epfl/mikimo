@@ -11,6 +11,8 @@ from matplotlib.ticker import FuncFormatter
 from navicat_volcanic.helpers import bround
 from navicat_volcanic.plotting2d import beautify_ax
 
+from helper import yesno
+
 matplotlib.use("Agg")
 
 
@@ -153,14 +155,11 @@ def plot_evo_save(
             shutil.move("output/", os.path.join(wdir, "output"))
         else:
             print("Output already exist")
-            move_bool = input("Move anyway? (y/n): ")
-            if move_bool == "y":
-                shutil.move("output/", os.path.join(wdir, "output"))
-            elif move_bool == "n":
-                pass
+            move_bool = yesno("Move anyway? (y/n): ")
+            if move_bool:
+                shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
             else:
-                move_bool = input(
-                    f"{move_bool} is invalid, please try again... (y/n): ")
+                pass
 
 
 def plot_save_cond(x, Pfs, var, prod_name, verb=1):

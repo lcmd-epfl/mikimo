@@ -104,13 +104,25 @@ def run_mkm_3d(grid: Tuple[np.ndarray, np.ndarray],
 def main():
 
     dg, df_network, tags, states, t_finals, temperatures, x_scale, more_species_mkm, \
-        plot_evo, map_tt, ncore, imputer_strat, verb = preprocess_data_mkm(sys.argv[2:], mode="mkm_cond")
-
-    initial_conc, energy_profile_all, dgr_all, \
-        coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
-
+        plot_evo, map_tt, ncore, imputer_strat, verb, ks = preprocess_data_mkm(sys.argv[2:], mode="mkm_cond")
+    
     idx_target_all = [states.index(i) for i in states if "*" in i]
     prod_name = [s for i, s in enumerate(states) if s.lower().startswith("p")]
+    if ks is None:
+        initial_conc, energy_profile_all, dgr_all, \
+            coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
+    else:
+        energy_profile_all = None
+        dgr_all = None
+        coeff_TS_all = None
+        initial_conc = np.array([])
+        last_row_index = df_network.index[-1]
+        if isinstance(last_row_index, str):
+            if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
+                initial_conc = df_network.iloc[-1:].to_numpy()[0]
+                df_network = df_network.drop(df_network.index[-1])
+        rxn_network_all = df_network.to_numpy()[:, :]
+
 
     if map_tt:
         if verb > 0:
@@ -352,7 +364,8 @@ def main():
                     states,
                     timeout=60,
                     report_as_yield=False,
-                    quality=2)
+                    quality=2,
+                    ks=ks)
                 c_target_t = np.array([result_solve_ivp.y[i][-1]
                                        for i in idx_target_all])
                 if plot_evo:

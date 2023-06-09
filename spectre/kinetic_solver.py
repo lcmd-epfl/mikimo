@@ -297,7 +297,8 @@ def calc_km(energy_profile_all: List,
             states: List,
             timeout: float,
             report_as_yield: bool,
-            quality: int = 0) -> Tuple[np.ndarray,
+            quality: int,
+            ks=None) -> Tuple[np.ndarray,
                                        Union[str,
                                              scipy.integrate._ivp.ivp.OdeResult]]:
     """
@@ -315,6 +316,7 @@ def calc_km(energy_profile_all: List,
         timeout (float): Timeout for the simulation.
         report_as_yield (bool): Flag indicating whether to report the results as yield or concentration.
         quality (int, optional): Quality level of the integration. Defaults to 0.
+        ks (np.ndarray): Array of rate constants for all reactions.
 
     Returns:
         Tuple[np.ndarray, Union[str, scipy.integrate._ivp.ivp.OdeResult]]: A tuple containing the results of the simulation
@@ -322,11 +324,15 @@ def calc_km(energy_profile_all: List,
             and the second element is either a string indicating failure or the result of the simulation.
     """
     idx_target_all = [states.index(i) for i in states if "*" in i]
-    k_forward_all, k_reverse_all = calc_k(
-        energy_profile_all,
-        dgr_all,
-        coeff_TS_all,
-        temperature)
+    if ks is not None:
+        k_forward_all = ks[:, 0]
+        k_reverse_all = ks[:, 1]
+    else:
+        k_forward_all, k_reverse_all = calc_k(
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            temperature)
 
     dydt = system_KE_DE(k_forward_all, k_reverse_all,
                         rxn_network_all, initial_conc, states)
@@ -706,13 +712,25 @@ def test_calc_dX_dt():
 def main():
 
     dg, df_network, tags, states, t_final, temperature, \
-        x_scale, more_species_mkm, wdir = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")
+        x_scale, more_species_mkm, wdir, ks = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")
 
-    initial_conc, energy_profile_all, dgr_all, \
-        coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
-    t_span = (0, t_final)
-    _, result_solve_ivp = calc_km(energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all,
-                                  temperature, t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2)
+    if ks is not None:
+        t_span = (0, t_final)
+        initial_conc = np.array([])
+        last_row_index = df_network.index[-1]
+        if isinstance(last_row_index, str):
+            if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
+                initial_conc = df_network.iloc[-1:].to_numpy()[0]
+                df_network = df_network.drop(df_network.index[-1])
+        rxn_network_all = df_network.to_numpy()[:, :]
+        _, result_solve_ivp = calc_km(None, None, None, rxn_network_all,
+                                    temperature, t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2, ks=ks)
+    else:
+        initial_conc, energy_profile_all, dgr_all, \
+            coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
+        t_span = (0, t_final)
+        _, result_solve_ivp = calc_km(energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all,
+                                    temperature, t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2, ks=None)
 
     states_ = [s.replace("*", "") for s in states]
     plot_evo_save(

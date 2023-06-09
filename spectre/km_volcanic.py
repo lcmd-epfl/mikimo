@@ -25,7 +25,7 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from tqdm import tqdm
 
-from helper import check_km_inp, preprocess_data_mkm, process_data_mkm
+from helper import check_km_inp, preprocess_data_mkm, process_data_mkm, yesno
 from kinetic_solver import calc_km
 from plot_function import (plot_2d_combo, plot_3d_, plot_3d_contour_regions_np,
                            plot_3d_np, plot_evo)
@@ -398,14 +398,12 @@ def evol_mode(d: List,
         shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
     else:
         print("Output already exist")
-        move_bool = input("Move anyway? (y/n): ")
-        if move_bool == "y":
+        move_bool = yesno("Move anyway? (y/n): ")
+        if move_bool:
             shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-        elif move_bool == "n":
-            pass
         else:
-            move_bool = input(
-                f"{move_bool} is invalid, please try again... (y/n): ")
+            pass
+    
 
     print("""\nThis is a parade
 Even if I have to drag these feet of mine
@@ -1205,14 +1203,11 @@ def main():
                 shutil.move("output/", os.path.join(wdir, "output"))
             else:
                 print("Output already exist")
-                move_bool = input("Move anyway? (y/n): ")
-                if move_bool == "y":
-                    shutil.move("output/", os.path.join(wdir, "output"))
-                elif move_bool == "n":
-                    pass
+                move_bool = yesno("Move anyway? (y/n): ")
+                if move_bool:
+                    shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
                 else:
-                    move_bool = input(
-                        f"{move_bool} is invalid, please try again... (y/n): ")
+                    pass
 
             print("""\nI won't pray anymore
     The kindness that rained on this city
