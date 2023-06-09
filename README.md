@@ -150,6 +150,8 @@ You can also find examples of reading h5 files and regenerating plots in the "ex
 
 3. Different TSs connecting the same 2 intermediates: just choose the lowest one
 
+To address these limitations, the code provides the option to specify rate constants explicitly in the rxn_network, using the "k_forward" column for forward rate constants and "k_reverse" for reverse rate constants. However, when rate constants are explicitly specified, the temperature effect cannot be taken into consideration.
+
 ## Citation [↑](#citation)
 
 If you use spectre in your work, please cite:
