@@ -51,6 +51,14 @@ if __name__ == "__main__":
         help="The order of the polynomial used to fit the sample, required if using savgol. polyorder must be less than window_length.",
     )
     parser.add_argument(
+    "-pm",
+    "-plotmode",
+    dest="plotmode",
+    type=int,
+    default=1,
+    help="Plot mode for volcano and activity map plotting. Higher is more detailed, lower is basic. 3 includes uncertainties. (default: 1)",
+    )
+    parser.add_argument(
         "-s",
         "--s",
         dest="save",
@@ -64,6 +72,7 @@ if __name__ == "__main__":
     window_length = args.window_length
     polyorder = args.polyorder
     save = args.save
+    plotmode = args.plotmode
 
     try:
         with h5py.File(filename, 'r') as f:
@@ -82,12 +91,14 @@ if __name__ == "__main__":
             tag = group['tag'][:]
             xlabel = group['xlabel'][:]
             ylabel = group['ylabel'][:]
+            labels = group['labels'][:]
     except Exception as e:
         sys.exit(f"Likely wrong h5 file, {e}")
 
     xlabel = xlabel[0].decode()
     ylabel = ylabel[0].decode()
     tag = tag[0].decode()
+    labels = [label.decode() for label in labels]
 
     print(
         f"Detect {prod_conc_.shape[0]} profiles in the input, require {prod_conc_.shape[0]} input for polyorder and window_length")
@@ -111,7 +122,7 @@ if __name__ == "__main__":
     prod_conc_sm_all = np.array(prod_conc_sm_all)
 
     if np.any(np.max(prod_conc_sm_all) > 10):
-        print("Concentration likely reported as %yield, set y_base to 10")
+        print("Concentration likely reported as %yield")
         ybase = np.round((np.max(prod_conc_sm_all) - 0) / 8)
         if ybase == 0: ybase = 5
         ylabel = "%yield"
@@ -122,6 +133,8 @@ if __name__ == "__main__":
         
     xbase = np.round((np.max(descr_all) - np.min(descr_all)) / 8)
     if xbase == 0: xbase = 5
+    ci_ = np.full(prod_conc_.shape[0], None)
+    
     out = []
     if prod_conc_.shape[0] > 1:
         plot_2d_combo(
@@ -129,6 +142,8 @@ if __name__ == "__main__":
             prod_conc_sm_all,
             descrp_pt,
             prod_conc_pt_,
+            ci=ci_,
+            ms=ms,
             xmin=descr_all[0],
             xmax=descr_all[-1],
             xbase=xbase,
@@ -136,7 +151,8 @@ if __name__ == "__main__":
             xlabel=xlabel,
             ylabel=ylabel,
             filename=f"km_volcano_{tag}_combo_polished.png",
-            plotmode=3)
+            plotmode=plotmode,
+            labels=labels)
         out.append(f"km_volcano_{tag}_combo_polished.png")
 
         for i in range(prod_conc_sm_all.shape[0]):
@@ -154,7 +170,7 @@ if __name__ == "__main__":
                 xlabel=xlabel,
                 ylabel=ylabel,
                 filename=f"km_volcano_{tag}_profile{i}.png",
-                plotmode=3)
+                plotmode=plotmode)
             out.append(f"km_volcano_{tag}_profile{i}.png")
     else:
         plot_2d(
@@ -171,7 +187,7 @@ if __name__ == "__main__":
             xlabel=xlabel,
             ylabel=ylabel,
             filename=f"km_volcano_{tag}_polished.png",
-            plotmode=3)
+            plotmode=plotmode)
         out.append(f"km_volcano_{tag}_polished.png")
 
         if save:

@@ -1111,8 +1111,9 @@ def main():
             out = []
             if not (comp_ci):
                 ci_ = np.full(prod_conc_.shape[0], None)
+            prod_names = [i.replace("*", "") for i in states if "*" in i]
             if prod_conc_.shape[0] > 1:
-                prod_names = [i.replace("*", "") for i in states if "*" in i]
+
                 plot_2d_combo(
                     xint,
                     prod_conc_,
@@ -1184,6 +1185,7 @@ def main():
                     group.create_dataset('tag', data=[tag.encode()])
                     group.create_dataset('xlabel', data=[xlabel.encode()])
                     group.create_dataset('ylabel', data=[ylabel.encode()])
+                    group.create_dataset('labels', data=prod_names)
                 out.append('data.h5')
 
             if not os.path.isdir("output"):
