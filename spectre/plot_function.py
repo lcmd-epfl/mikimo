@@ -383,7 +383,6 @@ def plot_2d_combo(
     px,
     py,
     ci=None,
-    ms=None,
     xmin=0,
     xmax=100,
     xbase=20,
@@ -392,6 +391,7 @@ def plot_2d_combo(
     ylabel="Y-axis",
     filename="plot.png",
     rid=None,
+    ms=None,
     rb=None,
     plotmode=1,
     labels=None
