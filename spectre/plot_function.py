@@ -453,7 +453,7 @@ def plot_2d_combo(
                     )
 
     # mono color scatter plot
-    elif plotmode > 1:
+    elif plotmode > 0:
 
         for i, yi in enumerate(y):
             ax.plot(
