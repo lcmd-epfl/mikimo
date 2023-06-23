@@ -25,10 +25,14 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from tqdm import tqdm
 
-from helper import check_km_inp, preprocess_data_mkm, process_data_mkm, yesno
-from kinetic_solver import calc_km
-from plot_function import (plot_2d_combo, plot_3d_, plot_3d_contour_regions_np,
-                           plot_3d_np, plot_evo)
+from .helper import check_km_inp, preprocess_data_mkm, process_data_mkm, yesno
+from .kinetic_solver import calc_km
+from .plot_function import (
+    plot_2d_combo,
+    plot_3d_,
+    plot_3d_contour_regions_np,
+    plot_3d_np,
+    plot_evo)
 
 
 def call_imputter(imp_alg):
@@ -51,7 +55,6 @@ def call_imputter(imp_alg):
         print("Invalid imputer type, use KNN imputer instead")
         imputer = KNNImputer(n_neighbors=5, weights="uniform")
     return imputer
-
 
 
 def process_n_calc_2d(
@@ -403,7 +406,6 @@ def evol_mode(d: List,
             shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
         else:
             pass
-    
 
     print("""\nThis is a parade
 Even if I have to drag these feet of mine
@@ -772,7 +774,7 @@ def main():
             d = np.column_stack((d, np.full((d.shape[0], 1), d_[-1, -1])))
             tags = np.append(tags, tags_[-1])
             sigma_dgs = np.column_stack((sigma_dgs, np.full((npoints, 1), 0)))
-            
+
         if screen_cond:
             if verb > 0:
                 print(
@@ -1099,15 +1101,18 @@ def main():
 
             if report_as_yield:
                 ybase = np.round((np.max(prod_conc_pt_) - 0) / 8)
-                if ybase == 0: ybase = 5
+                if ybase == 0:
+                    ybase = 5
                 ylabel = "%yield"
             else:
                 ybase = np.round((np.max(prod_conc_pt_) - 0) / 8, 1)
-                if ybase == 0: ybase = 0.05
+                if ybase == 0:
+                    ybase = 0.05
                 ylabel = "Final product concentraion (M)"
             xbase = np.round((np.max(xint) - np.min(xint)) / 8)
-            if xbase == 0: xbase = 5
-            
+            if xbase == 0:
+                xbase = 5
+
             out = []
             if not (comp_ci):
                 ci_ = np.full(prod_conc_.shape[0], None)
@@ -1207,7 +1212,11 @@ def main():
                 print("Output already exist")
                 move_bool = yesno("Move anyway? (y/n): ")
                 if move_bool:
-                    shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
+                    shutil.move(
+                        "output_evo/",
+                        os.path.join(
+                            wdir,
+                            "output_evo"))
                 else:
                     pass
 

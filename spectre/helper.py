@@ -20,6 +20,7 @@ def yesno(question):
         return True
     return False
 
+
 def check_existence(wdir, verb):
     rows_to_search = ["c0", "initial_conc", "initial conc"]
     columns_to_search = ["k_forward", "k_reverse"]
@@ -30,9 +31,12 @@ def check_existence(wdir, verb):
         last_row_index = df.index[-1]
         c0_exist = any([last_row_index.lower() in rows_to_search])
         k_exist = all([column in df.columns for column in columns_to_search])
-        if not(c0_exist): logging.critical("Initial concentration not found in rxn_network.csv")
+        if not (c0_exist):
+            logging.critical(
+                "Initial concentration not found in rxn_network.csv")
 
-    else: logging.critical("rxn_network.csv not found")
+    else:
+        logging.critical("rxn_network.csv not found")
 
     filename = f"{wdir}reaction_data"
     extensions = [".csv", ".xls", ".xlsx"]
@@ -45,14 +49,16 @@ def check_existence(wdir, verb):
     if energy_exist:
         if verb > 2:
             print("reaction_data file exists")
-        if k_exist: 
+        if k_exist:
             print("Both energy data and rate constants are provided")
     else:
         if k_exist:
             print("reaction_data file not found, but rate constants are provided")
         else:
-            logging.critical("reaction_data file not found and rate constants are not provided")
-            
+            logging.critical(
+                "reaction_data file not found and rate constants are not provided")
+
+
 def check_km_inp(df, df_network):
     """
     Checks the validity of inputs for kinetic modeling.
@@ -315,7 +321,7 @@ Complete and perfect. All you say is a bunch of lies""")
         x_scale = args.xscale
         more_species_mkm = args.addition
         check_existence(wdir, verb=verb)
-        
+
         rxn_data = f"{wdir}/reaction_data.csv"
         rnx = f"{wdir}/rxn_network.csv"
 
@@ -348,6 +354,8 @@ Complete and perfect. All you say is a bunch of lies""")
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
 
+        cont = False
+        ks = [1]
         if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
             print("""Detect k_forward and k_reverse in the reaction network file,
                   Note that temperature is not considered after this point""")
@@ -361,10 +369,10 @@ Complete and perfect. All you say is a bunch of lies""")
             else:
                 ks = None
                 cont = True
-       
+
         else:
             ks = None
-        
+
         if cont or ks is None:
             try:
                 df_all = pd.read_csv(rxn_data)
@@ -374,11 +382,11 @@ Complete and perfect. All you say is a bunch of lies""")
             dg = df_all.iloc[0].to_numpy()[1:]
             dg = dg.astype(float)
             tags = df_all.columns.values[1:]
-            
+
             clear = check_km_inp(df_all, df_network)
 
             if not (clear):
-                    print("\nRecheck your reaction network and your reaction data\n")
+                print("\nRecheck your reaction network and your reaction data\n")
             else:
                 if verb > 0:
                     print("\nKM input is clear\n")
@@ -412,7 +420,7 @@ Complete and perfect. All you say is a bunch of lies""")
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])
-        
+
         if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
             extracted_columns = df_network[['k_forward', 'k_reverse']]
             df_network.drop(['k_forward', 'k_reverse'], axis=1, inplace=True)
@@ -498,7 +506,8 @@ Complete and perfect. All you say is a bunch of lies""")
         df_network = pd.read_csv(rnx, index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
-
+        cont = False
+        ks = [1]
         if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
             print("""Detect k_forward and k_reverse in the reaction network file,
                   Note that temperature is not considered after this point""")
@@ -508,17 +517,29 @@ Complete and perfect. All you say is a bunch of lies""")
             if use_extracted:
                 ks = extracted_columns.to_numpy()
                 if len(temperatures) > 1:
-                    print("Cannot screen over temperature range when reading k_forward and k_reverse from the reaction network file")
+                    print(
+                        "Cannot screen over temperature range when reading k_forward and k_reverse from the reaction network file")
                     sys.exit()
                 else:
                     return (
-                        None, df_network, None, states, t_finals, [0],
-                        x_scale, more_species_mkm, plot_evo, map_tt, ncore, imputer_strat, verb, ks
-                    )
+                        None,
+                        df_network,
+                        None,
+                        states,
+                        t_finals,
+                        [0],
+                        x_scale,
+                        more_species_mkm,
+                        plot_evo,
+                        map_tt,
+                        ncore,
+                        imputer_strat,
+                        verb,
+                        ks)
             else:
                 ks = None
                 cont = True
-      
+
         else:
             ks = None
 
@@ -539,9 +560,20 @@ Complete and perfect. All you say is a bunch of lies""")
                 print("\nKM input is clear\n")
 
             return (
-                dg, df_network, tags, states, t_finals, temperatures,
-                x_scale, more_species_mkm, plot_evo, map_tt, ncore, imputer_strat, verb, ks
-            )
+                dg,
+                df_network,
+                tags,
+                states,
+                t_finals,
+                temperatures,
+                x_scale,
+                more_species_mkm,
+                plot_evo,
+                map_tt,
+                ncore,
+                imputer_strat,
+                verb,
+                ks)
 
 
 def process_data_mkm(dg: np.ndarray,

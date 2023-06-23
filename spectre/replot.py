@@ -9,7 +9,7 @@ import numpy as np
 from navicat_volcanic.plotting2d import plot_2d
 from scipy.signal import savgol_filter, wiener
 
-from plot_function import plot_2d_combo
+from .plot_function import plot_2d_combo
 
 if __name__ == "__main__":
 
@@ -51,12 +51,12 @@ if __name__ == "__main__":
         help="The order of the polynomial used to fit the sample, required if using savgol. polyorder must be less than window_length.",
     )
     parser.add_argument(
-    "-pm",
-    "-plotmode",
-    dest="plotmode",
-    type=int,
-    default=1,
-    help="Plot mode for volcano and activity map plotting. Higher is more detailed, lower is basic. 3 includes uncertainties. (default: 1)",
+        "-pm",
+        "-plotmode",
+        dest="plotmode",
+        type=int,
+        default=1,
+        help="Plot mode for volcano and activity map plotting. Higher is more detailed, lower is basic. 3 includes uncertainties. (default: 1)",
     )
     parser.add_argument(
         "-s",
@@ -124,17 +124,20 @@ if __name__ == "__main__":
     if np.any(np.max(prod_conc_sm_all) > 10):
         print("Concentration likely reported as %yield")
         ybase = np.round((np.max(prod_conc_sm_all) - 0) / 8)
-        if ybase == 0: ybase = 5
+        if ybase == 0:
+            ybase = 5
         ylabel = "%yield"
     else:
         ybase = np.round((np.max(prod_conc_pt_) - 0) / 8, 1)
-        if ybase == 0: ybase = 0.05
+        if ybase == 0:
+            ybase = 0.05
         ylabel = "Final product concentraion (M)"
-        
+
     xbase = np.round((np.max(descr_all) - np.min(descr_all)) / 8)
-    if xbase == 0: xbase = 5
+    if xbase == 0:
+        xbase = 5
     ci_ = np.full(prod_conc_.shape[0], None)
-    
+
     out = []
     if prod_conc_.shape[0] > 1:
         plot_2d_combo(
@@ -142,7 +145,7 @@ if __name__ == "__main__":
             prod_conc_sm_all,
             descrp_pt,
             prod_conc_pt_,
-            ci=[None]*len(labels),
+            ci=[None] * len(labels),
             rb=cb,
             ms=ms,
             xmin=descr_all[0],

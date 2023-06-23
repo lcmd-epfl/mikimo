@@ -11,11 +11,11 @@ from navicat_volcanic.helpers import bround
 from scipy.integrate import solve_ivp
 from tqdm import tqdm
 
-from helper import preprocess_data_mkm, process_data_mkm
-from kinetic_solver import calc_k, calc_km, system_KE_DE
-from km_volcanic import call_imputter
-from plot_function import (plot_3d_contour_regions_np, plot_3d_np,
-                           plot_evo_save, plot_save_cond)
+from .helper import preprocess_data_mkm, process_data_mkm
+from .kinetic_solver import calc_k, calc_km, system_KE_DE
+from .km_volcanic import call_imputter
+from .plot_function import (plot_3d_contour_regions_np, plot_3d_np,
+                            plot_evo_save, plot_save_cond)
 
 
 def run_mkm_3d(grid: Tuple[np.ndarray, np.ndarray],
@@ -105,7 +105,7 @@ def main():
 
     dg, df_network, tags, states, t_finals, temperatures, x_scale, more_species_mkm, \
         plot_evo, map_tt, ncore, imputer_strat, verb, ks = preprocess_data_mkm(sys.argv[2:], mode="mkm_cond")
-    
+
     idx_target_all = [states.index(i) for i in states if "*" in i]
     prod_name = [s for i, s in enumerate(states) if s.lower().startswith("p")]
     if ks is None:
@@ -118,11 +118,11 @@ def main():
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
+            if last_row_index.lower() in [
+                    'initial_conc', 'c0', 'initial conc']:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
-
 
     if map_tt:
         if verb > 0:

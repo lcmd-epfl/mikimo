@@ -11,7 +11,7 @@ from matplotlib.ticker import FuncFormatter
 from navicat_volcanic.helpers import bround
 from navicat_volcanic.plotting2d import beautify_ax
 
-from helper import yesno
+from .helper import yesno
 
 matplotlib.use("Agg")
 

@@ -11,8 +11,8 @@ from numpy.testing import assert_allclose
 from scipy.constants import R, calorie, h, k, kilo
 from scipy.integrate import solve_ivp
 
-from helper import preprocess_data_mkm, process_data_mkm
-from plot_function import plot_evo_save
+from .helper import preprocess_data_mkm, process_data_mkm
+from .plot_function import plot_evo_save
 
 warnings.filterwarnings("ignore")
 
@@ -299,8 +299,8 @@ def calc_km(energy_profile_all: List,
             report_as_yield: bool,
             quality: int,
             ks=None) -> Tuple[np.ndarray,
-                                       Union[str,
-                                             scipy.integrate._ivp.ivp.OdeResult]]:
+                              Union[str,
+                                    scipy.integrate._ivp.ivp.OdeResult]]:
     """
     Calculate the kinetic model (KM) simulation.
 
@@ -719,18 +719,19 @@ def main():
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in ['initial_conc', 'c0', 'initial conc']:
+            if last_row_index.lower() in [
+                    'initial_conc', 'c0', 'initial conc']:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
-        _, result_solve_ivp = calc_km(None, None, None, rxn_network_all,
-                                    temperature, t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2, ks=ks)
+        _, result_solve_ivp = calc_km(None, None, None, rxn_network_all, temperature, t_span,
+                                      initial_conc, states, timeout=60, report_as_yield=False, quality=2, ks=ks)
     else:
         initial_conc, energy_profile_all, dgr_all, \
             coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
         t_span = (0, t_final)
-        _, result_solve_ivp = calc_km(energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all,
-                                    temperature, t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2, ks=None)
+        _, result_solve_ivp = calc_km(energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all, temperature,
+                                      t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2, ks=None)
 
     states_ = [s.replace("*", "") for s in states]
     plot_evo_save(
