@@ -289,7 +289,7 @@ def process_n_calc_3d_ps(coord: Tuple[int, int],
         return np.array([np.nan] * n_target)
 
 
-def evol_mode(d: List,
+def evol_mode(d: np.ndarray,
               df_network: pd.DataFrame,
               names: List[str],
               tags: List[str],
@@ -308,7 +308,7 @@ def evol_mode(d: List,
     Execute the evolution mode: plotting evolution for all profiles.
 
     Parameters:
-        d: List of profiles.
+        d: Numpy array of profiles.
         df_network: Dataframe containing the reaction network information.
         names (List[str]): List of names of the profiles.
         tags (List[str]): Reaction data column names.
