@@ -413,7 +413,7 @@ In exchange for this seeping pain
 I'll find happiness in abundance""")
 
 
-def get_srps_1d(nd: int,
+def get_srps_1d(
                 d: np.ndarray,
                 tags: List[str],
                 coeff: np.ndarray,
@@ -421,6 +421,7 @@ def get_srps_1d(nd: int,
                 lfesrs_idx: Optional[List[int]],
                 cb: float,
                 ms: float,
+                xbase: float,
                 lmargin: float,
                 rmargin: float,
                 npoints: int,
@@ -437,7 +438,6 @@ def get_srps_1d(nd: int,
     Get the simulated reaction profiles (SRP) in case of 1 descriptor.
 
     Parameters:
-        nd (int): Number of dimensions.
         d (np.ndarray): Input data.
         tags (List[str]): List of tags for the data.
         coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
@@ -445,6 +445,7 @@ def get_srps_1d(nd: int,
         lfesrs_idx (Optional[List[int]]): Indices of manually chosen descriptors for LFESR.
         cb (float): Cutoff value for LFESR regression.
         ms (float): Minimum step for descriptor range.
+        xbase (float): x-axis interval
         lmargin (float): Left margin for descriptor range.
         rmargin (float): Right margin for descriptor range.
         npoints (int): Number of points.
@@ -462,68 +463,67 @@ def get_srps_1d(nd: int,
         - coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
         - idx (int): Index of chosen descriptor.
     """
-    xbase = 20
-    if nd == 1:
-        from navicat_volcanic.plotting2d import get_reg_targets
-        dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
-        if lfesrs_idx:
-            idx = lfesrs_idx[0]
-            if verb > 1:
-                print(f"\n**Manually chose {tags[idx]} as descriptor****\n")
-        else:
-            idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
-        if lfesr:
-            d = plot_2d_lsfer(
-                idx,
-                d,
-                tags,
-                coeff,
-                regress,
-                cb,
-                ms,
-                lmargin,
-                rmargin,
-                npoints,
-                plotmode,
-                verb,
-            )
-            lfesr_csv = [s + ".csv" for s in tags[1:]]
-            all_lfsers = [s + ".png" for s in tags[1:]]
-            all_lfsers.extend(lfesr_csv)
-            if not os.path.isdir("lfesr"):
-                os.makedirs("lfesr")
-            for file_name in all_lfsers:
-                source_file = os.path.abspath(file_name)
-                destination_file = os.path.join(
-                    "lfesr/", os.path.basename(file_name))
-                shutil.move(source_file, destination_file)
-
-        X, tag, tags, d, d2, coeff = get_reg_targets(
-            idx, d, tags, coeff, regress, mode="k")
-
-        lnsteps = range(d.shape[1])
-        xmax = bround(X.max() + rmargin, xbase)
-        xmin = bround(X.min() - lmargin, xbase)
-
+    from navicat_volcanic.plotting2d import get_reg_targets
+    dvs, r2s = find_1_dv(d, tags, coeff, regress, verb)
+    if lfesrs_idx:
+        idx = lfesrs_idx[0]
         if verb > 1:
-            print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
-        xint = np.linspace(xmin, xmax, npoints)
-        dgs = np.zeros((npoints, len(lnsteps)))
-        sigma_dgs = np.zeros((npoints, len(lnsteps)))
-        for i, j in enumerate(lnsteps):
-            Y = d[:, j].reshape(-1)
-            p, cov = np.polyfit(X, Y, 1, cov=True)
-            Y_pred = np.polyval(p, X)
-            n = Y.size
-            m = p.size
-            dof = n - m
-            resid = Y - Y_pred
-            with np.errstate(invalid="ignore"):
-                chi2 = np.sum((resid / Y_pred) ** 2)
-            yint = np.polyval(p, xint)
-            ci = calc_ci(resid, n, dof, X, xint, yint)
-            dgs[:, i] = yint
-            sigma_dgs[:, i] = ci
+            print(f"\n**Manually chose {tags[idx]} as descriptor****\n")
+    else:
+        idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
+    if lfesr:
+        d = plot_2d_lsfer(
+            idx,
+            d,
+            tags,
+            coeff,
+            regress,
+            cb,
+            ms,
+            lmargin,
+            rmargin,
+            npoints,
+            plotmode,
+            verb,
+        )
+        #TODO, not sure when, if at all, plot_2d_lsfer outout the csv files too
+        lfesr_csv = [s + ".csv" for s in tags[1:]]
+        all_lfsers = [s + ".png" for s in tags[1:]]
+        all_lfsers.extend(lfesr_csv)
+        if not os.path.isdir("lfesr"):
+            os.makedirs("lfesr")
+        for file_name in all_lfsers:
+            source_file = os.path.abspath(file_name)
+            destination_file = os.path.join(
+                "lfesr/", os.path.basename(file_name))
+            shutil.move(source_file, destination_file)
+
+    X, tag, tags, d, d2, coeff = get_reg_targets(
+        idx, d, tags, coeff, regress, mode="k")
+
+    lnsteps = range(d.shape[1])
+    xmax = bround(X.max() + rmargin, xbase)
+    xmin = bround(X.min() - lmargin, xbase)
+
+    if verb > 1:
+        print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
+    xint = np.linspace(xmin, xmax, npoints)
+    dgs = np.zeros((npoints, len(lnsteps)))
+    sigma_dgs = np.zeros((npoints, len(lnsteps)))
+    for i, j in enumerate(lnsteps):
+        Y = d[:, j].reshape(-1)
+        p, cov = np.polyfit(X, Y, 1, cov=True)
+        Y_pred = np.polyval(p, X)
+        n = Y.size
+        m = p.size
+        dof = n - m
+        resid = Y - Y_pred
+        with np.errstate(invalid="ignore"):
+            chi2 = np.sum((resid / Y_pred) ** 2)
+        yint = np.polyval(p, xint)
+        ci = calc_ci(resid, n, dof, X, xint, yint)
+        dgs[:, i] = yint
+        sigma_dgs[:, i] = ci
 
     return dgs, d, sigma_dgs, X, xint, xmax, xmin, tag, tags, coeff, idx
 
@@ -619,7 +619,7 @@ def get_srps_2d(
 def main():
 
     # %% loading and processing------------------------------------------------------------------------#
-    df, df_network, tags, states, n_target, lmargin, rmargin, \
+    df, df_network, tags, states, n_target, xbase, lmargin, rmargin, \
         verb, wdir, imputer_strat, report_as_yield, timeout, quality, p_quality, \
         plotmode, more_species_mkm, lfesr, x_scale, comp_ci, ncore, nd, lfesrs_idx, \
         times, temperatures = preprocess_data_mkm(sys.argv[2:], mode="mkm_screening")
@@ -762,7 +762,7 @@ def main():
 
     elif nd == 1:
         dgs, d, sigma_dgs, X, xint, xmax, xmin, tag, tags, coeff, idx = get_srps_1d(
-            nd, d, tags, coeff, regress, lfesrs_idx, cb, ms, lmargin, rmargin, npoints, plotmode, lfesr, verb)
+            d, tags, coeff, regress, lfesrs_idx, cb, ms, xbase, lmargin, rmargin, npoints, plotmode, lfesr, verb)
         # TODO For some reason, sometimes the volcanic drops the last state
         # Kinda adhoc fix for now
         tags_ = np.array([str(t) for t in df.columns[1:]], dtype=object)

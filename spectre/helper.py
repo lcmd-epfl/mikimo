@@ -169,6 +169,14 @@ Complete and perfect. All you say is a bunch of lies""")
         help="Temperature in K. (default: 298.15)",
     )
     parser.add_argument(
+        "-xbase",
+        "--xbase",
+        dest="xbase",
+        type=float,
+        default=20,
+        help="Interval for the x-axis (default: 20)",
+    )
+    parser.add_argument(
         "-lm",
         "--lm",
         dest="lmargin",
@@ -396,6 +404,7 @@ Complete and perfect. All you say is a bunch of lies""")
     elif mode == "mkm_screening":
         lmargin = args.lmargin
         rmargin = args.rmargin
+        xbase = args.xbase
         verb = args.verb
         wdir = args.dir
         imputer_strat = args.imputer_strat
@@ -452,6 +461,7 @@ Complete and perfect. All you say is a bunch of lies""")
             tags,
             states,
             n_target,
+            xbase,
             lmargin,
             rmargin,
             verb,

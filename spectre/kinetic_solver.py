@@ -324,9 +324,10 @@ def calc_km(energy_profile_all: List,
             and the second element is either a string indicating failure or the result of the simulation.
     """
     idx_target_all = [states.index(i) for i in states if "*" in i]
+    
+    #TODO, k_f and k_r concatenated
     if ks is not None:
-        k_forward_all = ks[:, 0]
-        k_reverse_all = ks[:, 1]
+        k_forward_all, k_reverse_all = np.split(ks,2)
     else:
         k_forward_all, k_reverse_all = calc_k(
             energy_profile_all,
