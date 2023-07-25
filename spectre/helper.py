@@ -22,6 +22,9 @@ def yesno(question):
 
 
 def check_existence(wdir, verb):
+
+    kinetic_mode = False
+
     rows_to_search = ["c0", "initial_conc", "initial conc"]
     columns_to_search = ["k_forward", "k_reverse"]
     if os.path.exists(f"{wdir}rxn_network.csv"):
@@ -58,18 +61,25 @@ def check_existence(wdir, verb):
             logging.critical(
                 "reaction_data file not found and rate constants are not provided")
 
+    if os.path.exists(f"{wdir}kinetic_data.csv") or os.path.exists(
+            f"{wdir}kinetic_data.xlsx"):
+        kinetic_mode = yesno(
+            "kinetic_profile.csv exists, toggle to kinetic mode?")
 
-def check_km_inp(df, df_network):
+    return kinetic_mode
+
+
+def check_km_inp(df, df_network, mode="energy"):
     """
-    Checks the validity of inputs for kinetic modeling.
+    Check the validity of input data for kinetic or energy mode.
 
-    Args:
-        df (pandas.DataFrame): Dataframe containing reaction data.
-        df_network (pandas.DataFrame): Dataframe containing network information.
-        c0 (Optional): Initial conditions. Defaults to None.
+    Parameters:
+        df (pd.DataFrame): Dataframe containing the reaction data.
+        df_network (pd.DataFrame): Dataframe containing the reaction network information.
+        mode (str, optional): Mode of the input, either "energy" or "kinetic". Default is "energy".
 
     Returns:
-        bool: True if all input checks pass, False otherwise.
+        bool: True if the input data is valid, False otherwise.
     """
 
     # extract initial conditions
@@ -94,15 +104,22 @@ def check_km_inp(df, df_network):
         states_network) if s.lower().startswith("r")])
 
     clear = True
-    # all INT names in nx are the same as in the profile
-    for state in states_network_int:
-        if state in states_profile:
-            pass
-        else:
+
+    if mode == "energy":
+        # all INT names in nx are the same as in the profile
+        for state in states_network_int:
+            if state in states_profile:
+                pass
+            else:
+                clear = False
+                logging.warning(
+                    f"""\n{state} cannot be found in the reaction data, if it is in different name,
+                    change it to be the same in both reaction data and the network""")
+    elif mode == "kinetic":
+        if int((df.shape[1] - 1) / 2) != df_network.shape[0]:
             clear = False
-            logging.warning(
-                f"""\n{state} cannot be found in the reaction data, if it is in different name,
-                change it to be the same in both reaction data and the network""")
+            logging.critical(
+                "Number of rate constants in the profile doesn't match with number of steps in the network input")
 
     # initial conc
     if len(states_network) != len(initial_conc):
@@ -328,10 +345,6 @@ Complete and perfect. All you say is a bunch of lies""")
         wdir = args.dir
         x_scale = args.xscale
         more_species_mkm = args.addition
-        check_existence(wdir, verb=verb)
-
-        rxn_data = f"{wdir}/reaction_data.csv"
-        rnx = f"{wdir}/rxn_network.csv"
 
         t_finals = args.time
         temperatures = args.temp
@@ -358,40 +371,37 @@ Complete and perfect. All you say is a bunch of lies""")
                 print("temperature is a range, use the first value")
             temperatures = temperatures[0]
 
+        rnx = f"{wdir}/rxn_network.csv"
         df_network = pd.read_csv(rnx, index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
 
-        cont = False
-        ks = [1]
-        if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
-            print("""Detect k_forward and k_reverse in the reaction network file,
-                  Note that temperature is not considered after this point""")
-            extracted_columns = df_network[['k_forward', 'k_reverse']]
-            df_network.drop(['k_forward', 'k_reverse'], axis=1, inplace=True)
-            use_extracted = yesno("Use the extracted k_forward and k_reverse?")
-            if use_extracted:
-                ks = extracted_columns.to_numpy()
-                return None, df_network, None, states, t_finals, temperatures, \
-                    x_scale, more_species_mkm, wdir, ks
-            else:
-                ks = None
-                cont = True
-
-        else:
-            ks = None
-
-        if cont or ks is None:
+        kinetic_mode = check_existence(wdir, verb)
+        ks = None
+        if kinetic_mode:
+            filename_xlsx = f"{wdir}kinetic_data.xlsx"
+            filename_csv = f"{wdir}kinetic_data.csv"
             try:
-                df_all = pd.read_csv(rxn_data)
-            except Exception as e:
-                rxn_data = rxn_data.replace(".csv", ".xlsx")
-                df_all = pd.read_excel(rxn_data)
-            dg = df_all.iloc[0].to_numpy()[1:]
-            dg = dg.astype(float)
-            tags = df_all.columns.values[1:]
+                df = pd.read_excel(filename_xlsx)
+            except FileNotFoundError as e:
+                df = pd.read_csv(filename_csv)
+            clear = check_km_inp(df, df_network, mode="kinetic")
+            ks = df.iloc[1].to_numpy()[1:].astype(np.float64)
+            return None, df_network, None, states, t_finals, temperatures, \
+                x_scale, more_species_mkm, wdir, ks
+        else:
+            filename_xlsx = f"{wdir}reaction_data.xlsx"
+            filename_csv = f"{wdir}reaction_data.csv"
+            try:
+                df = pd.read_excel(filename_xlsx)
+            except FileNotFoundError as e:
+                df = pd.read_csv(filename_csv)
 
-            clear = check_km_inp(df_all, df_network)
+            dg = df.iloc[0].to_numpy()[1:]
+            dg = dg.astype(float)
+            tags = df.columns.values[1:]
+
+            clear = check_km_inp(df, df_network)
 
             if not (clear):
                 print("\nRecheck your reaction network and your reaction data\n")
@@ -423,30 +433,35 @@ Complete and perfect. All you say is a bunch of lies""")
         times = args.time
         temperatures = args.temp
 
-        filename_xlsx = f"{wdir}reaction_data.xlsx"
-        filename_csv = f"{wdir}reaction_data.csv"
         df_network = pd.read_csv(f"{wdir}rxn_network.csv", index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])
 
-        if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
-            extracted_columns = df_network[['k_forward', 'k_reverse']]
-            df_network.drop(['k_forward', 'k_reverse'], axis=1, inplace=True)
-        try:
-            df = pd.read_excel(filename_xlsx)
-        except FileNotFoundError as e:
-            df = pd.read_csv(filename_csv)
-        tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
-
-        clear = check_km_inp(df, df_network)
-
-        if not (clear):
-            print("\nRecheck your reaction network and your reaction data\n")
+        kinetic_mode = check_existence(wdir, verb)
+        if kinetic_mode:
+            filename_xlsx = f"{wdir}kinetic_data.xlsx"
+            filename_csv = f"{wdir}kinetic_data.csv"
+            try:
+                df = pd.read_excel(filename_xlsx)
+            except FileNotFoundError as e:
+                df = pd.read_csv(filename_csv)
+            clear = check_km_inp(df, df_network, mode="kinetic")
         else:
-            if verb > 0:
-                print("\nKM input is clear\n")
+            filename_xlsx = f"{wdir}reaction_data.xlsx"
+            filename_csv = f"{wdir}reaction_data.csv"
+            try:
+                df = pd.read_excel(filename_xlsx)
+            except FileNotFoundError as e:
+                df = pd.read_csv(filename_csv)
+            clear = check_km_inp(df, df_network)
+            if not (clear):
+                print("\nRecheck your reaction network and your reaction data\n")
+            else:
+                if verb > 0:
+                    print("\nKM input is clear\n")
 
+        tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if ncore == -1:
             ncore = multiprocessing.cpu_count()
         if verb > 2:
@@ -480,7 +495,8 @@ Complete and perfect. All you say is a bunch of lies""")
             nd,
             lfesrs_idx,
             times,
-            temperatures)
+            temperatures,
+            kinetic_mode)
 
     elif mode == "mkm_cond":
         wdir = args.dir
@@ -491,10 +507,6 @@ Complete and perfect. All you say is a bunch of lies""")
         more_species_mkm = args.addition
         imputer_strat = args.imputer_strat
         verb = args.verb
-        check_existence(wdir, verb=verb)
-
-        rxn_data = f"{wdir}/reaction_data.csv"
-        rnx = f"{wdir}/rxn_network.csv"
 
         t_finals = args.time
         temperatures = args.temp
@@ -513,62 +525,56 @@ Complete and perfect. All you say is a bunch of lies""")
         elif len(temperatures) > 1:
             temperatures = temperatures
 
+        kinetic_mode = check_existence(wdir, verb)
+        rnx = f"{wdir}/rxn_network.csv"
         df_network = pd.read_csv(rnx, index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
-        cont = False
-        ks = [1]
-        if 'k_forward' in df_network.columns and 'k_reverse' in df_network.columns:
-            print("""Detect k_forward and k_reverse in the reaction network file,
-                  Note that temperature is not considered after this point""")
-            extracted_columns = df_network[['k_forward', 'k_reverse']]
-            df_network.drop(['k_forward', 'k_reverse'], axis=1, inplace=True)
-            use_extracted = yesno("Use the extracted k_forward and k_reverse?")
-            if use_extracted:
-                ks = extracted_columns.to_numpy()
-                if len(temperatures) > 1:
-                    print(
-                        "Cannot screen over temperature range when reading k_forward and k_reverse from the reaction network file")
-                    sys.exit()
-                else:
-                    return (
-                        None,
-                        df_network,
-                        None,
-                        states,
-                        t_finals,
-                        [0],
-                        x_scale,
-                        more_species_mkm,
-                        plot_evo,
-                        map_tt,
-                        ncore,
-                        imputer_strat,
-                        verb,
-                        ks)
-            else:
-                ks = None
-                cont = True
 
-        else:
-            ks = None
-
-        if cont or ks is None:
+        ks = None
+        if kinetic_mode:
+            filename_xlsx = f"{wdir}kinetic_data.xlsx"
+            filename_csv = f"{wdir}kinetic_data.csv"
             try:
-                df_all = pd.read_csv(rxn_data)
-            except Exception as e:
-                rxn_data = rxn_data.replace(".csv", ".xlsx")
-                df_all = pd.read_excel(rxn_data)
-            dg = df_all.iloc[0].to_numpy()[1:]
+                df = pd.read_excel(filename_xlsx)
+            except FileNotFoundError as e:
+                df = pd.read_csv(filename_csv)
+
+            clear = check_km_inp(df, df_network, mode="kinetic")
+            ks = df.iloc[1].to_numpy()[1:].astype(np.float64)
+            return (
+                None,
+                df_network,
+                None,
+                states,
+                t_finals,
+                [0],
+                x_scale,
+                more_species_mkm,
+                plot_evo,
+                map_tt,
+                ncore,
+                imputer_strat,
+                verb,
+                ks)
+        else:
+            filename_xlsx = f"{wdir}reaction_data.xlsx"
+            filename_csv = f"{wdir}reaction_data.csv"
+            try:
+                df = pd.read_excel(filename_xlsx)
+            except FileNotFoundError as e:
+                df = pd.read_csv(filename_csv)
+            dg = df.iloc[0].to_numpy()[1:]
             dg = dg.astype(float)
-            tags = df_all.columns.values[1:]
-            clear = check_km_inp(df_all, df_network)
+            tags = df.columns.values[1:]
+
+            clear = check_km_inp(df, df_network)
 
             if not (clear):
                 print("\nRecheck your reaction network and your reaction data\n")
             else:
-                print("\nKM input is clear\n")
-
+                if verb > 0:
+                    print("\nKM input is clear\n")
             return (
                 dg,
                 df_network,
