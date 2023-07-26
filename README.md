@@ -62,6 +62,7 @@ The user requires three essential inputs for the analysis: energy data, reaction
 
 - energy data: reaction_data (in csv or xlsx)
 - reaction network: rxn_network (in csv or xlsx)
+- (optional) kinetic data: kinetic_data (in csv or xlsx)
 
 The reaction network should be presented as a CSV or XLSX file named "rxn_network". Each row in the network represents an elementary step, while the columns represent the chemical species involved in the mechanism, excluding transition states. When filling in the reaction network, it is crucial to ensure that the species names match those in the energy data.
 
@@ -142,6 +143,8 @@ python replot.py examples/data/data.h5 -p 3 3 3 -w 20 20 20
 
 You can also find examples of reading h5 files and regenerating plots in the "examples" folder.
 
+If the kinetic profile is detected in the directory, the code will prompt the user with an option to choose between using the kinetic profile instead of the energy profile. However, it's important to note that selecting the kinetic profile will restrict the user from screening over a range of temperatures or utilizing different temperature settings. 
+
 ## Known Limitation [↑](#limitation)
 
 1. The overlapping states of different pathways after they converge before the referenece state (starting point).
@@ -150,7 +153,7 @@ You can also find examples of reading h5 files and regenerating plots in the "ex
 
 3. Different TSs connecting the same 2 intermediates: just choose the lowest one
 
-To address these limitations, the code provides the option to specify rate constants explicitly in the rxn_network, using the "k_forward" column for forward rate constants and "k_reverse" for reverse rate constants. However, when rate constants are explicitly specified, the temperature effect cannot be taken into consideration.
+To overcome these limitations and offer more flexibility, users have the option to input a kinetic profile named "kinetic_profile" in either CSV or XLSX format, replacing the conventional energy profile. However, this choice comes with the trade-off of disabling the ability to screen over a range of temperatures or use different temperature settings.
 
 ## Citation [↑](#citation)
 
