@@ -25,7 +25,7 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from tqdm import tqdm
 
-import .km_k_volcanic
+from . import km_k_volcanic
 from .helper import check_km_inp, preprocess_data_mkm, process_data_mkm, yesno
 from .kinetic_solver import calc_km
 from .plot_function import (
