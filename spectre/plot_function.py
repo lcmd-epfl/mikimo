@@ -531,7 +531,7 @@ def plot_3d_(
         grid,
         levels=levels,
         norm=norm,
-        cmap=cm.get_cmap("jet", len(levels)),
+        cmap=cm.get_cmap("seismic", len(levels)),
     )
 
     # Labels and key
@@ -594,7 +594,7 @@ def plot_3d_np(
         grid,
         levels=levels,
         norm=norm,
-        cmap=cm.get_cmap("jet", len(levels)),
+        cmap=cm.get_cmap("seismic", len(levels)),
     )
 
     # Labels and key
