@@ -236,6 +236,7 @@ def main():
             x2label=x2label,
             ylabel=alabel,
             filename=afilename,
+            cmap="jet",
         )
 
         prod = [p for p in states if "*" in p]

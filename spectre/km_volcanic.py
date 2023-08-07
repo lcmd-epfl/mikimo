@@ -912,6 +912,7 @@ def main():
                 x2label,
                 ylabel=alabel,
                 filename=afilename,
+                cmap="jet",
             )
             prod = [p for p in states if "*" in p]
             prod = [s.replace("*", "") for s in prod]
@@ -1370,6 +1371,7 @@ def main():
             filename=afilename,
             cb=cb,
             ms=ms,
+            cmap="jet",
         )
         if verb > 2:
             with h5py.File('data_a.h5', 'w') as f:

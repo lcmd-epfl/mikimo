@@ -75,7 +75,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     for n, i in enumerate(r_indices):
         ax.plot(t,
                 result_solve_ivp.y[i, :],
-                linestyle="--",
+                linestyle="-",
                 c=color_R[n],
                 linewidth=2,
                 alpha=0.85,
@@ -96,7 +96,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     for n, i in enumerate(p_indices):
         ax.plot(t,
                 result_solve_ivp.y[i, :],
-                linestyle="dashdot",
+                linestyle="-",
                 c=color_P[n],
                 linewidth=2,
                 alpha=0.85,
@@ -124,10 +124,10 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
 
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible
+    
     plt.xlabel(xlabel)
     plt.ylabel('Concentration [mol/l]')
-    plt.legend(frameon=False)
-    plt.grid(True, linestyle='--', linewidth=0.75)
+    plt.legend()
     plt.tight_layout()
 
     ymin, ymax = ax.get_ylim()
@@ -514,6 +514,7 @@ def plot_3d_(
     filename="plot.png",
     cb="white",
     ms="o",
+    cmap="seismic",
 ):
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
@@ -531,7 +532,7 @@ def plot_3d_(
         grid,
         levels=levels,
         norm=norm,
-        cmap=cm.get_cmap("seismic", len(levels)),
+        cmap=cm.get_cmap(cmap, len(levels)),
     )
 
     # Labels and key
@@ -544,7 +545,7 @@ def plot_3d_(
 
     def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
-    cbar.set_label(ylabel, labelpad=15, rotation=270)
+    cbar.set_label(ylabel, labelpad=3)
     tick_labels = ['{:.2f}'.format(value) for value in levels]
     cbar.set_ticklabels(tick_labels)
 
@@ -577,6 +578,7 @@ def plot_3d_np(
     x2label="X2-axis",
     ylabel="Y-axis",
     filename="plot.png",
+    cmap="seismic", 
 ):
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
@@ -594,7 +596,7 @@ def plot_3d_np(
         grid,
         levels=levels,
         norm=norm,
-        cmap=cm.get_cmap("seismic", len(levels)),
+        cmap=cm.get_cmap(cmap, len(levels)),
     )
 
     # Labels and key
@@ -607,7 +609,7 @@ def plot_3d_np(
 
     def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
-    cbar.set_label(ylabel, labelpad=15, rotation=270)
+    cbar.set_label(ylabel, labelpad=3)
     tick_labels = ['{:.2f}'.format(value) for value in levels]
     cbar.set_ticklabels(tick_labels)
 
@@ -655,7 +657,7 @@ def plot_3d_contour_regions_np(
     def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_ticks([])
-    cbar.set_label(ylabel, labelpad=40, rotation=270)
+    cbar.set_label(ylabel, labelpad=3)
     for j, tlab in enumerate(id_labels):
         cbar.ax.text(
             2,
@@ -665,7 +667,7 @@ def plot_3d_contour_regions_np(
             va="center",
             weight="light",
             fontsize=8,
-            rotation=-90,
+            rotation=90,
         )
-        cbar.ax.get_yaxis().labelpad = 30
+        cbar.ax.get_yaxis().labelpad = 20
     plt.savefig(filename)
