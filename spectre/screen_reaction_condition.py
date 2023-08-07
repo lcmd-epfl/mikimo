@@ -203,7 +203,7 @@ def main():
             group.create_dataset('agrid', data=grid_d_fill)
 
         x1label = "Temperatures [K]"
-        x2label = "log10(Time) [s]"
+        x2label = "log$_{10}$(Time) [s]"
 
         alabel = "Total product concentration [M]"
         afilename = f"Tt_activity_map.png"
