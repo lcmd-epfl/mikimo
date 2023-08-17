@@ -162,7 +162,7 @@ Complete and perfect. All you say is a bunch of lies""")
         "--d",
         "--dir",
         dest="dir",
-        help="directory containing all required input files (reaction_data, rxn_network in csv or xlsx format)",
+        help="Directory containing all required input files (reaction_data, rxn_network in csv or xlsx format)",
     )
 
     parser.add_argument(
@@ -173,7 +173,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="time",
         type=float,
         nargs='+',
-        help="Total reaction time (s) (default=1d",
+        help="Total reaction time (s) (default: 1 day)",
     )
     parser.add_argument(
         "-t",
@@ -183,7 +183,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="temp",
         type=float,
         nargs='+',
-        help="Temperature in K. (default: 298.15)",
+        help="Temperature in K. (default: 298.15 K)",
     )
     parser.add_argument(
         "-xbase",
@@ -214,7 +214,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="idx",
         type=int,
         nargs='+',
-        help="Manually specify the index of descriptor varaible in LFESEs. (default: None)",
+        help="Manually specify the index of descriptor for establishing LFESRs. (default: None)",
     )
     parser.add_argument(
         "-p",
@@ -231,7 +231,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="plotmode",
         type=int,
         default=1,
-        help="Plot mode for volcano and activity map plotting. Higher is more detailed, lower is basic. 3 includes uncertainties. (default: 1)",
+        help="Plot mode for volcano and activity map plotting. Higher is more detailed, lower is basic. (default: 1)",
     )
     parser.add_argument(
         "-is",
@@ -239,7 +239,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="imputer_strat",
         type=str,
         default="knn",
-        help="Imputter to refill missing datapoints. Beta version. (default: knn) (simple, knn, iterative, None)",
+        help="Imputter to refill missing datapoints. (default: knn) (simple, knn, iterative, None)",
     )
     parser.add_argument(
         "-ci",
@@ -260,7 +260,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="timeout",
         type=int,
         default=60,
-        help="""Timeout for each integration run (default = 60 s). Increase timeout if your mechanism seems complicated or multiple chemical species involved in your mechanism (default: 60)""",
+        help="""Timeout for each integration run (default = 60 s). """,
     )
     parser.add_argument(
         "-iq",
@@ -268,7 +268,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="int_quality",
         type=int,
         default=1,
-        help="""integration quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
+        help="""Integration quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
     )
     parser.add_argument(
         "-pq",
@@ -276,7 +276,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="plot_quality",
         type=int,
         default=1,
-        help="""plot quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
+        help="""Plot quality (0-2) (default: 1)""",
     )
     parser.add_argument(
         "-nd",
@@ -285,9 +285,9 @@ Complete and perfect. All you say is a bunch of lies""")
         type=int,
         default=1,
         help="""run mode (default: 1)
-        0: run mkm for every profiles
-        1: construct MKM volcano plot
-        2: construct MKM activity/selectivity map
+0: run mkm for every profiles
+1: construct MKM volcano plot
+2: construct MKM activity/selectivity map
         """,
     )
     parser.add_argument(
@@ -296,7 +296,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="xscale",
         type=str,
         default="ls",
-        help="time scale for evo mode (ls (log10(s)), s, lmin, min, h, day) (default=ls)",
+        help="Time scale in the evolution plot (ls (log10(s)), s, lmin, min, h, day) (default=ls)",
     )
     parser.add_argument(
         "-a",
@@ -304,7 +304,7 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="addition",
         type=int,
         nargs='+',
-        help="Index of additional species to be included in the mkm plot",
+        help="Index of additional species to be included in the evolution plot",
     )
     parser.add_argument(
         "-v",
@@ -321,22 +321,22 @@ Complete and perfect. All you say is a bunch of lies""")
         dest="ncore",
         type=int,
         default=1,
-        help="number of cpu cores for the parallel computing (default: 1)",
+        help="Number of cpu cores for the parallel computing (default: 1)",
     )
     parser.add_argument(
         "-ev",
         "--ev",
         dest="plot_evo",
         action="store_true",
-        help="""Toggle to plot evolution as well. (default: False)""",
+        help="Toggle to plot evolution plots. (default: False)",
     )
     parser.add_argument(
         "-tt",
         dest="map",
         action="store_true",
         help="""Toggle to construct time-temperature map
-        Require input of temperature range (-t temperature_1 temperature_2) and
-        time (-T time_1 time_2) range in K and s respectively. (default: False)""",
+Require input of temperature range (-t temperature_1 temperature_2) and
+time (-T time_1 time_2) range in K and s respectively. (default: False)""",
     )
 
     args = parser.parse_args(arguments)
@@ -351,7 +351,7 @@ Complete and perfect. All you say is a bunch of lies""")
 
         if t_finals is None:
             if verb > 0:
-                print("No time input, use the default value 54800 s (1d)")
+                print("No time input, use the default value of 54800 s (1d)")
             t_finals = 54800
         elif len(t_finals) == 1:
             t_finals = t_finals[0]
@@ -362,7 +362,7 @@ Complete and perfect. All you say is a bunch of lies""")
 
         if temperatures is None:
             if verb > 0:
-                print("No temperature input, use the default value 298.15 K")
+                print("No temperature input, use the default value of 298.15 K")
             temperatures = 298.15
         elif len(temperatures) == 1:
             temperatures = temperatures[0]
@@ -459,7 +459,7 @@ Complete and perfect. All you say is a bunch of lies""")
                 print("\nRecheck your reaction network and your reaction data\n")
             else:
                 if verb > 0:
-                    print("\nKM input is clear\n")
+                    print("\nKM inputs are clear\n")
 
         tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if ncore == -1:
@@ -574,7 +574,7 @@ Complete and perfect. All you say is a bunch of lies""")
                 print("\nRecheck your reaction network and your reaction data\n")
             else:
                 if verb > 0:
-                    print("\nKM input is clear\n")
+                    print("\nKM inputs are clear\n")
             return (
                 dg,
                 df_network,

@@ -1216,10 +1216,10 @@ def main(
                     pass
 
             print("""\nI won't pray anymore
-    The kindness that rained on this city
-    I won't rely on it anymore
-    My pain and my shape
-    No one else can decide it\n""")
+The kindness that rained on this city
+I won't rely on it anymore
+My pain and my shape
+No one else can decide it\n""")
 
     elif nd == 2:
         sys.exit("Unavaiable for now")
@@ -1462,4 +1462,4 @@ That utopia of endless happiness
 I don't care if I never reach any of those
 I don't need anything else but I\n""")
 
-# %%
+

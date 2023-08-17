@@ -695,7 +695,7 @@ def main():
         if verb > 1:
             print(
                 """Building actvity/selectivity map with time as the second variable,
-                  Force nd = 1""")
+Force nd = 1""")
 
     if temperatures is None:
         temperature = 298.15
@@ -717,7 +717,7 @@ def main():
         if verb > 1:
             print(
                 """Building actvity/selectivity map with temperature as the second variable,
-                  Force nd = 1""")
+Force nd = 1""")
 
     if ncore == -1:
         ncore = multiprocessing.cpu_count()
@@ -792,7 +792,7 @@ def main():
         # Kinda adhoc fix for now
         tags_ = np.array([str(t) for t in df.columns[1:]], dtype=object)
         if tags_[-1] not in tags and tags_[-1].lower().startswith("p"):
-            print("\n***Forgot the last state******\n")
+            #print("\n***Forgot the last state******\n")
             d_ = np.float32(df.to_numpy()[:, 1:])
 
             dgs = np.column_stack((dgs, np.full((npoints, 1), d_[-1, -1])))
@@ -1247,10 +1247,10 @@ def main():
                     pass
 
             print("""\nI won't pray anymore
-    The kindness that rained on this city
-    I won't rely on it anymore
-    My pain and my shape
-    No one else can decide it\n""")
+The kindness that rained on this city
+I won't rely on it anymore
+My pain and my shape
+No one else can decide it\n""")
 
     elif nd == 2:
         d, grids, xint, yint, X1, X2, x1max, x2max, x1min, x2max,\
