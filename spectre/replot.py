@@ -194,25 +194,25 @@ if __name__ == "__main__":
             plotmode=plotmode)
         out.append(f"km_volcano_{tag}_polished.png")
 
-        if save:
-            # create an HDF5 file
-            cb = np.array(cb, dtype='S')
-            ms = np.array(ms, dtype='S')
-            with h5py.File('data_polished.h5', 'w') as f:
-                group = f.create_group('data')
-                # save each numpy array as a dataset in the group
+    if save:
+        # create an HDF5 file
+        cb = np.array(cb, dtype='S')
+        ms = np.array(ms, dtype='S')
+        with h5py.File('data_polished.h5', 'w') as f:
+            group = f.create_group('data')
+            # save each numpy array as a dataset in the group
 
-                group.create_dataset('descr_all', data=descr_all)
-                group.create_dataset('prod_conc_', data=prod_conc_)
-                group.create_dataset('descrp_pt', data=descrp_pt)
-                group.create_dataset('prod_conc_pt_', data=prod_conc_sm_all)
-                group.create_dataset('prod_conc_sm', data=prod_conc_sm)
-                group.create_dataset('cb', data=cb)
-                group.create_dataset('ms', data=ms)
-                group.create_dataset('tag', data=[tag.encode()])
-                group.create_dataset('xlabel', data=[xlabel.encode()])
-                group.create_dataset('ylabel', data=[ylabel.encode()])
-            out.append('data_polished.h5')
+            group.create_dataset('descr_all', data=descr_all)
+            group.create_dataset('prod_conc_', data=prod_conc_)
+            group.create_dataset('descrp_pt', data=descrp_pt)
+            group.create_dataset('prod_conc_pt_', data=prod_conc_sm_all)
+            group.create_dataset('prod_conc_sm', data=prod_conc_sm)
+            group.create_dataset('cb', data=cb)
+            group.create_dataset('ms', data=ms)
+            group.create_dataset('tag', data=[tag.encode()])
+            group.create_dataset('xlabel', data=[xlabel.encode()])
+            group.create_dataset('ylabel', data=[ylabel.encode()])
+        out.append('data_polished.h5')
 
     aktun = filename.split("/")
     if aktun[0] != filename:
