@@ -1,6 +1,8 @@
-# Spectre: micorkinetic modeling for homogeneous reaction and its integraton with volcannic from Navicat platform
+# mikimo: micorkinetic modeling for homogeneous reaction and its integraton with volcannic from Navicat platform
 
-![workflow](./images/mkm_vp.png)
+!!I will move the code to the LCMD repo soon.!!
+
+![workflow](./images/logo.png)
 
 <details>
     <summary style="cursor: pointer;">
