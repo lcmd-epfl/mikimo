@@ -15,7 +15,6 @@ from .helper import yesno
 
 matplotlib.use("Agg")
 
-
 def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     """"used in km_volcanic, mode0"""
 
@@ -488,9 +487,9 @@ def plot_2d_combo(
     ymin, ymax = ax.get_ylim()
     ymax = bround(ymax, ybase, type="max")
     ymin = bround(ymin, ybase, type="min")
-    plt.ylim(ymin, ymax)
-    plt.yticks(np.arange(ymin, ymax + 0.1, ybase))
-    plt.legend(fontsize=10, loc='best')
+    plt.ylim(0, ymax)
+    plt.yticks(np.arange(0, ymax + 0.1, ybase))
+    plt.legend(fontsize=10, loc="upper right", frameon=False, borderpad=0)
     plt.savefig(filename)
 
 
@@ -536,17 +535,23 @@ def plot_3d_(
     )
 
     # Labels and key
+    xticks = np.arange(x1min, x1max + 0.1, x1base)
+    yticks = np.arange(x2min, x2max + 0.1, x2base)
     plt.xlabel(x1label)
     plt.ylabel(x2label)
-    plt.xlim(x1min, x1max)
-    plt.ylim(x2max, x2min)
+    plt.xlim(np.min(xticks), np.max(xticks))
+    plt.ylim(np.min(yticks), np.max(yticks))
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
 
     def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=3)
-    tick_labels = ['{:.2f}'.format(value) for value in levels]
+    # tick_labels = ['{:.2f}'.format(value) for value in levels]
+    tick_positions = np.arange(ymin, ymax+0.1, increment)
+    tick_labels = [f'{abs(value):.1f}' for value in tick_positions]
+
+    cbar.set_ticks(tick_positions)
     cbar.set_ticklabels(tick_labels)
 
     for i in range(len(px)):
@@ -600,17 +605,23 @@ def plot_3d_np(
     )
 
     # Labels and key
+    xticks = np.arange(x1min, x1max + 0.1, x1base)
+    yticks = np.arange(x2min, x2max + 0.1, x2base)
     plt.xlabel(x1label)
     plt.ylabel(x2label)
-    plt.xlim(x1min, x1max)
-    plt.ylim(x2min, x2max)
-    plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
-    plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
+    plt.xlim(np.min(xticks), np.max(xticks))
+    plt.ylim(np.min(yticks), np.max(yticks))
+    plt.xticks(xticks)
+    plt.yticks(yticks)
 
     def fmt(x, pos): return "%.0f" % x
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=3)
-    tick_labels = ['{:.2f}'.format(value) for value in levels]
+    # tick_labels = ['{:.2f}'.format(value) for value in levels]
+    tick_positions = np.arange(ymin, ymax+0.1, increment)
+    tick_labels = [f'{abs(value):.1f}' for value in tick_positions]
+
+    cbar.set_ticks(tick_positions)
     cbar.set_ticklabels(tick_labels)
 
     plt.savefig(filename)
@@ -647,10 +658,12 @@ def plot_3d_contour_regions_np(
     )
 
     # Labels and key
+    xticks = np.arange(x1min, x1max + 0.1, x1base)
+    yticks = np.arange(x2min, x2max + 0.1, x2base)
     plt.xlabel(x1label)
     plt.ylabel(x2label)
-    plt.xlim(x1min, x1max)
-    plt.ylim(x2min, x2max)
+    plt.xlim(np.min(xticks), np.max(xticks))
+    plt.ylim(np.min(yticks), np.max(yticks))
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
     ax.contour(xint, yint, grid, cset.levels, colors="black", linewidths=0.1)
