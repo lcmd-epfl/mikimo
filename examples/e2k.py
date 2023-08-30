@@ -24,14 +24,12 @@ def e2k(wdir, temperature):
 
     kinetic_data = []
     for profile in d:
-        initial_conc, energy_profile_all, dgr_all, \
-            coeff_TS_all, rxn_network = process_data_mkm(
-                profile, df_network, tags, states)
+        initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network = process_data_mkm(
+            profile, df_network, tags, states
+        )
         k_forward_all, k_reverse_all = calc_k(
-            energy_profile_all,
-            dgr_all,
-            coeff_TS_all,
-            temperature)
+            energy_profile_all, dgr_all, coeff_TS_all, temperature
+        )
         k_all = np.concatenate((k_forward_all, k_reverse_all))
         kinetic_data.append(k_all)
 
@@ -48,7 +46,8 @@ def e2k(wdir, temperature):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
-        description='Convert the energy profile to the kinetic profile.')
+        description="Convert the energy profile to the kinetic profile."
+    )
     parser.add_argument(
         "-d",
         "--d",

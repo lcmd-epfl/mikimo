@@ -1,4 +1,4 @@
-# mikimo: microkinetic modeling for homogeneous reaction and its integraton with volcannic from Navicat platform
+# mikimo: microkinetic modeling and microkinetic volcano plots for homogeneous catalytic reactions
 
 ![workflow](./images/logo.png)
 
