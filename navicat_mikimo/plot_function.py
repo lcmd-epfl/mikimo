@@ -1,4 +1,3 @@
-
 import os
 import shutil
 
@@ -41,8 +40,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
         t = result_solve_ivp.t / 86400
         xlabel = "time (d)"
     else:
-        raise ValueError(
-            "x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+        raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
 
     plt.rc("axes", labelsize=18)
     plt.rc("xtick", labelsize=18)
@@ -53,13 +51,15 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     ax = fig.add_subplot(1, 1, 1)
 
     # Catalyst---------
-    ax.plot(t,
-            result_solve_ivp.y[0, :],
-            c="#797979",
-            linewidth=2,
-            alpha=0.85,
-            zorder=1,
-            label=states[0])
+    ax.plot(
+        t,
+        result_solve_ivp.y[0, :],
+        c="#797979",
+        linewidth=2,
+        alpha=0.85,
+        zorder=1,
+        label=states[0],
+    )
 
     # Reactant--------------------------
     color_R = [
@@ -70,17 +70,20 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
         "#8FD810",
         "#ACBD0A",
         "#76B880",
-        "#195C0C"]
+        "#195C0C",
+    ]
 
     for n, i in enumerate(r_indices):
-        ax.plot(t,
-                result_solve_ivp.y[i, :],
-                linestyle="-",
-                c=color_R[n],
-                linewidth=2,
-                alpha=0.85,
-                zorder=1,
-                label=states[i])
+        ax.plot(
+            t,
+            result_solve_ivp.y[i, :],
+            linestyle="-",
+            c=color_R[n],
+            linewidth=2,
+            alpha=0.85,
+            zorder=1,
+            label=states[i],
+        )
 
     # Product--------------------------
     color_P = [
@@ -90,43 +93,41 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
         "#F34DD8",
         "#C5A806",
         "#602AFC",
-        "#156F93"
-        "#46597C"]
+        "#156F93" "#46597C",
+    ]
 
     for n, i in enumerate(p_indices):
-        ax.plot(t,
+        ax.plot(
+            t,
+            result_solve_ivp.y[i, :],
+            linestyle="-",
+            c=color_P[n],
+            linewidth=2,
+            alpha=0.85,
+            zorder=1,
+            label=states[i],
+        )
+
+    # additional INT-----------------
+    color_INT = ["#4251B3", "#3977BD", "#2F7794", "#7159EA", "#15AE9B", "#147F58"]
+    if more_species_mkm is not None:
+        for i in more_species_mkm:
+            ax.plot(
+                t,
                 result_solve_ivp.y[i, :],
-                linestyle="-",
-                c=color_P[n],
+                linestyle="dashdot",
+                c=color_INT[i],
                 linewidth=2,
                 alpha=0.85,
                 zorder=1,
-                label=states[i])
+                label=states[i],
+            )
 
-    # additional INT-----------------
-    color_INT = [
-        "#4251B3",
-        "#3977BD",
-        "#2F7794",
-        "#7159EA",
-        "#15AE9B",
-        "#147F58"]
-    if more_species_mkm is not None:
-        for i in more_species_mkm:
-            ax.plot(t,
-                    result_solve_ivp.y[i, :],
-                    linestyle="dashdot",
-                    c=color_INT[i],
-                    linewidth=2,
-                    alpha=0.85,
-                    zorder=1,
-                    label=states[i])
-
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible
 
     plt.xlabel(xlabel)
-    plt.ylabel('Concentration [mol/l]')
+    plt.ylabel("Concentration [mol/l]")
     plt.legend()
     plt.tight_layout()
 
@@ -140,13 +141,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
 
 
-def plot_evo_save(
-        result_solve_ivp,
-        wdir,
-        name,
-        states,
-        x_scale,
-        more_species_mkm):
+def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mkm):
 
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
@@ -170,21 +165,22 @@ def plot_evo_save(
         t = result_solve_ivp.t / 86400
         xlabel = "time (d)"
     else:
-        raise ValueError(
-            "x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+        raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
 
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
     )
     # Catalyst--------------------------
-    ax.plot(t,
-            result_solve_ivp.y[0, :],
-            "-",
-            c="#797979",
-            linewidth=1.5,
-            alpha=0.85,
-            zorder=1,
-            label=states[0])
+    ax.plot(
+        t,
+        result_solve_ivp.y[0, :],
+        "-",
+        c="#797979",
+        linewidth=1.5,
+        alpha=0.85,
+        zorder=1,
+        label=states[0],
+    )
 
     # Reactant--------------------------
     color_R = [
@@ -195,17 +191,20 @@ def plot_evo_save(
         "#8FD810",
         "#ACBD0A",
         "#76B880",
-        "#195C0C"]
+        "#195C0C",
+    ]
 
     for n, i in enumerate(r_indices):
-        ax.plot(t,
-                result_solve_ivp.y[i, :],
-                "-",
-                c=color_R[n],
-                linewidth=1.5,
-                alpha=0.85,
-                zorder=1,
-                label=states[i])
+        ax.plot(
+            t,
+            result_solve_ivp.y[i, :],
+            "-",
+            c=color_R[n],
+            linewidth=1.5,
+            alpha=0.85,
+            zorder=1,
+            label=states[i],
+        )
 
     # Product--------------------------
     color_P = [
@@ -215,67 +214,63 @@ def plot_evo_save(
         "#F34DD8",
         "#C5A806",
         "#602AFC",
-        "#156F93"
-        "#46597C"]
+        "#156F93" "#46597C",
+    ]
 
     for n, i in enumerate(p_indices):
-        ax.plot(t,
+        ax.plot(
+            t,
+            result_solve_ivp.y[i, :],
+            "-",
+            c=color_P[n],
+            linewidth=1.5,
+            alpha=0.85,
+            zorder=1,
+            label=states[i],
+        )
+
+    # additional INT-----------------
+    color_INT = ["#4251B3", "#3977BD", "#2F7794", "#7159EA", "#15AE9B", "#147F58"]
+    if more_species_mkm is not None:
+        for i in more_species_mkm:
+            ax.plot(
+                t,
                 result_solve_ivp.y[i, :],
-                "-",
-                c=color_P[n],
+                linestyle="dashdot",
+                c=color_INT[i],
                 linewidth=1.5,
                 alpha=0.85,
                 zorder=1,
-                label=states[i])
-
-    # additional INT-----------------
-    color_INT = [
-        "#4251B3",
-        "#3977BD",
-        "#2F7794",
-        "#7159EA",
-        "#15AE9B",
-        "#147F58"]
-    if more_species_mkm is not None:
-        for i in more_species_mkm:
-            ax.plot(t,
-                    result_solve_ivp.y[i, :],
-                    linestyle="dashdot",
-                    c=color_INT[i],
-                    linewidth=1.5,
-                    alpha=0.85,
-                    zorder=1,
-                    label=states[i])
+                label=states[i],
+            )
 
     beautify_ax(ax)
     plt.xlabel(xlabel)
-    plt.ylabel('Concentration (mol/l)')
+    plt.ylabel("Concentration (mol/l)")
     plt.legend()
     # plt.grid(True, linestyle='--', linewidth=0.75)
     plt.tight_layout()
     fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
 
-    np.savetxt(f't_{name}.txt', result_solve_ivp.t)
-    np.savetxt(f'cat_{name}.txt', result_solve_ivp.y[0, :])
-    np.savetxt(
-        f'Rs_{name}.txt', result_solve_ivp.y[r_indices])
-    np.savetxt(f'Ps_{name}.txt',
-               result_solve_ivp.y[p_indices])
+    np.savetxt(f"t_{name}.txt", result_solve_ivp.t)
+    np.savetxt(f"cat_{name}.txt", result_solve_ivp.y[0, :])
+    np.savetxt(f"Rs_{name}.txt", result_solve_ivp.y[r_indices])
+    np.savetxt(f"Ps_{name}.txt", result_solve_ivp.y[p_indices])
 
     out = [
-        f't_{name}.txt',
-        f'cat_{name}.txt',
-        f'Rs_{name}.txt',
-        f'Ps_{name}.txt',
-        f"kinetic_modelling_{name}.png"]
+        f"t_{name}.txt",
+        f"cat_{name}.txt",
+        f"Rs_{name}.txt",
+        f"Ps_{name}.txt",
+        f"kinetic_modelling_{name}.png",
+    ]
 
     if not os.path.isdir("output"):
         os.makedirs("output")
 
     for file_name in out:
         source_file = os.path.abspath(file_name)
-        destination_file = os.path.join(
-            "output/", os.path.basename(file_name))
+        destination_file = os.path.join("output/", os.path.basename(file_name))
         shutil.move(source_file, destination_file)
 
     if wdir:
@@ -297,25 +292,15 @@ def plot_save_cond(x, Pfs, var, prod_name, verb=1):
     plt.rc("ytick", labelsize=10)
     plt.rc("font", size=10)
     fig, ax = plt.subplots(
-        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True,
+        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
     )
 
-    color = [
-        "#FF6347",
-        "#32CD32",
-        "#4169E1",
-        "#FFD700",
-        "#8A2BE2",
-        "#00FFFF"]
+    color = ["#FF6347", "#32CD32", "#4169E1", "#FFD700", "#8A2BE2", "#00FFFF"]
 
     for i, Pf in enumerate(Pfs):
-        ax.plot(x,
-                Pf,
-                "-",
-                linewidth=1.5,
-                color=color[i],
-                alpha=0.95,
-                label=prod_name[i])
+        ax.plot(
+            x, Pf, "-", linewidth=1.5, color=color[i], alpha=0.95, label=prod_name[i]
+        )
         ax.scatter(
             x,
             Pf,
@@ -329,7 +314,7 @@ def plot_save_cond(x, Pfs, var, prod_name, verb=1):
 
     # plt.xlim(xmin - (xmax-xmin)*0.1, xmax + (xmax-xmin)*0.1)
     # plt.ylim(0, np.round(np.max(Pfs),1) + 0.15)
-    plt.legend(loc='best')
+    plt.legend(loc="best")
     plt.xlabel(var)
     plt.ylabel("Product concentration (M)")
     plt.savefig(f"{var}_screen.png", dpi=400, transparent=True)
@@ -394,7 +379,7 @@ def plot_2d_combo(
     ms=None,
     rb=None,
     plotmode=1,
-    labels=None
+    labels=None,
 ):
 
     color = [
@@ -405,20 +390,12 @@ def plot_2d_combo(
         "#EA2CD3",
         "#D88918",
         "#148873",
-        "#000000"]
-
-    marker = [
-        "o",
-        "^",
-        "s",
-        "P",
-        "*",
-        "X",
-        "d",
-        "D"
+        "#000000",
     ]
+
+    marker = ["o", "^", "s", "P", "*", "X", "d", "D"]
     fig, ax = plt.subplots(
-        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True,
+        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
     )
     # Labels and key
     plt.xlabel(xlabel)
@@ -430,13 +407,8 @@ def plot_2d_combo(
     if plotmode == 0:
         for i, yi in enumerate(y):
             ax.plot(
-                x,
-                yi,
-                "-",
-                linewidth=1.5,
-                color=color[i],
-                alpha=0.95,
-                label=labels[i])
+                x, yi, "-", linewidth=1.5, color=color[i], alpha=0.95, label=labels[i]
+            )
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
                 avgs = []
@@ -445,11 +417,7 @@ def plot_2d_combo(
                     avgs.append((rb[i] + rb[i + 1]) / 2)
                 for i in rb:
                     ax.axvline(
-                        i,
-                        linestyle="dashed",
-                        color="black",
-                        linewidth=0.75,
-                        alpha=0.75,
+                        i, linestyle="dashed", color="black", linewidth=0.75, alpha=0.75
                     )
 
     # mono color scatter plot
@@ -464,7 +432,8 @@ def plot_2d_combo(
                 color=color[i],
                 alpha=0.95,
                 zorder=1,
-                label=labels[i])
+                label=labels[i],
+            )
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
                 avgs = []
@@ -482,8 +451,7 @@ def plot_2d_combo(
                     )
             if ci[i] is not None:
                 plot_ci(ci[i], x, y[i], ax=ax)
-            plotpoints(ax, px, py[i], np.repeat(
-                [color[i]], len(px)), ms, plotmode)
+            plotpoints(ax, px, py[i], np.repeat([color[i]], len(px)), ms, plotmode)
 
     ymin, ymax = ax.get_ylim()
     ymax = bround(ymax, ybase, type="max")
@@ -527,12 +495,7 @@ def plot_3d_(
     levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
-        xint,
-        yint,
-        grid,
-        levels=levels,
-        norm=norm,
-        cmap=cm.get_cmap(cmap, len(levels)),
+        xint, yint, grid, levels=levels, norm=norm, cmap=cm.get_cmap(cmap, len(levels))
     )
 
     # Labels and key
@@ -545,12 +508,14 @@ def plot_3d_(
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
 
-    def fmt(x, pos): return "%.0f" % x
+    def fmt(x, pos):
+        return "%.0f" % x
+
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=3)
     # tick_labels = ['{:.2f}'.format(value) for value in levels]
     tick_positions = np.arange(ymin, ymax + 0.1, increment)
-    tick_labels = [f'{abs(value):.1f}' for value in tick_positions]
+    tick_labels = [f"{abs(value):.1f}" for value in tick_positions]
 
     cbar.set_ticks(tick_positions)
     cbar.set_ticklabels(tick_labels)
@@ -597,12 +562,7 @@ def plot_3d_np(
     levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
-        xint,
-        yint,
-        grid,
-        levels=levels,
-        norm=norm,
-        cmap=cm.get_cmap(cmap, len(levels)),
+        xint, yint, grid, levels=levels, norm=norm, cmap=cm.get_cmap(cmap, len(levels))
     )
 
     # Labels and key
@@ -615,12 +575,14 @@ def plot_3d_np(
     plt.xticks(xticks)
     plt.yticks(yticks)
 
-    def fmt(x, pos): return "%.0f" % x
+    def fmt(x, pos):
+        return "%.0f" % x
+
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=3)
     # tick_labels = ['{:.2f}'.format(value) for value in levels]
     tick_positions = np.arange(ymin, ymax + 0.1, increment)
-    tick_labels = [f'{abs(value):.1f}' for value in tick_positions]
+    tick_labels = [f"{abs(value):.1f}" for value in tick_positions]
 
     cbar.set_ticks(tick_positions)
     cbar.set_ticklabels(tick_labels)
@@ -651,11 +613,7 @@ def plot_3d_contour_regions_np(
     ax = beautify_ax(ax)
     levels = np.arange(-0.1, nunique + 0.9, 1)
     cset = ax.contourf(
-        xint,
-        yint,
-        grid,
-        levels=levels,
-        cmap=cm.get_cmap("Dark2", nunique + 1),
+        xint, yint, grid, levels=levels, cmap=cm.get_cmap("Dark2", nunique + 1)
     )
 
     # Labels and key
@@ -668,7 +626,10 @@ def plot_3d_contour_regions_np(
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
     ax.contour(xint, yint, grid, cset.levels, colors="black", linewidths=0.1)
-    def fmt(x, pos): return "%.0f" % x
+
+    def fmt(x, pos):
+        return "%.0f" % x
+
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_ticks([])
     cbar.set_label(ylabel, labelpad=3)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "navicat_mikimo"
-version = "0.0.0"
+version = "1.0.0"
 authors = [
   { name = "pregabalin_Hoshiyomi", email = "thanapat.worakul@epfl.ch" },
 ]
@@ -30,4 +30,4 @@ classifiers = [
 ]
 
 [project.scripts]
-navicat_mikimo = "spectre.__main__:main"
+navicat_mikimo = "navicat_mikimo.__main__:main"

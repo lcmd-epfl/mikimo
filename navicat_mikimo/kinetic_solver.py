@@ -17,8 +17,9 @@ from .plot_function import plot_evo_save
 warnings.filterwarnings("ignore")
 
 
-def erying(dG_ddag: Union[float, np.ndarray],
-           temperature: float) -> Union[float, np.ndarray]:
+def erying(
+    dG_ddag: Union[float, np.ndarray], temperature: float
+) -> Union[float, np.ndarray]:
     """
     Calculates the rate constant given the energy barrier and temperature based on Eyring equation.
 
@@ -32,19 +33,15 @@ def erying(dG_ddag: Union[float, np.ndarray],
     """
     R_: float = R * (1 / calorie) * (1 / kilo)
     kb_h: float = k / h
-    return kb_h * temperature * \
-        np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
+    return kb_h * temperature * np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
 
 
-def get_k(energy_profile: Union[List[float],
-                                np.ndarray],
-          dgr: float,
-          coeff_TS: Union[List[int],
-                          np.ndarray],
-          temperature: float = 298.15) -> Tuple[Union[List[float],
-                                                np.ndarray],
-                                                Union[List[float],
-                                                np.ndarray]]:
+def get_k(
+    energy_profile: Union[List[float], np.ndarray],
+    dgr: float,
+    coeff_TS: Union[List[int], np.ndarray],
+    temperature: float = 298.15,
+) -> Tuple[Union[List[float], np.ndarray], Union[List[float], np.ndarray]]:
     """
     Compute reaction rates (k) for a reaction profile.
 
@@ -105,8 +102,7 @@ def get_k(energy_profile: Union[List[float],
     energy_profile_reverse = energy_profile_reverse[:-1]
     energy_profile_reverse = energy_profile_reverse - dgr
     energy_profile_reverse = np.insert(energy_profile_reverse, 0, 0)
-    dG_ddag_reverse = get_dG_ddag(
-        energy_profile_reverse, -dgr, coeff_TS_reverse)
+    dG_ddag_reverse = get_dG_ddag(energy_profile_reverse, -dgr, coeff_TS_reverse)
 
     k_forward = erying(dG_ddag_forward, temperature)
     k_reverse = erying(dG_ddag_reverse, temperature)
@@ -114,10 +110,12 @@ def get_k(energy_profile: Union[List[float],
     return k_forward, k_reverse[::-1]
 
 
-def calc_k(energy_profile_all: List[Union[List[float], np.ndarray]],
-           dgr_all: List[float],
-           coeff_TS_all: List[Union[List[int], np.ndarray]],
-           temperature: float) -> Tuple[np.ndarray, np.ndarray]:
+def calc_k(
+    energy_profile_all: List[Union[List[float], np.ndarray]],
+    dgr_all: List[float],
+    coeff_TS_all: List[Union[List[int], np.ndarray]],
+    temperature: float,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Calculate reaction rates (k) for all steps in the given energy profiles.
 
@@ -136,7 +134,8 @@ def calc_k(energy_profile_all: List[Union[List[float], np.ndarray]],
 
     for i in range(len(energy_profile_all)):
         k_forward, k_reverse = get_k(
-            energy_profile_all[i], dgr_all[i], coeff_TS_all[i], temperature=temperature)
+            energy_profile_all[i], dgr_all[i], coeff_TS_all[i], temperature=temperature
+        )
         k_forward_all.extend(k_forward)
         k_reverse_all.extend(k_reverse)
 
@@ -146,11 +145,13 @@ def calc_k(energy_profile_all: List[Union[List[float], np.ndarray]],
     return k_forward_all, k_reverse_all
 
 
-def add_rate(y: np.ndarray,
-             k_forward_all: np.ndarray,
-             k_reverse_all: np.ndarray,
-             rxn_network_all: np.ndarray,
-             a: int) -> float:
+def add_rate(
+    y: np.ndarray,
+    k_forward_all: np.ndarray,
+    k_reverse_all: np.ndarray,
+    rxn_network_all: np.ndarray,
+    a: int,
+) -> float:
     """
     Add the contribution of a specific reaction step to the overall reaction rate law.
 
@@ -168,19 +169,23 @@ def add_rate(y: np.ndarray,
     rate = 0
     left_species = np.where(rxn_network_all[a, :] < 0)
     right_species = np.where(rxn_network_all[a, :] > 0)
-    rate += k_forward_all[a] * np.prod(y[left_species]
-                                       ** np.abs(rxn_network_all[a, left_species])[0])
-    rate -= k_reverse_all[a] * np.prod(y[right_species]
-                                       ** np.abs(rxn_network_all[a, right_species])[0])
+    rate += k_forward_all[a] * np.prod(
+        y[left_species] ** np.abs(rxn_network_all[a, left_species])[0]
+    )
+    rate -= k_reverse_all[a] * np.prod(
+        y[right_species] ** np.abs(rxn_network_all[a, right_species])[0]
+    )
 
     return rate
 
 
-def calc_dX_dt(y: np.ndarray,
-               k_forward_all: np.ndarray,
-               k_reverse_all: np.ndarray,
-               rxn_network_all: np.ndarray,
-               a: int) -> float:
+def calc_dX_dt(
+    y: np.ndarray,
+    k_forward_all: np.ndarray,
+    k_reverse_all: np.ndarray,
+    rxn_network_all: np.ndarray,
+    a: int,
+) -> float:
     """
     Calculate the rate of change of the concentration of a species with respect to time (rate law).
 
@@ -196,22 +201,23 @@ def calc_dX_dt(y: np.ndarray,
     """
 
     loc_idxs = np.where(rxn_network_all[:, a] != 0)[0]
-    all_rate = [np.sign(rxn_network_all[idx,
-                                        a]) * add_rate(y,
-                                                       k_forward_all,
-                                                       k_reverse_all,
-                                                       rxn_network_all,
-                                                       idx) for idx in loc_idxs]
+    all_rate = [
+        np.sign(rxn_network_all[idx, a])
+        * add_rate(y, k_forward_all, k_reverse_all, rxn_network_all, idx)
+        for idx in loc_idxs
+    ]
     dX_dt = np.sum(all_rate)
 
     return dX_dt
 
 
-def system_KE_DE(k_forward_all: np.ndarray,
-                 k_reverse_all: np.ndarray,
-                 rxn_network_all: np.ndarray,
-                 initial_conc: np.ndarray,
-                 states: List[str]) -> Callable[[float, np.ndarray], np.ndarray]:
+def system_KE_DE(
+    k_forward_all: np.ndarray,
+    k_reverse_all: np.ndarray,
+    rxn_network_all: np.ndarray,
+    initial_conc: np.ndarray,
+    states: List[str],
+) -> Callable[[float, np.ndarray], np.ndarray]:
     """
     Define the system of kinetic equations for the reaction network.
 
@@ -228,12 +234,15 @@ def system_KE_DE(k_forward_all: np.ndarray,
 
     boundary = np.zeros((initial_conc.shape[0], 2))
     tolerance = 1
-    R_idx = [i for i, s in enumerate(
-        states) if s.lower().startswith('r') and 'INT' not in s]
-    P_idx = [i for i, s in enumerate(
-        states) if s.lower().startswith('p') and 'INT' not in s]
-    INT_idx = [i for i in range(1, initial_conc.shape[0])
-               if i not in R_idx and i not in P_idx]
+    R_idx = [
+        i for i, s in enumerate(states) if s.lower().startswith("r") and "INT" not in s
+    ]
+    P_idx = [
+        i for i, s in enumerate(states) if s.lower().startswith("p") and "INT" not in s
+    ]
+    INT_idx = [
+        i for i in range(1, initial_conc.shape[0]) if i not in R_idx and i not in P_idx
+    ]
 
     boundary[0] = [0 - tolerance, initial_conc[0] + tolerance]
     for i in R_idx:
@@ -270,15 +279,16 @@ def system_KE_DE(k_forward_all: np.ndarray,
                         dy_dt = np.array(dy_dt_)
                         y = np.array(y_)
                 return dy_dt
+
             return wrapper
+
         return decorator
 
     @bound_decorator(boundary)
     def _dydt(t, y):
         dydt = [None for _ in range(initial_conc.shape[0])]
         for a in range(initial_conc.shape[0]):
-            dydt[a] = calc_dX_dt(
-                y, k_forward_all, k_reverse_all, rxn_network_all, a)
+            dydt[a] = calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
         dydt = np.array(dydt)
         return dydt
 
@@ -287,20 +297,20 @@ def system_KE_DE(k_forward_all: np.ndarray,
     return _dydt
 
 
-def calc_km(energy_profile_all: List,
-            dgr_all: List,
-            coeff_TS_all: List,
-            rxn_network_all: np.ndarray,
-            temperature: float,
-            t_span: Tuple,
-            initial_conc: np.ndarray,
-            states: List,
-            timeout: float,
-            report_as_yield: bool,
-            quality: int,
-            ks=None) -> Tuple[np.ndarray,
-                              Union[str,
-                                    scipy.integrate._ivp.ivp.OdeResult]]:
+def calc_km(
+    energy_profile_all: List,
+    dgr_all: List,
+    coeff_TS_all: List,
+    rxn_network_all: np.ndarray,
+    temperature: float,
+    t_span: Tuple,
+    initial_conc: np.ndarray,
+    states: List,
+    timeout: float,
+    report_as_yield: bool,
+    quality: int,
+    ks=None,
+) -> Tuple[np.ndarray, Union[str, scipy.integrate._ivp.ivp.OdeResult]]:
     """
     Calculate the kinetic model (KM) simulation.
 
@@ -330,13 +340,12 @@ def calc_km(energy_profile_all: List,
         k_forward_all, k_reverse_all = np.split(ks, 2)
     else:
         k_forward_all, k_reverse_all = calc_k(
-            energy_profile_all,
-            dgr_all,
-            coeff_TS_all,
-            temperature)
+            energy_profile_all, dgr_all, coeff_TS_all, temperature
+        )
 
-    dydt = system_KE_DE(k_forward_all, k_reverse_all,
-                        rxn_network_all, initial_conc, states)
+    dydt = system_KE_DE(
+        k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states
+    )
 
     # first try BDF + ag with various rtol and atol
     # then BDF with FD as arraybox failure tends to happen when R/P loc is complicate
@@ -500,11 +509,13 @@ def calc_km(energy_profile_all: List,
 
     try:
         if result_solve_ivp != "Shiki":
-            c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                  for i in idx_target_all])
+            c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
 
-            R_idx = [i for i, s in enumerate(
-                states) if s.lower().startswith('r') and 'INT' not in s]
+            R_idx = [
+                i
+                for i, s in enumerate(states)
+                if s.lower().startswith("r") and "INT" not in s
+            ]
             Rp = rxn_network_all[:, R_idx]
             Rp_ = []
             for col in range(Rp.shape[1]):
@@ -536,15 +547,13 @@ def calc_km(energy_profile_all: List,
 def test_get_k():
 
     # Test case 1: CoL6 pincer co2
-    energy_profile = np.array([0., 14.6, 0.5, 20.1, -1.7, 20.1])
+    energy_profile = np.array([0.0, 14.6, 0.5, 20.1, -1.7, 20.1])
     dgr = 2.2
     coeff_TS = np.array([0, 1, 0, 1, 0, 1])
     temperature = 298.15
 
-    expected_k_forward = np.array(
-        [1.23420642e+02, 2.66908478e-02, 6.51255161e-04])
-    expected_k_reverse = np.array(
-        [2.87005583e+02, 6.51255161e-04, 4.70404010e-01])
+    expected_k_forward = np.array([1.23420642e02, 2.66908478e-02, 6.51255161e-04])
+    expected_k_reverse = np.array([2.87005583e02, 6.51255161e-04, 4.70404010e-01])
 
     k_forward, k_reverse = get_k(energy_profile, dgr, coeff_TS, temperature)
 
@@ -557,8 +566,8 @@ def test_get_k():
     coeff_TS = np.array([0, 1, 0, 1])
     temperature = 298.15
 
-    expected_k_forward = np.array([1.34349679e+09, 1.83736712e+03])
-    expected_k_reverse = np.array([2.90543524e+05, 1.35881500e-02])
+    expected_k_forward = np.array([1.34349679e09, 1.83736712e03])
+    expected_k_reverse = np.array([2.90543524e05, 1.35881500e-02])
 
     k_forward, k_reverse = get_k(energy_profile, dgr, coeff_TS, temperature)
 
@@ -571,9 +580,7 @@ def test_add_rate():
     y = np.array([1.0, 2.0, 3.0, 4.0])
     k_forward_all = np.array([1.0, 2.0, 3.0])
     k_reverse_all = np.array([0.5, 1.0, 1.5])
-    rxn_network_all = np.array([[-1, 1, 0, 0],
-                                [0, -1, 1, 0],
-                                [0, 0, -1, 1]])
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]])
     a = 0
 
     expected_rate = 1.0 * (1.0 ** np.abs(-1)) - 0.5 * (2.0 ** np.abs(1))
@@ -586,8 +593,7 @@ def test_add_rate():
     y = np.array([1.5, 2.5, 3.5, 4.5])
     k_forward_all = np.array([2.0, 3.0])
     k_reverse_all = np.array([1.0, 1.5])
-    rxn_network_all = np.array([[-1, 1, 0, 0],
-                                [0, -1, 1, 0]])
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0]])
     a = 1
 
     expected_rate = 3.0 * (2.5 ** np.abs(-1)) - 1.5 * (3.5 ** np.abs(1))
@@ -600,9 +606,7 @@ def test_add_rate():
     y = np.array([1.0, 2.0, 3.0, 4.0])
     k_forward_all = np.array([1.0, 1.0, 1.0])
     k_reverse_all = np.array([1.0, 1.0, 1.0])
-    rxn_network_all = np.array([[-1, 1, 0, 0],
-                                [0, -1, 1, 0],
-                                [0, 0, -1, 1]])
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]])
     a = 2
 
     expected_rate = 1.0 * (1.0 ** np.abs(-1)) - 1.0 * (2.0 ** np.abs(1))
@@ -612,28 +616,40 @@ def test_add_rate():
     assert_allclose(rate, expected_rate)
 
     # Test case 4
-    y = np.array([0.05, 0.01, 0.02, 0.01, 0.08, 0.05, 1.2, 5., 0.25, 0.15])
-    k_forward_all = np.array([1.23420642e+02,
-                              2.66908478e-02,
-                              6.51255161e-04,
-                              3.97347520e-01,
-                              4.93579691e-03,
-                              4.48316527e+01,
-                              1.72819070e-12])
-    k_reverse_all = np.array([2.87005583e+02,
-                              6.51255161e-04,
-                              4.70404010e-01,
-                              1.14778310e-02,
-                              4.48316527e+01,
-                              8.48836837e-08,
-                              1.27807417e-17])
-    rxn_network_all = np.array([[-1., 1., 0., 0., 0., 0., -1., 0., 0., 0.],
-                                [0., -1., 1., 0., 0., 0., 0., -1., 0., 0.],
-                                [1., 0., -1., 1., 0., 0., 0., 0., 0., 0.],
-                                [-1., 0., 0., -1., 1., 0., 0., 0., 0., 0.],
-                                [0., 0., 0., 0., -1., 1., 0., -1., 0., 0.],
-                                [1., 0., 0., 0., 0., -1., 0., 0., 1., 0.],
-                                [1., 0., 0., 0., 0., -1., 0., 0., 0., 1.]])
+    y = np.array([0.05, 0.01, 0.02, 0.01, 0.08, 0.05, 1.2, 5.0, 0.25, 0.15])
+    k_forward_all = np.array(
+        [
+            1.23420642e02,
+            2.66908478e-02,
+            6.51255161e-04,
+            3.97347520e-01,
+            4.93579691e-03,
+            4.48316527e01,
+            1.72819070e-12,
+        ]
+    )
+    k_reverse_all = np.array(
+        [
+            2.87005583e02,
+            6.51255161e-04,
+            4.70404010e-01,
+            1.14778310e-02,
+            4.48316527e01,
+            8.48836837e-08,
+            1.27807417e-17,
+        ]
+    )
+    rxn_network_all = np.array(
+        [
+            [-1.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0],
+            [0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0],
+            [1.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0, -1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0],
+        ]
+    )
     a = 4
 
     expected_rate = -2.2396083183576385
@@ -650,9 +666,7 @@ def test_calc_dX_dt():
     y = np.array([1.0, 2.0, 3.0, 4.0])
     k_forward_all = np.array([1.0, 2.0, 3.0])
     k_reverse_all = np.array([0.5, 1.0, 1.5])
-    rxn_network_all = np.array([[-1, 1, 0, 0],
-                                [0, -1, 1, 0],
-                                [0, 0, -1, 1]])
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]])
     a = 0
 
     expected_dX_dt = 1.0 * (1.0 ** np.abs(-1)) - 0.5 * (2.0 ** np.abs(1))
@@ -665,40 +679,55 @@ def test_calc_dX_dt():
     y = np.array([1.5, 2.5, 3.5, 4.5])
     k_forward_all = np.array([2.0, 3.0])
     k_reverse_all = np.array([1.0, 1.5])
-    rxn_network_all = np.array([[-1, 1, 0, 0],
-                                [0, -1, 1, 0]])
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0]])
     a = 1
 
-    expected_dX_dt = -3.0 * (2.5 ** np.abs(-1)) + 1.5 * (3.5 ** np.abs(1))\
-        + 2.0 * (1.5) - 1.0 * (2.5)
+    expected_dX_dt = (
+        -3.0 * (2.5 ** np.abs(-1))
+        + 1.5 * (3.5 ** np.abs(1))
+        + 2.0 * (1.5)
+        - 1.0 * (2.5)
+    )
 
     dX_dt = calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
     print(dX_dt)
     assert_allclose(dX_dt, expected_dX_dt)
 
     # Test case 3
-    y = np.array([0.05, 0.01, 0.02, 0.01, 0.08, 0.05, 1.2, 5., 0.25, 0.15])
-    k_forward_all = np.array([1.23420642e+02,
-                              2.66908478e-02,
-                              6.51255161e-04,
-                              3.97347520e-01,
-                              4.93579691e-03,
-                              4.48316527e+01,
-                              1.72819070e-12])
-    k_reverse_all = np.array([2.87005583e+02,
-                              6.51255161e-04,
-                              4.70404010e-01,
-                              1.14778310e-02,
-                              4.48316527e+01,
-                              8.48836837e-08,
-                              1.27807417e-17])
-    rxn_network_all = np.array([[-1., 1., 0., 0., 0., 0., -1., 0., 0., 0.],
-                                [0., -1., 1., 0., 0., 0., 0., -1., 0., 0.],
-                                [1., 0., -1., 1., 0., 0., 0., 0., 0., 0.],
-                                [-1., 0., 0., -1., 1., 0., 0., 0., 0., 0.],
-                                [0., 0., 0., 0., -1., 1., 0., -1., 0., 0.],
-                                [1., 0., 0., 0., 0., -1., 0., 0., 1., 0.],
-                                [1., 0., 0., 0., 0., -1., 0., 0., 0., 1.]])
+    y = np.array([0.05, 0.01, 0.02, 0.01, 0.08, 0.05, 1.2, 5.0, 0.25, 0.15])
+    k_forward_all = np.array(
+        [
+            1.23420642e02,
+            2.66908478e-02,
+            6.51255161e-04,
+            3.97347520e-01,
+            4.93579691e-03,
+            4.48316527e01,
+            1.72819070e-12,
+        ]
+    )
+    k_reverse_all = np.array(
+        [
+            2.87005583e02,
+            6.51255161e-04,
+            4.70404010e-01,
+            1.14778310e-02,
+            4.48316527e01,
+            8.48836837e-08,
+            1.27807417e-17,
+        ]
+    )
+    rxn_network_all = np.array(
+        [
+            [-1.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0],
+            [0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0],
+            [1.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0, -1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0],
+        ]
+    )
     a = 0
 
     expected_dX_dt = -2.29310268633785
@@ -712,52 +741,68 @@ def test_calc_dX_dt():
 
 def main():
 
-    dg, df_network, tags, states, t_final, temperature, \
-        x_scale, more_species_mkm, wdir, ks = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")
+    dg, df_network, tags, states, t_final, temperature, x_scale, more_species_mkm, wdir, ks = preprocess_data_mkm(
+        sys.argv[2:], mode="mkm_solo"
+    )
 
     if ks is not None:
         t_span = (0, t_final)
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in [
-                    'initial_conc', 'c0', 'initial conc']:
+            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
-        _, result_solve_ivp = calc_km(None, None, None, rxn_network_all, temperature, t_span,
-                                      initial_conc, states, timeout=60, report_as_yield=False, quality=2, ks=ks)
+        _, result_solve_ivp = calc_km(
+            None,
+            None,
+            None,
+            rxn_network_all,
+            temperature,
+            t_span,
+            initial_conc,
+            states,
+            timeout=60,
+            report_as_yield=False,
+            quality=2,
+            ks=ks,
+        )
     else:
-        initial_conc, energy_profile_all, dgr_all, \
-            coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
+        initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all = process_data_mkm(
+            dg, df_network, tags, states
+        )
         t_span = (0, t_final)
-        _, result_solve_ivp = calc_km(energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all, temperature,
-                                      t_span, initial_conc, states, timeout=60, report_as_yield=False, quality=2, ks=None)
+        _, result_solve_ivp = calc_km(
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            rxn_network_all,
+            temperature,
+            t_span,
+            initial_conc,
+            states,
+            timeout=60,
+            report_as_yield=False,
+            quality=2,
+            ks=None,
+        )
 
     states_ = [s.replace("*", "") for s in states]
-    plot_evo_save(
-        result_solve_ivp,
-        wdir,
-        "",
-        states_,
-        x_scale,
-        more_species_mkm)
+    plot_evo_save(result_solve_ivp, wdir, "", states_, x_scale, more_species_mkm)
 
     print("\n-------------Reactant Initial Concentration-------------\n")
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     for i in r_indices:
-        print('--[{}]: {:.4f}--'.format(states[i],
-              initial_conc[i]))
+        print("--[{}]: {:.4f}--".format(states[i], initial_conc[i]))
 
     print("\n-------------Reactant Final Concentration-------------\n")
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     for i in r_indices:
-        print('--[{}]: {:.4f}--'.format(states[i],
-              result_solve_ivp.y[i][-1]))
+        print("--[{}]: {:.4f}--".format(states[i], result_solve_ivp.y[i][-1]))
     print("\n-------------Product Final Concentration--------------\n")
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
     for i in p_indices:
-        print('--[{}]: {:.4f}--'.format(states[i],
-              result_solve_ivp.y[i][-1]))
+        print("--[{}]: {:.4f}--".format(states[i], result_solve_ivp.y[i][-1]))
 
     print("\nWords that have faded to gray are colored like cappuccino\n")

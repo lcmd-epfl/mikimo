@@ -14,18 +14,24 @@ from tqdm import tqdm
 from .helper import preprocess_data_mkm, process_data_mkm
 from .kinetic_solver import calc_k, calc_km, system_KE_DE
 from .km_volcanic import call_imputter
-from .plot_function import (plot_3d_contour_regions_np, plot_3d_np,
-                            plot_evo_save, plot_save_cond)
+from .plot_function import (
+    plot_3d_contour_regions_np,
+    plot_3d_np,
+    plot_evo_save,
+    plot_save_cond,
+)
 
 
-def run_mkm_3d(grid: Tuple[np.ndarray, np.ndarray],
-               loc: Tuple[int, int],
-               energy_profile_all: np.ndarray,
-               dgr_all: np.ndarray,
-               coeff_TS_all: np.ndarray,
-               rxn_network_all: np.ndarray,
-               states: List[str],
-               initial_conc: np.ndarray) -> np.ndarray:
+def run_mkm_3d(
+    grid: Tuple[np.ndarray, np.ndarray],
+    loc: Tuple[int, int],
+    energy_profile_all: np.ndarray,
+    dgr_all: np.ndarray,
+    coeff_TS_all: np.ndarray,
+    rxn_network_all: np.ndarray,
+    states: List[str],
+    initial_conc: np.ndarray,
+) -> np.ndarray:
     """
     Run MKM calculation to build tt map.
 
@@ -49,12 +55,14 @@ def run_mkm_3d(grid: Tuple[np.ndarray, np.ndarray],
     t_span = (0, grid[1][loc[1], 0])
     initial_conc += 1e-9
     k_forward_all, k_reverse_all = calc_k(
-        energy_profile_all, dgr_all, coeff_TS_all, temperature)
+        energy_profile_all, dgr_all, coeff_TS_all, temperature
+    )
     assert k_forward_all.shape[0] == rxn_network_all.shape[0]
     assert k_reverse_all.shape[0] == rxn_network_all.shape[0]
 
-    dydt = system_KE_DE(k_forward_all, k_reverse_all,
-                        rxn_network_all, initial_conc, states)
+    dydt = system_KE_DE(
+        k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states
+    )
 
     max_step = (t_span[1] - t_span[0]) / 10.0
     first_step = np.min(
@@ -90,8 +98,7 @@ def run_mkm_3d(grid: Tuple[np.ndarray, np.ndarray],
                 first_step=first_step,
             )
             success = True
-            c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                  for i in idx_target_all])
+            c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
             return c_target_t
         except Exception as e:
             if rtol == last_[0] and atol == last_[1]:
@@ -103,14 +110,16 @@ def run_mkm_3d(grid: Tuple[np.ndarray, np.ndarray],
 
 def main():
 
-    dg, df_network, tags, states, t_finals, temperatures, x_scale, more_species_mkm, \
-        plot_evo, map_tt, ncore, imputer_strat, verb, ks = preprocess_data_mkm(sys.argv[2:], mode="mkm_cond")
+    dg, df_network, tags, states, t_finals, temperatures, x_scale, more_species_mkm, plot_evo, map_tt, ncore, imputer_strat, verb, ks = preprocess_data_mkm(
+        sys.argv[2:], mode="mkm_cond"
+    )
 
     idx_target_all = [states.index(i) for i in states if "*" in i]
     prod_name = [s for i, s in enumerate(states) if s.lower().startswith("p")]
     if ks is None:
-        initial_conc, energy_profile_all, dgr_all, \
-            coeff_TS_all, rxn_network_all = process_data_mkm(dg, df_network, tags, states)
+        initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all = process_data_mkm(
+            dg, df_network, tags, states
+        )
     else:
         energy_profile_all = None
         dgr_all = None
@@ -118,8 +127,7 @@ def main():
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in [
-                    'initial_conc', 'c0', 'initial conc']:
+            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
@@ -129,8 +137,9 @@ def main():
             print(f"-------Constructing time-temperature map-------\n")
             print(f"Time span: {t_finals} s")
             print(f"temperature span: {temperatures} s")
-        assert len(t_finals) > 1 and len(
-            temperatures) > 1, "Require more than 1 time and temperature input"
+        assert (
+            len(t_finals) > 1 and len(temperatures) > 1
+        ), "Require more than 1 time and temperature input"
 
         npoints = 200
         t_finals_log = np.log10(t_finals)
@@ -155,20 +164,16 @@ def main():
         grid_d = np.array([grid] * n_target)
         total_combinations = len(temperatures_) * len(times_)
         combinations = list(
-            itertools.product(
-                range(
-                    len(temperatures_)), range(
-                    len(times_))))
-        num_chunks = total_combinations // ncore + \
-            (total_combinations % ncore > 0)
+            itertools.product(range(len(temperatures_)), range(len(times_)))
+        )
+        num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
 
         for chunk_index in tqdm(range(num_chunks)):
             start_index = chunk_index * ncore
             end_index = min(start_index + ncore, total_combinations)
             chunk = combinations[start_index:end_index]
 
-            results = Parallel(
-                n_jobs=ncore)(
+            results = Parallel(n_jobs=ncore)(
                 delayed(run_mkm_3d)(
                     Tts,
                     loc,
@@ -177,7 +182,10 @@ def main():
                     coeff_TS_all,
                     rxn_network_all,
                     states,
-                    initial_conc) for loc in chunk)
+                    initial_conc,
+                )
+                for loc in chunk
+            )
             i = 0
             for k, l in chunk:
                 for j in range(n_target):
@@ -195,12 +203,12 @@ def main():
             grid_d_fill = grid_d
 
         times_ = np.log10(times_)
-        with h5py.File('data_tt.h5', 'w') as f:
-            group = f.create_group('data')
+        with h5py.File("data_tt.h5", "w") as f:
+            group = f.create_group("data")
             # save each numpy array as a dataset in the group
-            group.create_dataset('temperatures_', data=temperatures_)
-            group.create_dataset('times_', data=times_)
-            group.create_dataset('agrid', data=grid_d_fill)
+            group.create_dataset("temperatures_", data=temperatures_)
+            group.create_dataset("times_", data=times_)
+            group.create_dataset("agrid", data=grid_d_fill)
 
         x1label = "Temperatures [K]"
         x2label = "log$_{10}$(Time) [s]"
@@ -213,12 +221,12 @@ def main():
         amax = activity_grid.max()
 
         if verb > 2:
-            with h5py.File('data_a_tt.h5', 'w') as f:
-                group = f.create_group('data')
+            with h5py.File("data_a_tt.h5", "w") as f:
+                group = f.create_group("data")
                 # save each numpy array as a dataset in the group
-                group.create_dataset('temperatures_', data=temperatures_)
-                group.create_dataset('times_', data=times_)
-                group.create_dataset('agrid', data=activity_grid)
+                group.create_dataset("temperatures_", data=temperatures_)
+                group.create_dataset("times_", data=times_)
+                group.create_dataset("agrid", data=activity_grid)
 
         plot_3d_np(
             temperatures_,
@@ -247,18 +255,18 @@ def main():
             min_ratio = -3
             max_ratio = 3
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
-            selectivity_ratio_ = np.clip(
-                selectivity_ratio, min_ratio, max_ratio)
+            selectivity_ratio_ = np.clip(selectivity_ratio, min_ratio, max_ratio)
             selectivity_ratio_ = np.nan_to_num(
-                selectivity_ratio_, nan=-3, posinf=3, neginf=-3)
+                selectivity_ratio_, nan=-3, posinf=3, neginf=-3
+            )
             smin = selectivity_ratio_.min()
             smax = selectivity_ratio_.max()
             if verb > 2:
-                with h5py.File('data_s_tt.h5', 'w') as f:
-                    group = f.create_group('data')
-                    group.create_dataset('temperatures_', data=temperatures_)
-                    group.create_dataset('times_', data=times_)
-                    group.create_dataset('sgrid', data=selectivity_ratio_)
+                with h5py.File("data_s_tt.h5", "w") as f:
+                    group = f.create_group("data")
+                    group.create_dataset("temperatures_", data=temperatures_)
+                    group.create_dataset("times_", data=times_)
+                    group.create_dataset("sgrid", data=selectivity_ratio_)
             plot_3d_np(
                 temperatures_,
                 times_,
@@ -281,12 +289,11 @@ def main():
             dominant_indices = np.argmax(grid_d_fill, axis=0)
             slabel = "Dominant product"
             if verb > 2:
-                with h5py.File('data_s_tt.h5', 'w') as f:
-                    group = f.create_group('data')
-                    group.create_dataset('temperatures_', data=temperatures_)
-                    group.create_dataset('times_', data=times_)
-                    group.create_dataset(
-                        'dominant_indices', data=dominant_indices)
+                with h5py.File("data_s_tt.h5", "w") as f:
+                    group = f.create_group("data")
+                    group.create_dataset("temperatures_", data=temperatures_)
+                    group.create_dataset("times_", data=times_)
+                    group.create_dataset("dominant_indices", data=dominant_indices)
             plot_3d_contour_regions_np(
                 temperatures_,
                 times_,
@@ -302,14 +309,13 @@ def main():
                 ylabel=slabel,
                 filename=sfilename,
                 id_labels=prod,
-                nunique=n_target
+                nunique=n_target,
             )
 
     else:
         if len(t_finals) == 1:
             if verb > 0:
-                print(
-                    f"-------Screening over temperature: {temperatures} K-------")
+                print(f"-------Screening over temperature: {temperatures} K-------")
             Pfs = np.zeros((len(temperatures), len(idx_target_all)))
             t_final = t_finals[0]
             t_span = (0, t_final)
@@ -326,9 +332,11 @@ def main():
                     states,
                     timeout=60,
                     report_as_yield=False,
-                    quality=2)
-                c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                       for i in idx_target_all])
+                    quality=2,
+                )
+                c_target_t = np.array(
+                    [result_solve_ivp.y[i][-1] for i in idx_target_all]
+                )
                 if plot_evo:
                     plot_evo_save(
                         result_solve_ivp,
@@ -336,20 +344,15 @@ def main():
                         str(temperature),
                         states,
                         x_scale,
-                        more_species_mkm)
+                        more_species_mkm,
+                    )
                 Pfs[i] = c_target_t
             print(temperatures)
-            plot_save_cond(
-                temperatures,
-                Pfs.T,
-                "Temperature (K)",
-                prod_name,
-                verb=verb)
+            plot_save_cond(temperatures, Pfs.T, "Temperature (K)", prod_name, verb=verb)
 
         elif len(temperatures) == 1:
             if verb > 0:
-                print(
-                    f"-------Screening over reaction time: {t_finals} s-------\n")
+                print(f"-------Screening over reaction time: {t_finals} s-------\n")
             Pfs = np.zeros((len(t_finals), len(idx_target_all)))
             temperature = temperatures[0]
             for i, tf in enumerate(t_finals):
@@ -366,9 +369,11 @@ def main():
                     timeout=60,
                     report_as_yield=False,
                     quality=2,
-                    ks=ks)
-                c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                       for i in idx_target_all])
+                    ks=ks,
+                )
+                c_target_t = np.array(
+                    [result_solve_ivp.y[i][-1] for i in idx_target_all]
+                )
                 if plot_evo:
                     plot_evo_save(
                         result_solve_ivp,
@@ -376,14 +381,16 @@ def main():
                         str(temperature),
                         states,
                         x_scale,
-                        more_species_mkm)
+                        more_species_mkm,
+                    )
                 Pfs[i] = c_target_t
             plot_save_cond(t_finals, Pfs.T, "Time [s]", prod_name, verb=verb)
 
         elif len(t_finals) > 1 and len(temperatures) > 1:
             if verb > 0:
                 print(
-                    f"-------Screening over both reaction time and temperature:-------\n")
+                    f"-------Screening over both reaction time and temperature:-------\n"
+                )
                 print(f"{t_finals} s")
                 print(f"{temperatures} K\n")
             combinations = list(itertools.product(t_finals, temperatures))
@@ -402,9 +409,11 @@ def main():
                     states,
                     timeout=60,
                     report_as_yield=False,
-                    quality=2)
-                c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                       for i in idx_target_all])
+                    quality=2,
+                )
+                c_target_t = np.array(
+                    [result_solve_ivp.y[i][-1] for i in idx_target_all]
+                )
                 if plot_evo:
                     plot_evo_save(
                         result_solve_ivp,
@@ -412,7 +421,8 @@ def main():
                         str(temperature),
                         states,
                         x_scale,
-                        more_species_mkm)
+                        more_species_mkm,
+                    )
                 Pfs[i] = c_target_t
 
             data_dict = dict()
@@ -426,7 +436,9 @@ def main():
             if verb > 0:
                 print(df.to_string(index=False))
 
-    print("""\nI have a heart that can't be filled
+    print(
+        """\nI have a heart that can't be filled
 Cast me an unbreaking spell to make these uplifting extraordinary day pours down
 Alone in the noisy neon city
-steps that feels like about to break my heels""")
+steps that feels like about to break my heels"""
+    )
