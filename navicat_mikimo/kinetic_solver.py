@@ -523,7 +523,7 @@ def calc_km(
                 Rp_.append(non_zero_values)
             Rp_ = np.abs([r[0] for r in Rp_])
 
-            # TODO: higest conc P can be, should be refined in the future
+            # TODO: better way to find determining reactant conc
             upper = np.min(initial_conc[R_idx] * Rp_)
 
             if report_as_yield:
