@@ -15,6 +15,7 @@ from .helper import yesno
 
 matplotlib.use("Agg")
 
+
 def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     """"used in km_volcanic, mode0"""
 
@@ -123,7 +124,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
 
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible
-    
+
     plt.xlabel(xlabel)
     plt.ylabel('Concentration [mol/l]')
     plt.legend()
@@ -548,7 +549,7 @@ def plot_3d_(
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=3)
     # tick_labels = ['{:.2f}'.format(value) for value in levels]
-    tick_positions = np.arange(ymin, ymax+0.1, increment)
+    tick_positions = np.arange(ymin, ymax + 0.1, increment)
     tick_labels = [f'{abs(value):.1f}' for value in tick_positions]
 
     cbar.set_ticks(tick_positions)
@@ -583,7 +584,7 @@ def plot_3d_np(
     x2label="X2-axis",
     ylabel="Y-axis",
     filename="plot.png",
-    cmap="seismic", 
+    cmap="seismic",
 ):
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
@@ -618,7 +619,7 @@ def plot_3d_np(
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=3)
     # tick_labels = ['{:.2f}'.format(value) for value in levels]
-    tick_positions = np.arange(ymin, ymax+0.1, increment)
+    tick_positions = np.arange(ymin, ymax + 0.1, increment)
     tick_labels = [f'{abs(value):.1f}' for value in tick_positions]
 
     cbar.set_ticks(tick_positions)

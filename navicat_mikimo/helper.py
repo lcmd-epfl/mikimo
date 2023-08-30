@@ -114,7 +114,7 @@ def check_km_inp(df, df_network, mode="energy"):
                 clear = False
                 logging.warning(
                     f"""\n{state} cannot be found in the reaction data, if it is in different name,
-                    change it to be the same in both reaction data and the network""")
+change it to be the same in both reaction data and the network""")
     elif mode == "kinetic":
         if int((df.shape[1] - 1) / 2) != df_network.shape[0]:
             clear = False
