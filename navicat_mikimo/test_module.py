@@ -1,5 +1,5 @@
-from helper import test_process_data_mkm
-from kinetic_solver import test_add_rate, test_calc_dX_dt, test_get_k
+from .helper import test_process_data_mkm
+from .kinetic_solver import test_add_rate, test_calc_dX_dt, test_get_k
 
 test_add_rate()
 test_calc_dX_dt()
