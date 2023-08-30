@@ -8,25 +8,25 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 script_files = []
-for fname in glob("spectre/**/*", recursive=True):
+for fname in glob("navicat_mikimo/**/*", recursive=True):
     if path.isfile(fname):
         script_files += [fname]
 
 setup(
-    name='spectre',
+    name='navicat_mikimo',
     version='0.0',
     description='microkinetic modeling code for homogeneous catalytic reactions',
     long_description=long_description,
     long_description_content_type="text/x-rst",
     author='pregabalin_Hoshiyomi',
     author_email='thanapat.worakul@epfl.ch',
-    url="https://github.com/PregY/spectre",
-    packages=['spectre'],
+    url="https://github.com/PregY/navicat_mikimo",
+    packages=['navicat_mikimo'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     install_requires=[
         'numpy',
         'scipy',
@@ -36,8 +36,9 @@ setup(
         'h5py',
         'fire',
         'navicat_volcanic',
+        'openpyxl'
     ],
     keywords="computational chemistry utility",
-    entry_points={'console_scripts': ['spectre=spectre.__main__:main']},
+    entry_points={'console_scripts': ['navicat_mikimo=navicat_mikimo.__main__:main']},
     include_package_data=True,
 )
