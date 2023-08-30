@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from helper import process_data_mkm
-from kinetic_solver import calc_k
+from navicat_mikimo.helper import process_data_mkm
+from navicat_mikimo.kinetic_solver import calc_k
 import argparse
 
 
