@@ -2,7 +2,6 @@ import argparse
 import logging
 import multiprocessing
 import os
-import sys
 from typing import List, Tuple
 
 import autograd.numpy as np
@@ -24,6 +23,7 @@ def yesno(question):
 def check_existence(wdir, verb):
 
     kinetic_mode = False
+    k_exist = False
 
     rows_to_search = ["c0", "initial_conc", "initial conc"]
     columns_to_search = ["k_forward", "k_reverse"]
