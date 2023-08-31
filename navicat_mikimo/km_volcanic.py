@@ -62,7 +62,7 @@ def call_imputter(imp_alg):
     elif imp_alg == "simple":
         imputer = SimpleImputer(missing_values=np.nan, strategy="mean")
     else:
-        print("Invalid imputer type, use KNN imputer instead")
+        print("Invalid imputer type, use KNN imputer instead.")
         imputer = KNNImputer(n_neighbors=5, weights="uniform")
     return imputer
 
@@ -82,25 +82,25 @@ def process_n_calc_2d(
     comp_ci: bool,
     verb: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Process input data and perform MKM simulation in case of 1 descriptor.
+    """Process input data and perform MKM simulation in case of one descriptor.
 
     Args:
         profile (List[float]): Profile values.
         sigma_p (float): Sigma value.
         n_target (int): Number of products.
         temperature (float): Temperature value.
-        t_span (Tuple[float, float]): Time span.
-        df_network (pd.DataFrame): Network DataFrame.
-        tags (List[str]): Reaction data column names.
-        states (List[str]): Reaction network column names.
-        timeout (int): Timeout value.
-        report_as_yield (bool): Report as yield flag.
-        quality (int): Quality of integration.
-        comp_ci (bool): Compute confidence interval flag.
+        t_span (Tuple[float, float]): Time span for simulation.
+        df_network (pd.DataFrame): Reaction network DataFrame.
+        tags (List[str]): Column names for reaction data.
+        states (List[str]): Column names for reaction network states.
+        timeout (int): Timeout for the calculation.
+        report_as_yield (bool): Flag to report results as yield.
+        quality (int): Integration quality.
+        comp_ci (bool): Flag to compute confidence interval.
         verb (int): Verbosity level.
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: Result arrays for final concentrations and confidence interval.
+        Tuple[np.ndarray, np.ndarray]: Arrays of final concentrations and confidence intervals.
 
     Raises:
         Exception: If an error occurs during computation.
@@ -109,9 +109,13 @@ def process_n_calc_2d(
         if np.isnan(profile[0]):
             return np.array([np.nan] * n_target), np.array([np.nan] * n_target)
         else:
-            initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network = process_data_mkm(
-                profile, df_network, tags, states
-            )
+            (
+                initial_conc,
+                energy_profile_all,
+                dgr_all,
+                coeff_TS_all,
+                rxn_network,
+            ) = process_data_mkm(profile, df_network, tags, states)
             result, _ = calc_km(
                 energy_profile_all,
                 dgr_all,
@@ -130,12 +134,20 @@ def process_n_calc_2d(
                 profile_u = profile + sigma_p
                 profile_d = profile - sigma_p
 
-                initial_conc, energy_profile_all_u, dgr_all, coeff_TS_all, rxn_network = process_data_mkm(
-                    profile_u, df_network, tags, states
-                )
-                initial_conc, energy_profile_all_d, dgr_all, coeff_TS_all, rxn_network = process_data_mkm(
-                    profile_d, df_network, tags, states
-                )
+                (
+                    initial_conc,
+                    energy_profile_all_u,
+                    dgr_all,
+                    coeff_TS_all,
+                    rxn_network,
+                ) = process_data_mkm(profile_u, df_network, tags, states)
+                (
+                    initial_conc,
+                    energy_profile_all_d,
+                    dgr_all,
+                    coeff_TS_all,
+                    rxn_network,
+                ) = process_data_mkm(profile_d, df_network, tags, states)
 
                 result_u, _ = calc_km(
                     energy_profile_all_u,
@@ -170,7 +182,7 @@ def process_n_calc_2d(
 
     except Exception as e:
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line due to {e}")
+            print(f"Fail to compute at point {profile} in the volcano line due to {e}.")
         return np.array([np.nan] * n_target), np.array([np.nan] * n_target)
 
 
@@ -211,9 +223,13 @@ def process_n_calc_3d(
 
     try:
         profile = [gridj[coord] for gridj in grids]
-        initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network = process_data_mkm(
-            profile, df_network, tags, states
-        )
+        (
+            initial_conc,
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            rxn_network,
+        ) = process_data_mkm(profile, df_network, tags, states)
         result, _ = calc_km(
             energy_profile_all,
             dgr_all,
@@ -231,7 +247,7 @@ def process_n_calc_3d(
 
     except Exception as e:
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line due to {e}")
+            print(f"Fail to compute at point {profile} in the volcano line due to {e}.")
         return np.array([np.nan] * n_target)
 
 
@@ -251,20 +267,21 @@ def process_n_calc_3d_ps(
     verb: str,
 ) -> np.ndarray:
     """
-    Process and calculate the MKM in case of 1 descriptor and 1 physical variable (time, temperature).
+    Process and calculate the MKM for a single descriptor and one physical variable
+    (time or temperature).
 
     Parameters:
-        coord (Tuple[int, int]): Coordinate of the point in the 3D space.
+        coord (Tuple[int, int]): Coordinate of the point in the descriptor/physical variable space.
         dgs (np.ndarray): Array of free energy profiles.
-        t_points (np.ndarray): Array of temperature points.
-        fixed_condition (Union[float, int]): Fixed condition (either temperature or time).
+        t_points (np.ndarray): Array of physical factor variable.
+        fixed_condition (Union[float, int]): Fixed physical condition.
         n_target (int): Number of products.
-        df_network (pd.DataFrame): DataFrame representing the reaction network.
+        df_network (pd.DataFrame): Reaction network DataFrame.
         tags (List[str]): Reaction data column names.
         states (List[str]): Reaction network column names.
-        timeout (int): Timeout value for the calculation.
-        report_as_yield (bool): Flag indicating whether to report results as yield.
-        quality (int): Quality of the integration.
+        timeout (int): Calculation timeout.
+        report_as_yield (bool): Report results as yield if True.
+        quality (int): Integration quality level.
         mode (str): Calculation mode ('vtime' or 'vtemp').
         verb (int): Verbosity level.
 
@@ -280,9 +297,13 @@ def process_n_calc_3d_ps(
             temperature = t_points[coord[1]]
             t_span = (0, fixed_condition)
 
-        initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network = process_data_mkm(
-            profile, df_network, tags, states
-        )
+        (
+            initial_conc,
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            rxn_network,
+        ) = process_data_mkm(profile, df_network, tags, states)
         result, _ = calc_km(
             energy_profile_all,
             dgr_all,
@@ -301,7 +322,7 @@ def process_n_calc_3d_ps(
 
     except Exception as e:
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line due to {e}")
+            print(f"Fail to compute at point {profile} in the volcano line due to {e}.")
         return np.array([np.nan] * n_target)
 
 
@@ -318,29 +339,29 @@ def evol_mode(
     quality: float,
     verb: int,
     n_target: int,
-    x_scale: float,
+    x_scale: str,
     more_species_mkm: List[str],
     wdir: str,
 ) -> None:
     """
-    Execute the evolution mode: plotting evolution for all profiles.
+    Execute the evolution mode: plotting evolution for all profiles in the reaction data.
 
     Parameters:
-        d: Numpy array of profiles.
-        df_network: Dataframe containing the reaction network information.
+        d: NumPy array of profiles.
+        df_network: Dataframe containing the reaction network.
         names (List[str]): List of names of the profiles.
         tags (List[str]): Reaction data column names.
         states (List[str]): Reaction network column names.
         temperature: Temperature for the simulation.
         t_span: Time span for the simulation.
         timeout: Timeout for the simulation.
-        report_as_yield: Flag indicating whether to report the results as yield or concentration.
-        quality: Quality level of the simulation.
+        report_as_yield: Flag for reporting results as yield or concentration.
+        quality: Quality level of the integration.
         verb: Verbosity level.
         n_target: Number of target species.
-        x_scale: Scaling factor for the x-axis in the plots.
-        more_species_mkm: Additional species in the kinetic model.
-        wdir: output directory.
+        x_scale: Time scale for the x-axis.
+        more_species_mkm: Additional species to be included in the evolution plot.
+        wdir: Output directory.
 
     Returns:
         None
@@ -357,12 +378,16 @@ def evol_mode(
         os.makedirs("output_evo")
     else:
         if verb > 1:
-            print("The evolution output directort already exists")
+            print("The evolution output directory already exists")
     for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
         try:
-            initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all = process_data_mkm(
-                profile, df_network, tags, states
-            )
+            (
+                initial_conc,
+                energy_profile_all,
+                dgr_all,
+                coeff_TS_all,
+                rxn_network_all,
+            ) = process_data_mkm(profile, df_network, tags, states)
             result, result_solve_ivp = calc_km(
                 energy_profile_all,
                 dgr_all,
@@ -391,7 +416,7 @@ def evol_mode(
             )
             shutil.move(source_file, destination_file)
         except Exception as e:
-            print(f"Cannot perform mkm for {names[i]}")
+            print(f"Cannot perform mkm for {names[i]} due to {e}.")
             prod_conc_pt.append(np.array([np.nan] * n_target))
             result_solve_ivp_all.append("Shiki")
 
@@ -415,7 +440,7 @@ def evol_mode(
     if not os.path.isdir(os.path.join(wdir, "output_evo/")):
         shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
     else:
-        print("Output already exist")
+        print("Output already exist.")
         move_bool = yesno("Move anyway? (y/n): ")
         if move_bool:
             shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
@@ -426,7 +451,7 @@ def evol_mode(
         """\nThis is a parade
 Even if I have to drag these feet of mine
 In exchange for this seeping pain
-I'll find happiness in abundance"""
+I'll find happiness in abundance."""
     )
 
 
@@ -434,7 +459,7 @@ def get_srps_1d(
     d: np.ndarray,
     tags: List[str],
     coeff: np.ndarray,
-    regress: bool,
+    regress: np.ndarray,
     lfesrs_idx: Optional[List[int]],
     cb: float,
     ms: float,
@@ -447,31 +472,31 @@ def get_srps_1d(
     verb: int,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str], np.ndarray, int]:
     """
-    Get the simulated reaction profiles (SRP) in case of 1 descriptor.
+    Get the simulated reaction profiles (SRP) in case of a single descriptor.
 
     Parameters:
-        d (np.ndarray): Input data.
-        tags (List[str]): List of tags for the data.
+        d (np.ndarray): Numpy array of energy profiles.
+        tags (List[str]): Reaction data column names.
         coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
-        regress (bool): Whether to perform regression.
-        lfesrs_idx (Optional[List[int]]): Indices of manually chosen descriptors for LFESR.
-        cb (float): Cutoff value for LFESR regression.
-        ms (float): Minimum step for descriptor range.
-        xbase (float): x-axis interval
+        regress (np.ndarray): Boolean array for whether to perform regression.
+        lfesrs_idx (Optional[List[int]]): Index of a manually chosen descriptor for LFESRs.
+        cb (np.ndarray): Array of color values.
+        ms (np.ndarray): Array of marker styles.
+        xbase (float): x-axis interval.
         lmargin (float): Left margin for descriptor range.
         rmargin (float): Right margin for descriptor range.
-        npoints (int): Number of points.
-        plotmode (str): Plot mode for LFESR.
-        lfesr (bool): Whether to perform LFESR analysis.
+        npoints (int): Number of points to compute.
+        plotmode (str): Plot mode for LFESRs.
+        lfesr (bool): Whether to plot LFESRs.
         verb (int): Verbosity level.
 
     Returns:
         Tuple containing:
-        - dgs (np.ndarray): Single-Reaction Potential values.
-        - d (np.ndarray): Updated input data.
-        - sigma_dgs (np.ndarray): Sigma values for the SRPs.
+        - dgs (np.ndarray): LFESRs
+        - d (np.ndarray): Curated reaction data
+        - sigma_dgs (np.ndarray): Sigma values for the LFESRs.
         - xint (np.ndarray): Array of descriptor values.
-        - tags (List[str]): Updated list of tags.
+        - tags (List[str]): Reaction data column names.
         - coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
         - idx (int): Index of chosen descriptor.
     """
@@ -481,7 +506,7 @@ def get_srps_1d(
     if lfesrs_idx:
         idx = lfesrs_idx[0]
         if verb > 1:
-            print(f"\n**Manually chose {tags[idx]} as descriptor****\n")
+            print(f"\n**Manually chose {tags[idx]} as a descriptor variable****\n")
     else:
         idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
     if lfesr:
@@ -500,7 +525,6 @@ def get_srps_1d(
             verb,
         )
         # TODO, not sure when, if at all, plot_2d_lsfer outout the csv files
-        # too
         lfesr_csv = [s + ".csv" for s in tags[1:]]
         all_lfsers = [s + ".png" for s in tags[1:]]
         all_lfsers.extend(lfesr_csv)
@@ -518,7 +542,7 @@ def get_srps_1d(
     xmin = bround(X.min() - lmargin, xbase)
 
     if verb > 1:
-        print(f"Range of descriptor set to [ {xmin} , {xmax} ]")
+        print(f"Range of descriptor set to [{xmin}, {xmax}].")
     xint = np.linspace(xmin, xmax, npoints)
     dgs = np.zeros((npoints, len(lnsteps)))
     sigma_dgs = np.zeros((npoints, len(lnsteps)))
@@ -544,7 +568,7 @@ def get_srps_2d(
     d: np.ndarray,
     tags: List[str],
     coeff: np.ndarray,
-    regress: bool,
+    regress: np.ndarray,
     lfesrs_idx: Optional[List[int]],
     lmargin: float,
     rmargin: float,
@@ -558,16 +582,16 @@ def get_srps_2d(
         d (np.ndarray): Array of the free energy profiles.
         tags (List[str]): Reaction data column names.
         coeff (np.ndarray): One-hot encoding of state (0=INT, 1=TS).
-        regress (bool): Flag indicating whether to perform regression.
-        lfesrs_idx (Optional[List[int]]): List of indices for LFE/SRS.
+        regress (np.ndarray): Boolean array for whether to perform regression.
+        lfesrs_idx (Optional[List[int]]): Indices of manually chosen descriptors for LFESRs.
         lmargin (float): Left margin value.
         rmargin (float): Right margin value.
         npoints (int): Number of points to compute.
         verb (int): Verbosity level.
 
     Returns:
-        d (np.ndarray): Input data array.
-        grids (List[np.ndarray]): List of 2D grids.
+        d (np.ndarray): Curated reaction data
+        grids (List[np.ndarray]): The 2D grids.
         xint (np.ndarray): Array of x-axis values (1st descriptor).
         yint (np.ndarray): Array of y-axis values (2nd descriptor).
         X1 (float): X1 value (1st descriptor points).
@@ -593,7 +617,7 @@ def get_srps_2d(
         idx1, idx2 = lfesrs_idx
         if verb > 1:
             print(
-                f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor****\n"
+                f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptors**\n"
             )
     else:
         idx1, idx2 = user_choose_2_dv(dvs, r2s, tags)
@@ -608,9 +632,7 @@ def get_srps_2d(
     x2max = bround(X2.max() + rmargin, x2base, "max")
     x2min = bround(X2.min() - lmargin, x2base, "min")
     if verb > 1:
-        print(
-            f"Range of descriptors set to [ {x1min} , {x1max} ] and [ {x2min} , {x2max} ]"
-        )
+        print(f"Range of descriptors set to [{x1min}, {x1max}] and [{x2min}, {x2max}].")
     xint = np.linspace(x1min, x1max, npoints)
     yint = np.linspace(x2min, x2max, npoints)
     grids = []
@@ -648,14 +670,40 @@ def get_srps_2d(
 
 
 def main():
-
     # %% loading and processing------------------------------------------------------------------------#
-    df, df_network, tags, states, n_target, xbase, lmargin, rmargin, verb, wdir, imputer_strat, report_as_yield, timeout, quality, p_quality, plotmode, more_species_mkm, lfesr, x_scale, comp_ci, ncore, nd, lfesrs_idx, times, temperatures, kinetic_mode = preprocess_data_mkm(
-        sys.argv[2:], mode="mkm_screening"
-    )
+    (
+        df,
+        df_network,
+        tags,
+        states,
+        n_target,
+        xbase,
+        lmargin,
+        rmargin,
+        verb,
+        wdir,
+        imputer_strat,
+        report_as_yield,
+        timeout,
+        quality,
+        p_quality,
+        plotmode,
+        more_species_mkm,
+        lfesr,
+        x_scale,
+        comp_ci,
+        ncore,
+        nd,
+        lfesrs_idx,
+        times,
+        temperatures,
+        kinetic_mode,
+    ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_screening")
 
     if kinetic_mode:
-        print("Lauch kinetic mode for constructing mkm vp or activity map")
+        print(
+            "Lauch the kinetic mode for constructing mkm volcano plot or activity map."
+        )
         sys.exit(
             km_k_volcanic.main(
                 df,
@@ -724,8 +772,7 @@ def main():
         t_points = np.logspace(x2min, x2max, npoints)
         if verb > 1:
             print(
-                """Building actvity/selectivity map with time as the second variable,
-Force nd = 1"""
+                """Building actvity/selectivity map with time as the second variable."""
             )
 
     if temperatures is None:
@@ -747,14 +794,13 @@ Force nd = 1"""
             x2base = 0.5
         if verb > 1:
             print(
-                """Building actvity/selectivity map with temperature as the second variable,
-Force nd = 1"""
+                """Building actvity/selectivity map with temperature as the second variable."""
             )
 
     if ncore == -1:
         ncore = multiprocessing.cpu_count()
     if verb > 2:
-        print(f"Use {ncore} cores for parallel computing")
+        print(f"Use {ncore} cores for parallel computing.")
 
     if plotmode == 0 and comp_ci:
         plotmode = 1
@@ -1033,7 +1079,6 @@ Force nd = 1"""
                 )
 
         else:
-
             if verb > 0:
                 print("\n------------Constructing MKM volcano plot------------------\n")
 
@@ -1041,7 +1086,7 @@ Force nd = 1"""
             if interpolate:
                 if verb > 0:
                     print(
-                        f"Performing microkinetics modelling for the volcano line ({n_point_calc} points)"
+                        f"Performing microkinetics modelling for the volcano line ({n_point_calc} points)."
                     )
                 selected_indices = np.round(
                     np.linspace(0, len(dgs) - 1, n_point_calc)
@@ -1058,7 +1103,7 @@ Force nd = 1"""
                 trun_dgs = dgs
                 if verb > 0:
                     print(
-                        f"Performing microkinetics modelling for the volcano line ({npoints})"
+                        f"Performing microkinetics modelling for the volcano line ({npoints})."
                     )
             prod_conc = np.zeros((len(dgs), n_target))
             ci = np.zeros((len(dgs), n_target))
@@ -1097,7 +1142,6 @@ Force nd = 1"""
             ci_ = ci.copy()
             missing_indices = np.isnan(prod_conc[:, 0])
             for i in range(n_target):
-
                 f = interp1d(
                     xint[~missing_indices],
                     prod_conc[:, i][~missing_indices],
@@ -1120,7 +1164,9 @@ Force nd = 1"""
             prod_conc_ = prod_conc_.T
             ci_ = ci_.T
             # Volcano points
-            print(f"Performing microkinetics modelling for the volcano line ({len(d)})")
+            print(
+                f"Performing microkinetics modelling for every profiles in the reaction date ({len(d)} profiles)."
+            )
 
             prod_conc_pt = np.zeros((len(d), n_target))
 
@@ -1190,7 +1236,6 @@ Force nd = 1"""
                 ci_ = np.full(prod_conc_.shape[0], None)
             prod_names = [i.replace("*", "") for i in states if "*" in i]
             if prod_conc_.shape[0] > 1:
-
                 plot_2d_combo(
                     xint,
                     prod_conc_,
@@ -1273,7 +1318,7 @@ Force nd = 1"""
                 if lfesr:
                     shutil.move("lfesr", "output")
             else:
-                print("The output directort already exists")
+                print("The output directort already exists.")
 
             for file_name in out:
                 source_file = os.path.abspath(file_name)
@@ -1283,7 +1328,7 @@ Force nd = 1"""
             if not os.path.isdir(os.path.join(wdir, "output/")):
                 shutil.move("output/", os.path.join(wdir, "output"))
             else:
-                print("Output already exist")
+                print("Output already exist.")
                 move_bool = yesno("Move anyway? (y/n): ")
                 if move_bool:
                     shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
@@ -1295,16 +1340,33 @@ Force nd = 1"""
 The kindness that rained on this city
 I won't rely on it anymore
 My pain and my shape
-No one else can decide it\n"""
+No one else can decide it.\n"""
             )
 
     elif nd == 2:
-        d, grids, xint, yint, X1, X2, x1max, x2max, x1min, x2max, tag1, tag2, tags, coeff, idx1, idx2 = get_srps_2d(
+        (
+            d,
+            grids,
+            xint,
+            yint,
+            X1,
+            X2,
+            x1max,
+            x2max,
+            x1min,
+            x2max,
+            tag1,
+            tag2,
+            tags,
+            coeff,
+            idx1,
+            idx2,
+        ) = get_srps_2d(
             d, tags, coeff, regress, lfesrs_idx, lmargin, rmargin, npoints, verb
         )
         tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if len(grids) != len(tags_) and tags_[-1].lower().startswith("p"):
-            print("\n***Forgot the last state******\n")
+            # print("\n***Forgot the last state******\n")
             d_ = np.float32(df.to_numpy()[:, 1:])
 
             grids.append(np.full(((npoints, npoints)), d_[-1, -1]))
@@ -1534,5 +1596,5 @@ No one else can decide it\n"""
             """\nThe glow of that gigantic star
 That utopia of endless happiness
 I don't care if I never reach any of those
-I don't need anything else but I\n"""
+I don't need anything else but I.\n"""
         )
