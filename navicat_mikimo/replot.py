@@ -12,14 +12,16 @@ from scipy.signal import savgol_filter, wiener
 from .plot_function import plot_2d_combo
 
 if __name__ == "__main__":
-
     # Input
     parser = argparse.ArgumentParser(
-        description="""Replot with different arguement for filtering method\n
-    Guideline:
-    1. lower window size, more resemblance to the original
-    2. higher polynomail, more resemblance to the original
-    3. vice versa, smoother-looking curve but deviates more from the original
+        description="""Replotting with Varied Filtering Method Parameters. Available for 2D volcano plots only.
+
+To enhance the clarity of the plotted data, we recommend exploring different parameter settings for the filtering method. 
+Specifically, consider the following guidelines:
+
+1. Smaller Window Size retains greater resemblance to the original data.
+2. Increased Polynomial Order creates a plot that closely aligns with the original data.
+3. Larger Window Size and Polynomial Order creates a smoother plot, but may deviate from the original plot.
             """
     )
 
@@ -38,7 +40,7 @@ if __name__ == "__main__":
         dest="window_length",
         type=int,
         nargs="+",
-        help="The length of the filter window (i.e., the number of coefficients), must be less than 200",
+        help="The length of the filter window",
     )
     parser.add_argument(
         "-p",
@@ -99,15 +101,15 @@ if __name__ == "__main__":
     labels = [label.decode() for label in labels]
 
     print(
-        f"Detect {prod_conc_.shape[0]} profiles in the input, require {prod_conc_.shape[0]} input for polyorder and window_length"
+        f"Detect {prod_conc_.shape[0]} profiles in the input, require {prod_conc_.shape[0]} input for polyorder and window_length."
     )
     if filtering_method == "savgol":
         assert len(polyorder) == len(
             window_length
-        ), "Number of polyorder is not equal to number of window_length"
+        ), "Number of polyorder is not equal to number of window_length."
     assert (
         len(window_length) == prod_conc_.shape[0]
-    ), "Number of window_length is not equal to number of the plot"
+    ), "Number of window_length is not equal to number of the plot."
     print("Passed!")
 
     prod_conc_sm_all = []
@@ -117,12 +119,12 @@ if __name__ == "__main__":
         elif filtering_method == "wiener":
             prod_conc_sm = wiener(prod_conc, window_length[i])
         else:
-            sys.exit("Invalid filtering method (savgol, wiener)")
+            sys.exit("Invalid filtering method (savgol, wiener).")
         prod_conc_sm_all.append(prod_conc_sm)
     prod_conc_sm_all = np.array(prod_conc_sm_all)
 
     if np.any(np.max(prod_conc_sm_all) > 10):
-        print("Concentration likely reported as %yield")
+        print("Concentration likely reported as %yield.")
         ybase = np.round((np.max(prod_conc_sm_all) - 0) / 8)
         if ybase == 0:
             ybase = 5

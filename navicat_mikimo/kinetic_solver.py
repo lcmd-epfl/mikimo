@@ -17,18 +17,18 @@ from .plot_function import plot_evo_save
 warnings.filterwarnings("ignore")
 
 
-def erying(
+def eyring(
     dG_ddag: Union[float, np.ndarray], temperature: float
 ) -> Union[float, np.ndarray]:
     """
     Calculates the rate constant given the energy barrier and temperature based on Eyring equation.
 
     Args:
-        dG_ddag (float or array-like): Energy barrier or barriers.
+        dG_ddag (float or array-like): Energy barrier(s).
         temperature (float): Temperature in Kelvin.
 
     Returns:
-        float or array-like: Erying rate constant or constants.
+        float or array-like: Eyring rate constant(s).
 
     """
     R_: float = R * (1 / calorie) * (1 / kilo)
@@ -47,7 +47,7 @@ def get_k(
 
     Parameters:
         energy_profile (array-like): The relative free energies profile (in kcal/mol).
-        dgr (float): Free energy of the reaction.
+        dgr (float): Free energy of the reaction (in kcal/mol).
         coeff_TS (one-hot array): One-hot encoding of the elements that are "TS" along the reaction coordinate.
         temperature (float): Temperature in Kelvin. Default is 298.15.
 
@@ -57,7 +57,6 @@ def get_k(
     """
 
     def get_dG_ddag(energy_profile, dgr, coeff_TS):
-
         # compute all dG_ddag in the profile
         n_S = energy_profile.size
         n_TS = np.count_nonzero(coeff_TS)
@@ -104,8 +103,8 @@ def get_k(
     energy_profile_reverse = np.insert(energy_profile_reverse, 0, 0)
     dG_ddag_reverse = get_dG_ddag(energy_profile_reverse, -dgr, coeff_TS_reverse)
 
-    k_forward = erying(dG_ddag_forward, temperature)
-    k_reverse = erying(dG_ddag_reverse, temperature)
+    k_forward = eyring(dG_ddag_forward, temperature)
+    k_reverse = eyring(dG_ddag_reverse, temperature)
 
     return k_forward, k_reverse[::-1]
 
@@ -132,9 +131,9 @@ def calc_k(
     k_forward_all = []
     k_reverse_all = []
 
-    for i in range(len(energy_profile_all)):
+    for energy_profile, dgr, coeff_TS in zip(energy_profile_all, dgr_all, coeff_TS_all):
         k_forward, k_reverse = get_k(
-            energy_profile_all[i], dgr_all[i], coeff_TS_all[i], temperature=temperature
+            energy_profile, dgr, coeff_TS, temperature=temperature
         )
         k_forward_all.extend(k_forward)
         k_reverse_all.extend(k_reverse)
@@ -266,7 +265,7 @@ def system_KE_DE(
                         # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
                         dy_dt[violate_low_idx] = 0
                         dy_dt[violate_up_idx] = 0
-                    except TypeError as e:
+                    except TypeError as err:
                         y_ = np.array(y._value)
                         dy_dt_ = np.array(dy_dt._value)
                         # arraybox failure
@@ -312,7 +311,7 @@ def calc_km(
     ks=None,
 ) -> Tuple[np.ndarray, Union[str, scipy.integrate._ivp.ivp.OdeResult]]:
     """
-    Calculate the kinetic model (KM) simulation.
+    Perform MKM simulation.
 
     Parameters:
         energy_profile_all (List): List of energy profiles for all steps.
@@ -527,7 +526,6 @@ def calc_km(
             upper = np.min(initial_conc[R_idx] * Rp_)
 
             if report_as_yield:
-
                 c_target_yield = c_target_t / upper * 100
                 c_target_yield[c_target_yield > 100] = 100
                 c_target_yield[c_target_yield < 0] = 0
@@ -545,7 +543,6 @@ def calc_km(
 
 
 def test_get_k():
-
     # Test case 1: CoL6 pincer co2
     energy_profile = np.array([0.0, 14.6, 0.5, 20.1, -1.7, 20.1])
     dgr = 2.2
@@ -740,10 +737,18 @@ def test_calc_dX_dt():
 
 
 def main():
-
-    dg, df_network, tags, states, t_final, temperature, x_scale, more_species_mkm, wdir, ks = preprocess_data_mkm(
-        sys.argv[2:], mode="mkm_solo"
-    )
+    (
+        dg,
+        df_network,
+        tags,
+        states,
+        t_final,
+        temperature,
+        x_scale,
+        more_species_mkm,
+        wdir,
+        ks,
+    ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")
 
     if ks is not None:
         t_span = (0, t_final)
@@ -769,9 +774,13 @@ def main():
             ks=ks,
         )
     else:
-        initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all = process_data_mkm(
-            dg, df_network, tags, states
-        )
+        (
+            initial_conc,
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            rxn_network_all,
+        ) = process_data_mkm(dg, df_network, tags, states)
         t_span = (0, t_final)
         _, result_solve_ivp = calc_km(
             energy_profile_all,
@@ -805,4 +814,4 @@ def main():
     for i in p_indices:
         print("--[{}]: {:.4f}--".format(states[i], result_solve_ivp.y[i][-1]))
 
-    print("\nWords that have faded to gray are colored like cappuccino\n")
+    print("\nWords that have faded to gray are colored like cappuccino.\n")

@@ -33,7 +33,7 @@ def run_mkm_3d(
     initial_conc: np.ndarray,
 ) -> np.ndarray:
     """
-    Run MKM calculation to build tt map.
+    Run MKM calculation to build time-temperature map.
 
     Parameters:
         grid (Tuple[np.ndarray, np.ndarray]): Grid containing temperature and time points.
@@ -109,17 +109,33 @@ def run_mkm_3d(
 
 
 def main():
-
-    dg, df_network, tags, states, t_finals, temperatures, x_scale, more_species_mkm, plot_evo, map_tt, ncore, imputer_strat, verb, ks = preprocess_data_mkm(
-        sys.argv[2:], mode="mkm_cond"
-    )
+    (
+        dg,
+        df_network,
+        tags,
+        states,
+        t_finals,
+        temperatures,
+        x_scale,
+        more_species_mkm,
+        plot_evo,
+        map_tt,
+        ncore,
+        imputer_strat,
+        verb,
+        ks,
+    ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_cond")
 
     idx_target_all = [states.index(i) for i in states if "*" in i]
     prod_name = [s for i, s in enumerate(states) if s.lower().startswith("p")]
     if ks is None:
-        initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all = process_data_mkm(
-            dg, df_network, tags, states
-        )
+        (
+            initial_conc,
+            energy_profile_all,
+            dgr_all,
+            coeff_TS_all,
+            rxn_network_all,
+        ) = process_data_mkm(dg, df_network, tags, states)
     else:
         energy_profile_all = None
         dgr_all = None
@@ -136,7 +152,7 @@ def main():
         if verb > 0:
             print(f"-------Constructing time-temperature map-------\n")
             print(f"Time span: {t_finals} s")
-            print(f"temperature span: {temperatures} s")
+            print(f"Temperature span: {temperatures} s")
         assert (
             len(t_finals) > 1 and len(temperatures) > 1
         ), "Require more than 1 time and temperature input"
@@ -389,7 +405,7 @@ def main():
         elif len(t_finals) > 1 and len(temperatures) > 1:
             if verb > 0:
                 print(
-                    f"-------Screening over both reaction time and temperature:-------\n"
+                    f"-------Screening over both reaction time and temperature-------\n"
                 )
                 print(f"{t_finals} s")
                 print(f"{temperatures} K\n")
@@ -440,5 +456,5 @@ def main():
         """\nI have a heart that can't be filled
 Cast me an unbreaking spell to make these uplifting extraordinary day pours down
 Alone in the noisy neon city
-steps that feels like about to break my heels"""
+steps that feels like about to break my heels ."""
     )

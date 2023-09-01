@@ -9,7 +9,7 @@ import pandas as pd
 
 
 def yesno(question):
-    """Simple Yes/No Function, Ruben's code"""
+    """Simple Yes/No Function, From Volcanic"""
     prompt = f"{question} ? (y/n): "
     ans = input(prompt).strip().lower()
     if ans not in ["y", "n"]:
@@ -21,7 +21,6 @@ def yesno(question):
 
 
 def check_existence(wdir, verb):
-
     kinetic_mode = False
     k_exist = False
 
@@ -35,10 +34,10 @@ def check_existence(wdir, verb):
         c0_exist = any([last_row_index.lower() in rows_to_search])
         k_exist = all([column in df.columns for column in columns_to_search])
         if not (c0_exist):
-            logging.critical("Initial concentration not found in rxn_network.csv")
+            logging.critical("Initial concentration not found in rxn_network.csv.")
 
     else:
-        logging.critical("rxn_network.csv not found")
+        logging.critical("rxn_network.csv not found.")
 
     filename = f"{wdir}reaction_data"
     extensions = [".csv", ".xls", ".xlsx"]
@@ -47,21 +46,21 @@ def check_existence(wdir, verb):
 
     if energy_exist:
         if verb > 2:
-            print("reaction_data file exists")
+            print("Found reaction data file.")
         if k_exist:
-            print("Both energy data and rate constants are provided")
+            print("Both energy data and rate constants are provided.")
     else:
         if k_exist:
-            print("reaction_data file not found, but rate constants are provided")
+            print("reaction_data file not found, but rate constants are provided.")
         else:
             logging.critical(
-                "reaction_data file not found and rate constants are not provided"
+                "reaction_data file not found and rate constants are not provided."
             )
 
     if os.path.exists(f"{wdir}kinetic_data.csv") or os.path.exists(
         f"{wdir}kinetic_data.xlsx"
     ):
-        kinetic_mode = yesno("kinetic_profile.csv exists, toggle to kinetic mode?")
+        kinetic_mode = yesno("kinetic_profile.csv exists, toggle the kinetic mode?")
 
     return kinetic_mode
 
@@ -86,9 +85,9 @@ def check_km_inp(df, df_network, mode="energy"):
         if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
             initial_conc = df_network.iloc[-1:].to_numpy()[0]
             df_network = df_network.drop(df_network.index[-1])
-            logging.info("Initial conditions found")
+            logging.info("Initial conditions found.")
         else:
-            logging.critical("Initial conditions not found")
+            logging.critical("Initial conditions not found.")
 
     states_network = df_network.columns.to_numpy()[:]
     states_profile = df.columns.to_numpy()[1:]
@@ -116,19 +115,19 @@ def check_km_inp(df, df_network, mode="energy"):
                 clear = False
                 logging.warning(
                     f"""\n{state} cannot be found in the reaction data, if it is in different name,
-change it to be the same in both reaction data and the network"""
+change it to be the same in both reaction data and the network."""
                 )
     elif mode == "kinetic":
         if int((df.shape[1] - 1) / 2) != df_network.shape[0]:
             clear = False
             logging.critical(
-                "Number of rate constants in the profile doesn't match with number of steps in the network input"
+                "Number of rate constants in the profile doesn't match with number of steps in the network input."
             )
 
     # initial conc
     if len(states_network) != len(initial_conc):
         clear = False
-        logging.warning("\nYour initial conc seems wrong")
+        logging.warning("\nYour initial conc seems wrong.")
 
     # check network sanity
     mask = (~df_network.isin([-1, 1])).all(axis=1)
@@ -143,21 +142,20 @@ change it to be the same in both reaction data and the network"""
     if np.any(mask_R):
         clear = False
         logging.warning(
-            f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong"
+            f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong."
         )
 
     mask_P = (~df_network.iloc[:, p_indices].isin([1])).all(axis=0).to_numpy()
     if np.any(mask_P):
         clear = False
         logging.warning(
-            f"\nThe product location: {states_network[p_indices[mask_P]]} appears wrong"
+            f"\nThe product location: {states_network[p_indices[mask_P]]} appears wrong."
         )
 
     return clear
 
 
 def preprocess_data_mkm(arguments, mode):
-
     parser = argparse.ArgumentParser(
         prog="mikimo",
         description="Perform microkinetic simulations and generate microkinetic volcano plots for homogeneous catalytic reactions.",
@@ -295,7 +293,7 @@ def preprocess_data_mkm(arguments, mode):
         type=int,
         default=1,
         help="""Run mode (default: 1)
-0: Run mkm for every profile in the input.
+0: Run mkm for every profile in the reaction data input.
 1: Construct microkinetic volcano plot.
 2: Construct microkinetic activity/selectivity map.
         """,
@@ -361,24 +359,24 @@ time (-T time_1 time_2) range in K and s respectively. (default: False)""",
 
         if t_finals is None:
             if verb > 0:
-                print("No time input, use the default value of 54800 s (1d)")
+                print("No time input, use the default value of 54800 s (1d).")
             t_finals = 54800
         elif len(t_finals) == 1:
             t_finals = t_finals[0]
         elif len(t_finals) > 1:
             if verb > 0:
-                print("t_final is a range, use the first value")
+                print("t_final is a range, use the first value.")
             t_finals = t_finals[0]
 
         if temperatures is None:
             if verb > 0:
-                print("No temperature input, use the default value of 298.15 K")
+                print("No temperature input, use the default value of 298.15 K.")
             temperatures = 298.15
         elif len(temperatures) == 1:
             temperatures = temperatures[0]
         elif len(temperatures) > 1:
             if verb > 0:
-                print("temperature is a range, use the first value")
+                print("Temperature input is a range, use the first value.")
             temperatures = temperatures[0]
 
         rnx = f"{wdir}/rxn_network.csv"
@@ -424,10 +422,10 @@ time (-T time_1 time_2) range in K and s respectively. (default: False)""",
             clear = check_km_inp(df, df_network)
 
             if not (clear):
-                print("\nRecheck your reaction network and your reaction data\n")
+                print("\nRecheck your reaction network and your reaction data.\n")
             else:
                 if verb > 0:
-                    print("\nKM input is clear\n")
+                    print("\nMKM inputs are clean\n")
             return (
                 dg,
                 df_network,
@@ -486,16 +484,16 @@ time (-T time_1 time_2) range in K and s respectively. (default: False)""",
                 df = pd.read_csv(filename_csv)
             clear = check_km_inp(df, df_network)
             if not (clear):
-                print("\nRecheck your reaction network and your reaction data\n")
+                print("\nRecheck your reaction network and your reaction data.\n")
             else:
                 if verb > 0:
-                    print("\nKM inputs are clear\n")
+                    print("\nMKM inputs are clean.\n")
 
         tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if ncore == -1:
             ncore = multiprocessing.cpu_count()
         if verb > 2:
-            print(f"Use {ncore} cores for parallel computing")
+            print(f"Use {ncore} cores for parallel computing.")
 
         if plotmode == 0 and comp_ci:
             plotmode = 1
@@ -603,10 +601,10 @@ time (-T time_1 time_2) range in K and s respectively. (default: False)""",
             clear = check_km_inp(df, df_network)
 
             if not (clear):
-                print("\nRecheck your reaction network and your reaction data\n")
+                print("\nRecheck your reaction network and your reaction data.\n")
             else:
                 if verb > 0:
-                    print("\nKM inputs are clear\n")
+                    print("\nMKM inputs are clean\n")
             return (
                 dg,
                 df_network,
@@ -629,7 +627,7 @@ def process_data_mkm(
     dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
 ) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
     """
-    Processes data for kinetic modeling.
+    Processes data for micokinetic modeling.
 
     Args:
         dg (numpy.array): free energy profile.
@@ -722,7 +720,7 @@ def process_data_mkm(
 
 
 def test_process_data_mkm():
-    # Test data
+    """test data processor"""
     dg = np.array(
         [
             0.0,
@@ -828,9 +826,13 @@ def test_process_data_mkm():
     )
 
     # Test the function
-    initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all = process_data_mkm(
-        dg, df_network, tags, states
-    )
+    (
+        initial_conc,
+        energy_profile_all,
+        dgr_all,
+        coeff_TS_all,
+        rxn_network_all,
+    ) = process_data_mkm(dg, df_network, tags, states)
 
     # Compare the results
     assert np.array_equal(initial_conc, initial_conc_expected)

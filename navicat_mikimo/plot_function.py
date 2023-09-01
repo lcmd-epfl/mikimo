@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 
 
 def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
-    """"used in km_volcanic, mode0"""
+    """ "used in km_volcanic, mode0"""
 
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
@@ -142,7 +142,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
 
 
 def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mkm):
-
+    """use in screen_cond"""
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
 
@@ -286,7 +286,6 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
 
 
 def plot_save_cond(x, Pfs, var, prod_name, verb=1):
-
     plt.rc("axes", labelsize=10)
     plt.rc("xtick", labelsize=10)
     plt.rc("ytick", labelsize=10)
@@ -331,6 +330,7 @@ def plot_save_cond(x, Pfs, var, prod_name, verb=1):
 
 
 def plot_ci(ci, x2, y2, ax=None):
+    """taken from navicat_volcanic"""
     if ax is None:
         try:
             ax = plt.gca()
@@ -343,6 +343,7 @@ def plot_ci(ci, x2, y2, ax=None):
 
 
 def plotpoints(ax, px, py, cb, ms, plotmode):
+    """adapted from navicat_volcanic"""
     if plotmode == 1:
         s = 30
         lw = 0.3
@@ -381,7 +382,6 @@ def plot_2d_combo(
     plotmode=1,
     labels=None,
 ):
-
     color = [
         "#FF6347",
         "#32CD32",
@@ -422,7 +422,6 @@ def plot_2d_combo(
 
     # mono color scatter plot
     elif plotmode > 0:
-
         for i, yi in enumerate(y):
             ax.plot(
                 x,
