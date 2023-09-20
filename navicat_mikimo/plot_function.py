@@ -514,7 +514,7 @@ def plot_3d_(
     cbar.set_label(ylabel, labelpad=3)
     # tick_labels = ['{:.2f}'.format(value) for value in levels]
     tick_positions = np.arange(ymin, ymax + 0.1, increment)
-    tick_labels = [f"{abs(value):.1f}" for value in tick_positions]
+    tick_labels = [f"{value:.1f}" for value in tick_positions]
 
     cbar.set_ticks(tick_positions)
     cbar.set_ticklabels(tick_labels)
@@ -581,7 +581,7 @@ def plot_3d_np(
     cbar.set_label(ylabel, labelpad=3)
     # tick_labels = ['{:.2f}'.format(value) for value in levels]
     tick_positions = np.arange(ymin, ymax + 0.1, increment)
-    tick_labels = [f"{abs(value):.1f}" for value in tick_positions]
+    tick_labels = [f"{value:.1f}" for value in tick_positions]
 
     cbar.set_ticks(tick_positions)
     cbar.set_ticklabels(tick_labels)
@@ -624,7 +624,7 @@ def plot_3d_contour_regions_np(
     plt.ylim(np.min(yticks), np.max(yticks))
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
-    ax.contour(xint, yint, grid, cset.levels, colors="black", linewidths=0.1)
+    ax.contour(xint, yint, grid, cszet.levels, colors="black", linewidths=0.1)
 
     def fmt(x, pos):
         return "%.0f" % x
