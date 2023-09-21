@@ -624,7 +624,7 @@ def plot_3d_contour_regions_np(
     plt.ylim(np.min(yticks), np.max(yticks))
     plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
     plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
-    ax.contour(xint, yint, grid, cszet.levels, colors="black", linewidths=0.1)
+    ax.contour(xint, yint, grid, cset.levels, colors="black", linewidths=0.1)
 
     def fmt(x, pos):
         return "%.0f" % x

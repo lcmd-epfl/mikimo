@@ -4,8 +4,8 @@ import multiprocessing
 import os
 import shutil
 import sys
-from typing import List, Optional, Tuple, Union
 import warnings
+from typing import List, Optional, Tuple, Union
 
 import h5py
 import matplotlib.pyplot as plt
@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import sklearn as sk
 from joblib import Parallel, delayed
-from navicat_volcanic.dv1 import curate_d
 from navicat_volcanic.dv2 import find_2_dv
 from navicat_volcanic.helpers import (
     bround,
@@ -21,20 +20,16 @@ from navicat_volcanic.helpers import (
     user_choose_1_dv,
     user_choose_2_dv,
 )
-from navicat_volcanic.plotting2d import calc_ci, plot_2d, plot_2d_lsfer, get_reg_targets
+from navicat_volcanic.plotting2d import calc_ci, get_reg_targets, plot_2d, plot_2d_lsfer
 from navicat_volcanic.plotting3d import (
     get_bases,
     plot_3d_contour,
     plot_3d_contour_regions,
-    plot_3d_lsfer,
-    plot_3d_scatter,
 )
 from scipy.interpolate import interp1d
-from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from tqdm import tqdm
 
-from .helper import check_km_inp, preprocess_data_mkm, process_data_mkm, yesno
+from .helper import process_data_mkm, yesno
 from .kinetic_solver import calc_km
 from .plot_function import (
     plot_2d_combo,
@@ -43,7 +38,6 @@ from .plot_function import (
     plot_3d_np,
     plot_evo,
 )
-from .km_volcanic import call_imputter
 
 warnings.filterwarnings("ignore")
 

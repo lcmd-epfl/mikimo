@@ -25,16 +25,12 @@ from navicat_volcanic.plotting3d import (
     get_bases,
     plot_3d_contour,
     plot_3d_contour_regions,
-    plot_3d_lsfer,
-    plot_3d_scatter,
 )
 from scipy.interpolate import interp1d
-from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from tqdm import tqdm
 
 from . import km_k_volcanic
-from .helper import check_km_inp, preprocess_data_mkm, process_data_mkm, yesno
+from .helper import call_imputter, preprocess_data_mkm, process_data_mkm, yesno
 from .kinetic_solver import calc_km
 from .plot_function import (
     plot_2d_combo,
@@ -43,28 +39,6 @@ from .plot_function import (
     plot_3d_np,
     plot_evo,
 )
-
-
-def call_imputter(imp_alg):
-    """
-    Create an instance of the specified imputer type.
-
-    Parameters:
-        imputer_type: Type of imputer. Options: "knn", "iterative", "simple".
-
-    Returns:
-        An instance of the specified imputer type.
-    """
-    if imp_alg == "knn":
-        imputer = KNNImputer(n_neighbors=5, weights="uniform")
-    elif imp_alg == "iterative":
-        imputer = IterativeImputer(max_iter=10, random_state=0)
-    elif imp_alg == "simple":
-        imputer = SimpleImputer(missing_values=np.nan, strategy="mean")
-    else:
-        print("Invalid imputer type, use KNN imputer instead.")
-        imputer = KNNImputer(n_neighbors=5, weights="uniform")
-    return imputer
 
 
 def process_n_calc_2d(

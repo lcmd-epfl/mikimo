@@ -6,6 +6,30 @@ from typing import List, Tuple
 
 import autograd.numpy as np
 import pandas as pd
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
+
+
+def call_imputter(imp_alg):
+    """
+    Create an instance of the specified imputer type.
+
+    Parameters:
+        imputer_type: Type of imputer. Options: "knn", "iterative", "simple".
+
+    Returns:
+        An instance of the specified imputer type.
+    """
+    if imp_alg == "knn":
+        imputer = KNNImputer(n_neighbors=5, weights="uniform")
+    elif imp_alg == "iterative":
+        imputer = IterativeImputer(max_iter=10, random_state=0)
+    elif imp_alg == "simple":
+        imputer = SimpleImputer(missing_values=np.nan, strategy="mean")
+    else:
+        print("Invalid imputer type, use KNN imputer instead.")
+        imputer = KNNImputer(n_neighbors=5, weights="uniform")
+    return imputer
 
 
 def yesno(question):
