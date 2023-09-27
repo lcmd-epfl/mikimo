@@ -50,10 +50,10 @@ def check_existence(wdir, verb):
 
     rows_to_search = ["c0", "initial_conc", "initial conc"]
     columns_to_search = ["k_forward", "k_reverse"]
-    if os.path.exists(f"{wdir}rxn_network.csv"):
+    if os.path.exists(f"{wdir}/rxn_network.csv"):
         if verb > 2:
             print("rxn_network.csv exists")
-        df = pd.read_csv(f"{wdir}rxn_network.csv", index_col=0)
+        df = pd.read_csv(f"{wdir}/rxn_network.csv", index_col=0)
         last_row_index = df.index[-1]
         c0_exist = any([last_row_index.lower() in rows_to_search])
         k_exist = all([column in df.columns for column in columns_to_search])
@@ -486,7 +486,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         times = args.time
         temperatures = args.temp
 
-        df_network = pd.read_csv(f"{wdir}rxn_network.csv", index_col=0)
+        df_network = pd.read_csv(f"{wdir}/rxn_network.csv", index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])

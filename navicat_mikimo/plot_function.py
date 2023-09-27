@@ -277,8 +277,8 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
         if not os.path.isdir(os.path.join(wdir, "output/")):
             shutil.move("output/", os.path.join(wdir, "output"))
         else:
-            print("Output already exist")
-            move_bool = yesno("Move anyway? (y/n): ")
+            print("Output directory named output already exists.")
+            move_bool = yesno("Continue anyway? (y/n): ")
             if move_bool:
                 shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
             else:
