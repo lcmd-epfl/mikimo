@@ -412,8 +412,8 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         kinetic_mode = check_existence(wdir, verb)
         ks = None
         if kinetic_mode:
-            filename_xlsx = f"{wdir}kinetic_data.xlsx"
-            filename_csv = f"{wdir}kinetic_data.csv"
+            filename_xlsx = f"{wdir}/kinetic_data.xlsx"
+            filename_csv = f"{wdir}/kinetic_data.csv"
             try:
                 df = pd.read_excel(filename_xlsx)
             except FileNotFoundError as e:
@@ -433,8 +433,8 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 ks,
             )
         else:
-            filename_xlsx = f"{wdir}reaction_data.xlsx"
-            filename_csv = f"{wdir}reaction_data.csv"
+            filename_xlsx = f"{wdir}/reaction_data.xlsx"
+            filename_csv = f"{wdir}/reaction_data.csv"
             try:
                 df = pd.read_excel(filename_xlsx)
             except FileNotFoundError as e:
@@ -493,16 +493,16 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
 
         kinetic_mode = check_existence(wdir, verb)
         if kinetic_mode:
-            filename_xlsx = f"{wdir}kinetic_data.xlsx"
-            filename_csv = f"{wdir}kinetic_data.csv"
+            filename_xlsx = f"{wdir}/kinetic_data.xlsx"
+            filename_csv = f"{wdir}/kinetic_data.csv"
             try:
                 df = pd.read_excel(filename_xlsx)
             except FileNotFoundError as e:
                 df = pd.read_csv(filename_csv)
             clear = check_km_inp(df, df_network, mode="kinetic")
         else:
-            filename_xlsx = f"{wdir}reaction_data.xlsx"
-            filename_csv = f"{wdir}reaction_data.csv"
+            filename_xlsx = f"{wdir}/reaction_data.xlsx"
+            filename_csv = f"{wdir}/reaction_data.csv"
             try:
                 df = pd.read_excel(filename_xlsx)
             except FileNotFoundError as e:
@@ -587,8 +587,8 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
 
         ks = None
         if kinetic_mode:
-            filename_xlsx = f"{wdir}kinetic_data.xlsx"
-            filename_csv = f"{wdir}kinetic_data.csv"
+            filename_xlsx = f"{wdir}/kinetic_data.xlsx"
+            filename_csv = f"{wdir}/kinetic_data.csv"
             try:
                 df = pd.read_excel(filename_xlsx)
             except FileNotFoundError as e:
@@ -613,8 +613,8 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 ks,
             )
         else:
-            filename_xlsx = f"{wdir}reaction_data.xlsx"
-            filename_csv = f"{wdir}reaction_data.csv"
+            filename_xlsx = f"{wdir}/reaction_data.xlsx"
+            filename_csv = f"{wdir}/reaction_data.csv"
             try:
                 df = pd.read_excel(filename_xlsx)
             except FileNotFoundError as e:
