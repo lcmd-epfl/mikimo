@@ -63,7 +63,7 @@ def check_existence(wdir, verb):
     else:
         logging.critical("rxn_network.csv not found.")
 
-    filename = f"{wdir}reaction_data"
+    filename = f"{wdir}/reaction_data"
     extensions = [".csv", ".xls", ".xlsx"]
 
     energy_exist = any(os.path.isfile(filename + extension) for extension in extensions)

@@ -814,4 +814,3 @@ def main():
     for i in p_indices:
         print("--[{}]: {:.4f}--".format(states[i], result_solve_ivp.y[i][-1]))
 
-    print("\nWords that have faded to gray are colored like cappuccino.\n")
