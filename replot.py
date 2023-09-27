@@ -12,14 +12,13 @@ from scipy.signal import savgol_filter, wiener
 from plot_function import plot_2d_combo
 
 if __name__ == "__main__":
-
     # Input
     parser = argparse.ArgumentParser(
-        description="""Replot with different arguement for filtering method\n
+        description="""Replot with filtering to smooth possible noise due to interpolation.\n
     Guideline:
-    1. lower window size, more resemblance to the original.
-    2. higher polynomial, more resemblance to the original.
-    3. vice versa, smoother-looking curve but deviates more from the original.
+    1. Lower window size, more resemblance to the original.
+    2. Higher polynomial, more resemblance to the original.
+    3. Vice versa, smoother-looking curve but further from the original.
             """
     )
 
@@ -30,7 +29,7 @@ if __name__ == "__main__":
         dest="filter",
         type=str,
         default="savgol",
-        help="Filtering method for smoothening the volcano (default: savgol) (savgol, wiener, None)",
+        help="Filtering method for smoothening the volcano (default: savgol) (savgol, wiener, None).",
     )
     parser.add_argument(
         "-w",
@@ -38,7 +37,7 @@ if __name__ == "__main__":
         dest="window_length",
         type=int,
         nargs="+",
-        help="The length of the filter window (i.e., the number of coefficients), must be less than 200",
+        help="The length of the filter window (i.e., the number of coefficients), must be less than 200.",
     )
     parser.add_argument(
         "-p",
@@ -53,7 +52,7 @@ if __name__ == "__main__":
         "--s",
         dest="save",
         action="store_true",
-        help="Flag to save a new data. (default: False)",
+        help="Flag to save a new data. (default: False).",
     )
 
     args = parser.parse_args()
@@ -88,15 +87,15 @@ if __name__ == "__main__":
     tag = tag[0].decode()
 
     print(
-        f"Detect {prod_conc_.shape[0]} profiles in the input, require {prod_conc_.shape[0]} input for polyorder and window_length"
+        f"Detected {prod_conc_.shape[0]} profiles in the input, require {prod_conc_.shape[0]} input for polyorder and window_length."
     )
     if filtering_method == "savgol":
         assert len(polyorder) == len(
             window_length
-        ), "Number of polyorder is not equal to number of window_length"
+        ), "Number of polyorder is not equal to number of window_length."
     assert (
         len(window_length) == prod_conc_.shape[0]
-    ), "Number of window_length is not equal to number of the plot"
+    ), "Number of window_length is not equal to number of the plot."
     print("Passed!")
 
     prod_conc_sm_all = []
@@ -106,12 +105,12 @@ if __name__ == "__main__":
         elif filtering_method == "wiener":
             prod_conc_sm = wiener(prod_conc, window_length[i])
         else:
-            sys.exit("Invalid filtering method (savgol, wiener)")
+            sys.exit("Invalid filtering method (savgol, wiener).")
         prod_conc_sm_all.append(prod_conc_sm)
     prod_conc_sm_all = np.array(prod_conc_sm_all)
 
     if np.any(np.max(prod_conc_sm_all) > 10):
-        print("Concentration likely reported as %yield, set y_base to 10")
+        print("Concentration likely reported as %yield, set y_base to 10.")
         ybase = np.round((np.max(prod_conc_sm_all) - 0) / 8)
         if ybase == 0:
             ybase = 5
@@ -120,7 +119,7 @@ if __name__ == "__main__":
         ybase = np.round((np.max(prod_conc_pt_) - 0) / 8, 1)
         if ybase == 0:
             ybase = 0.05
-        ylabel = "Final product concentraion (M)"
+        ylabel = "Final product concentraion (M)."
 
     xbase = np.round((np.max(descr_all) - np.min(descr_all)) / 8)
     if xbase == 0:

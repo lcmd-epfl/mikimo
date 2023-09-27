@@ -14,7 +14,7 @@ for fname in glob("navicat_mikimo/**/*", recursive=True):
 
 setup(
     name="navicat_mikimo",
-    version="1.0.0",
+    version="1.0.1",
     description="microkinetic modeling code for homogeneous catalytic reactions",
     long_description=long_description,
     long_description_content_type="text/x-rst",

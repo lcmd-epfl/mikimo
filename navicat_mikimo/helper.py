@@ -15,7 +15,7 @@ def call_imputter(imp_alg):
     Create an instance of the specified imputer type.
 
     Parameters:
-        imputer_type: Type of imputer. Options: "knn", "iterative", "simple".
+        Imputer_type: Type of imputer. Options: "knn", "iterative", "simple".
 
     Returns:
         An instance of the specified imputer type.
@@ -33,7 +33,7 @@ def call_imputter(imp_alg):
 
 
 def yesno(question):
-    """Simple Yes/No Function, From Volcanic"""
+    """Simple Yes/No Function from volcanic"""
     prompt = f"{question} ? (y/n): "
     ans = input(prompt).strip().lower()
     if ans not in ["y", "n"]:
@@ -138,20 +138,19 @@ def check_km_inp(df, df_network, mode="energy"):
             else:
                 clear = False
                 logging.warning(
-                    f"""\n{state} cannot be found in the reaction data, if it is in different name,
-change it to be the same in both reaction data and the network."""
+                    f"""\n{state} cannot be found in the reaction data, if it is make sure that the same name is used in both reaction data and network."""
                 )
     elif mode == "kinetic":
         if int((df.shape[1] - 1) / 2) != df_network.shape[0]:
             clear = False
             logging.critical(
-                "Number of rate constants in the profile doesn't match with number of steps in the network input."
+                "The number of rate constants in the profile doesn't match with number of steps in the network input."
             )
 
     # initial conc
     if len(states_network) != len(initial_conc):
         clear = False
-        logging.warning("\nYour initial conc seems wrong.")
+        logging.warning("\nYour initial concentration seems wrong. Double check!")
 
     # check network sanity
     mask = (~df_network.isin([-1, 1])).all(axis=1)
@@ -166,14 +165,14 @@ change it to be the same in both reaction data and the network."""
     if np.any(mask_R):
         clear = False
         logging.warning(
-            f"\nThe reactant location: {states_network[r_indices[mask_R]]} appears wrong."
+            f"\nThe reactant location: {states_network[r_indices[mask_R]]} is likely wrong."
         )
 
     mask_P = (~df_network.iloc[:, p_indices].isin([1])).all(axis=0).to_numpy()
     if np.any(mask_P):
         clear = False
         logging.warning(
-            f"\nThe product location: {states_network[p_indices[mask_P]]} appears wrong."
+            f"\nThe product location: {states_network[p_indices[mask_P]]} is likely wrong."
         )
 
     return clear
@@ -183,11 +182,11 @@ def preprocess_data_mkm(arguments, mode):
     parser = argparse.ArgumentParser(
         prog="mikimo",
         description="Perform microkinetic simulations and generate microkinetic volcano plots for homogeneous catalytic reactions.",
-        epilog="Remember to cite the volcanic paper: (Submitted!)",
+        epilog="Remember to cite the mikimo paper: (Submitted!)",
     )
 
     parser.add_argument(
-        "-version", "--version", action="version", version="%(prog)s 1.0.0"
+        "-version", "--version", action="version", version="%(prog)s 1.0.1"
     )
 
     parser.add_argument(
@@ -195,6 +194,8 @@ def preprocess_data_mkm(arguments, mode):
         "--d",
         "--dir",
         dest="dir",
+        default=".",
+        type=str,
         help="Directory containing all required input files (reaction_data, rxn_network in csv or xlsx format)",
     )
 
@@ -367,8 +368,8 @@ def preprocess_data_mkm(arguments, mode):
         dest="map",
         action="store_true",
         help="""Toggle to construct time-temperature map
-Require input of temperature range (-t temperature_1 temperature_2) and
-time (-T time_1 time_2) range in K and s respectively. (default: False)""",
+Requires the input of a temperature range (-t temperature_1 temperature_2) and
+time range (-T time_1 time_2) in K and s respectively. (default: False)""",
     )
 
     args = parser.parse_args(arguments)
@@ -449,7 +450,7 @@ time (-T time_1 time_2) range in K and s respectively. (default: False)""",
                 print("\nRecheck your reaction network and your reaction data.\n")
             else:
                 if verb > 0:
-                    print("\nMKM inputs are clean\n")
+                    print("\nMKM inputs appear to be valid.\n")
             return (
                 dg,
                 df_network,
@@ -511,13 +512,13 @@ time (-T time_1 time_2) range in K and s respectively. (default: False)""",
                 print("\nRecheck your reaction network and your reaction data.\n")
             else:
                 if verb > 0:
-                    print("\nMKM inputs are clean.\n")
+                    print("\nMKM inputs appear to be valid.\n")
 
         tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if ncore == -1:
             ncore = multiprocessing.cpu_count()
         if verb > 2:
-            print(f"Use {ncore} cores for parallel computing.")
+            print(f"Will use {ncore} cores for parallel computing.")
 
         if plotmode == 0 and comp_ci:
             plotmode = 1
@@ -628,7 +629,7 @@ time (-T time_1 time_2) range in K and s respectively. (default: False)""",
                 print("\nRecheck your reaction network and your reaction data.\n")
             else:
                 if verb > 0:
-                    print("\nMKM inputs are clean\n")
+                    print("\nMKM inputs appear to be valid.\n")
             return (
                 dg,
                 df_network,

@@ -1,3 +1,4 @@
+#!/usr/env/ python3
 import pandas as pd
 import numpy as np
 from navicat_mikimo.helper import process_data_mkm
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         "--d",
         "--dir",
         dest="dir",
-        help="directory containing all required input files (reaction_data, rxn_network in csv or xlsx format)",
+        help="Directory containing all required input files (reaction_data, rxn_network in csv or xlsx format)",
     )
     parser.add_argument(
         "-t",
@@ -71,4 +72,4 @@ if __name__ == "__main__":
     temperature = args.temp
     e2k(wdir, temperature)
 
-    print(f"Converted energy profile in {wdir} to kinetic profile.")
+    print(f"Converted energy profile in {wdir} to kinetic profile, saved as kinetic_data.csv in the same directory.")

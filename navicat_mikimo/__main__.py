@@ -6,7 +6,6 @@ from . import kinetic_solver, km_volcanic, screen_reaction_condition
 
 
 def run(mode):
-
     if mode == "mkm":
         sys.exit(kinetic_solver.main())
     elif mode == "vp":
