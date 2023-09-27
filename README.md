@@ -74,6 +74,12 @@ For each step (denoted as *i*) in the reaction network, assign a value of *-n* t
 The initial concentrations should be specified in the last row of the reaction network file. This row can be named "c0", "initial_conc," or "initial conc." 
 
 
+The code offers three modes of operation:
+
+- **mkm**: This mode is for a single MKM run. If there are multiple profiles in the reaction data file, the top-most row is read. 
+- **cond**: Use this mode for screening over reaction time and/or temperature.
+- **vp**: This mode is for screening over all energy profiles in the reaction data file. Note that it's only applicable when the reaction data contains more than one energy profile.
+
 Once all input files are ready and `mikimo` is installed, several run options are available:
 
 1. Call just kinetic solver:
@@ -114,17 +120,17 @@ python -m navicat_mikimo mkm -d test_cases/pd_carbocylic_borylation/ -t 298.15 -
 
 2. Microkinetic modelling for all profiles of the catalytic competing carboamination and cyclopropanation of N-enoxyphathanalimides with alkenes (353.15 K, 1 d):
 ```python
-python -m navicat_mikimo vp -d volcanic_test/CA_CP_selectivity/ -t 353.15 -nd 0
+python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 0
 ```
 
 3. Constructing the microkinetic volcano plot for the catalytic competing carboamination and cyclopropanation of N-enoxyphathanalimides with alkenes (353.15 K, 1 d):
 ```python
-python -m navicat_mikimo vp -d volcanic_test/CA_CP_selectivity/ -t 353.15 -nd 1 -ncore 24
+python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 1 -ncore 24
 ```
 
 4. Constructiong the microkinetic activity/selectivity map for the catalytic competing carboamination and cyclopropanation of N-enoxyphathanalimides with alkenes (353.15 K, 1 d):
 ```python
-python -m navicat_mikimo vp -d volcanic_test/CA_CP_selectivity/ -t 353.15 -nd 2 -ncore 24
+python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 2 -ncore 24
 ```
 
 5. Constructing the activity/selectivity map with time [2-24 hr] and temperature [273.15-423.15 K] as descriptors:
@@ -136,7 +142,7 @@ python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 
 6. Using filtering to smooth the plot:
 
 ```python
-python replot.py examples/data/data.h5 -p 3 3 3 -w 20 20 20
+python replot.py examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
 ```
 
 You can find examples of reading h5 files and regenerating plots in the "examples" folder.
