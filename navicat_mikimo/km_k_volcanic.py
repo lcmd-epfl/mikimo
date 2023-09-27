@@ -437,7 +437,7 @@ def evol_mode(
         shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
     else:
         print("Output directory named output already exists.")
-        move_bool = yesno("Continue anyway?")
+        move_bool = yesno("Continue anyway")
         if move_bool:
             shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
         else:
@@ -1240,7 +1240,7 @@ def main(
                 shutil.move("output/", os.path.join(wdir, "output"))
             else:
                 print("Output directory named output already exists.")
-                move_bool = yesno("Continue anyway?")
+                move_bool = yesno("Continue anyway")
                 if move_bool:
                     shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
                 else:
