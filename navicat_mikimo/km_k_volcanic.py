@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 import itertools
 import multiprocessing
-import os
-import shutil
 import sys
 import warnings
 from typing import List, Optional, Tuple, Union
@@ -376,11 +374,7 @@ def evol_mode(
             initial_conc = df_network.iloc[-1:].to_numpy()[0]
             df_network = df_network.drop(df_network.index[-1])
     rxn_network_all = df_network.to_numpy()[:, :]
-    if not os.path.isdir("output_evo"):
-        os.makedirs("output_evo")
-    else:
-        if verb > 1:
-            print("The evolution output directory already exists.")
+
     for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
         try:
             result, result_solve_ivp = calc_km(
@@ -406,11 +400,7 @@ def evol_mode(
 
             states_ = [s.replace("*", "") for s in states]
             plot_evo(result_solve_ivp, names[i], states_, x_scale, more_species_mkm)
-            source_file = os.path.abspath(f"kinetic_modelling_{names[i]}.png")
-            destination_file = os.path.join(
-                "output_evo/", os.path.basename(f"kinetic_modelling_{names[i]}.png")
-            )
-            shutil.move(source_file, destination_file)
+
         except Exception as e:
             print(f"Cannot perform mkm for {names[i]}.")
             prod_conc_pt.append(np.array([np.nan] * n_target))
@@ -427,21 +417,6 @@ def evol_mode(
         df_ev = pd.DataFrame(data_dict)
         df_ev.to_csv("prod_conc.csv", index=False)
         print(df_ev.to_string(index=False))
-        source_file = os.path.abspath("prod_conc.csv")
-        destination_file = os.path.join(
-            "output_evo/", os.path.basename("prod_conc.csv")
-        )
-        shutil.move(source_file, destination_file)
-
-    if not os.path.isdir(os.path.join(wdir, "output_evo/")):
-        shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-    else:
-        print("Output directory named output already exists.")
-        move_bool = yesno("Continue anyway")
-        if move_bool:
-            shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-        else:
-            pass
 
     print(
         """\nThis is a parade
@@ -526,12 +501,6 @@ def get_srps_1d(
         all_lfsers = [s + ".png" for s in tags[1:]]
         lfesr_csv = [s + ".csv" for s in tags[1:]]
         all_lfsers.extend(lfesr_csv)
-        if not os.path.isdir("lfesr"):
-            os.makedirs("lfesr")
-        for file_name in all_lfsers:
-            source_file = os.path.abspath(file_name)
-            destination_file = os.path.join("lfesr/", os.path.basename(file_name))
-            shutil.move(source_file, destination_file)
 
     X, tag, tags, d, d2, coeff = get_reg_targets(idx, d, tags, coeff, regress, mode="k")
     lnsteps = range(d.shape[1])
@@ -1223,28 +1192,6 @@ def main(
                     group.create_dataset("ylabel", data=[ylabel.encode()])
                     group.create_dataset("labels", data=prod_names)
                 out.append("data.h5")
-
-            if not os.path.isdir("output"):
-                os.makedirs("output")
-                if lfesr:
-                    shutil.move("lfesr", "output")
-            else:
-                print("The output directort already exists.")
-
-            for file_name in out:
-                source_file = os.path.abspath(file_name)
-                destination_file = os.path.join("output/", os.path.basename(file_name))
-                shutil.move(source_file, destination_file)
-
-            if not os.path.isdir(os.path.join(wdir, "output/")):
-                shutil.move("output/", os.path.join(wdir, "output"))
-            else:
-                print("Output directory named output already exists.")
-                move_bool = yesno("Continue anyway")
-                if move_bool:
-                    shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-                else:
-                    pass
 
             print(
                 """\nI won't pray anymore

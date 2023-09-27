@@ -1,6 +1,3 @@
-import os
-import shutil
-
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -141,7 +138,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
 
 
-def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mkm):
+def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
     """use in screen_cond"""
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
@@ -248,7 +245,6 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
     plt.xlabel(xlabel)
     plt.ylabel("Concentration (mol/l)")
     plt.legend()
-    # plt.grid(True, linestyle='--', linewidth=0.75)
     plt.tight_layout()
     fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
 
@@ -256,33 +252,6 @@ def plot_evo_save(result_solve_ivp, wdir, name, states, x_scale, more_species_mk
     np.savetxt(f"cat_{name}.txt", result_solve_ivp.y[0, :])
     np.savetxt(f"Rs_{name}.txt", result_solve_ivp.y[r_indices])
     np.savetxt(f"Ps_{name}.txt", result_solve_ivp.y[p_indices])
-
-    out = [
-        f"t_{name}.txt",
-        f"cat_{name}.txt",
-        f"Rs_{name}.txt",
-        f"Ps_{name}.txt",
-        f"kinetic_modelling_{name}.png",
-    ]
-
-    if not os.path.isdir("output"):
-        os.makedirs("output")
-
-    for file_name in out:
-        source_file = os.path.abspath(file_name)
-        destination_file = os.path.join("output/", os.path.basename(file_name))
-        shutil.move(source_file, destination_file)
-
-    if wdir:
-        if not os.path.isdir(os.path.join(wdir, "output/")):
-            shutil.move("output/", os.path.join(wdir, "output"))
-        else:
-            print("Output directory named output already exists.")
-            move_bool = yesno("Continue anyway")
-            if move_bool:
-                shutil.move("output_evo/", os.path.join(wdir, "output_evo"))
-            else:
-                pass
 
 
 def plot_save_cond(x, Pfs, var, prod_name, verb=1):

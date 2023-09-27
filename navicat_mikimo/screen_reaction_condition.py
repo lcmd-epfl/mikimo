@@ -356,7 +356,6 @@ def main():
                 if plot_evo:
                     plot_evo_save(
                         result_solve_ivp,
-                        None,
                         str(temperature),
                         states,
                         x_scale,
@@ -393,7 +392,6 @@ def main():
                 if plot_evo:
                     plot_evo_save(
                         result_solve_ivp,
-                        None,
                         str(temperature),
                         states,
                         x_scale,
@@ -433,7 +431,6 @@ def main():
                 if plot_evo:
                     plot_evo_save(
                         result_solve_ivp,
-                        None,
                         str(temperature),
                         states,
                         x_scale,
