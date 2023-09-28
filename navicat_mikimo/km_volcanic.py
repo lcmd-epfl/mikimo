@@ -334,8 +334,6 @@ def evol_mode(
     prod_conc_pt = []
     result_solve_ivp_all = []
 
-    if not os.path.isdir("output_evo"):
-        os.makedirs("output_evo")
     else:
         if verb > 1:
             print("The evolution output directory already exists.")
