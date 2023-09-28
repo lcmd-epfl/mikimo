@@ -135,7 +135,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     plt.ylim(ymin, ymax)
     plt.yticks(np.arange(0, ymax + 0.1, ybase))
 
-    fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
+    fig.savefig(f"mkm_{name}.png", dpi=400)
 
 
 def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
@@ -246,8 +246,9 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
     plt.ylabel("Concentration (mol/l)")
     plt.legend()
     plt.tight_layout()
-    fig.savefig(f"kinetic_modelling_{name}.png", dpi=400)
+    fig.savefig(f"mkm_{name}.png", dpi=400)
 
+    # TODO refine
     np.savetxt(f"t_{name}.txt", result_solve_ivp.t)
     np.savetxt(f"cat_{name}.txt", result_solve_ivp.y[0, :])
     np.savetxt(f"Rs_{name}.txt", result_solve_ivp.y[r_indices])

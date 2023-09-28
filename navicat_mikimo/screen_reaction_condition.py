@@ -219,7 +219,7 @@ def main():
             grid_d_fill = grid_d
 
         times_ = np.log10(times_)
-        with h5py.File("data_tt.h5", "w") as f:
+        with h5py.File("mkm_time_temperature.h5", "w") as f:
             group = f.create_group("data")
             # save each numpy array as a dataset in the group
             group.create_dataset("temperatures_", data=temperatures_)
@@ -230,14 +230,14 @@ def main():
         x2label = "log$_{10}$(Time) [s]"
 
         alabel = "Total product concentration [M]"
-        afilename = f"Tt_activity_map.png"
+        afilename = f"time_temperature_activity_map.png"
 
         activity_grid = np.sum(grid_d_fill, axis=0)
         amin = activity_grid.min()
         amax = activity_grid.max()
 
         if verb > 2:
-            with h5py.File("data_a_tt.h5", "w") as f:
+            with h5py.File("mkm_time_temperature_activity.h5", "w") as f:
                 group = f.create_group("data")
                 # save each numpy array as a dataset in the group
                 group.create_dataset("temperatures_", data=temperatures_)
@@ -265,7 +265,7 @@ def main():
 
         prod = [p for p in states if "*" in p]
         prod = [s.replace("*", "") for s in prod]
-        sfilename = "Tt_selectivity_map.png"
+        sfilename = "mkm_time_temperature_selectivity.png"
         if n_target == 2:
             slabel = "$log_{10}$" + f"({prod[0]}/{prod[1]})"
             min_ratio = -3
@@ -278,7 +278,7 @@ def main():
             smin = selectivity_ratio_.min()
             smax = selectivity_ratio_.max()
             if verb > 2:
-                with h5py.File("data_s_tt.h5", "w") as f:
+                with h5py.File("mkm_time_temperature_selectivity.h5", "w") as f:
                     group = f.create_group("data")
                     group.create_dataset("temperatures_", data=temperatures_)
                     group.create_dataset("times_", data=times_)
@@ -305,7 +305,7 @@ def main():
             dominant_indices = np.argmax(grid_d_fill, axis=0)
             slabel = "Dominant product"
             if verb > 2:
-                with h5py.File("data_s_tt.h5", "w") as f:
+                with h5py.File("mkm_time_temperature_selectivity.h5", "w") as f:
                     group = f.create_group("data")
                     group.create_dataset("temperatures_", data=temperatures_)
                     group.create_dataset("times_", data=times_)
@@ -445,7 +445,7 @@ def main():
                 data_dict[prod_name[i]] = Pf
 
             df = pd.DataFrame(data_dict)
-            df.to_csv(f"time_temp_screen.csv", index=False)
+            df.to_csv(f"time_temperature_screen.csv", index=False)
             if verb > 0:
                 print(df.to_string(index=False))
 

@@ -12,19 +12,31 @@ import sklearn as sk
 from joblib import Parallel, delayed
 from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.dv2 import find_2_dv
-from navicat_volcanic.helpers import (bround, group_data_points,
-                                      user_choose_1_dv, user_choose_2_dv)
+from navicat_volcanic.helpers import (
+    bround,
+    group_data_points,
+    user_choose_1_dv,
+    user_choose_2_dv,
+)
 from navicat_volcanic.plotting2d import calc_ci, plot_2d, plot_2d_lsfer
-from navicat_volcanic.plotting3d import (get_bases, plot_3d_contour,
-                                         plot_3d_contour_regions)
+from navicat_volcanic.plotting3d import (
+    get_bases,
+    plot_3d_contour,
+    plot_3d_contour_regions,
+)
 from scipy.interpolate import interp1d
 from tqdm import tqdm
 
 from . import km_k_volcanic
 from .helper import call_imputter, preprocess_data_mkm, process_data_mkm, yesno
 from .kinetic_solver import calc_km
-from .plot_function import (plot_2d_combo, plot_3d_,
-                            plot_3d_contour_regions_np, plot_3d_np, plot_evo)
+from .plot_function import (
+    plot_2d_combo,
+    plot_3d_,
+    plot_3d_contour_regions_np,
+    plot_3d_np,
+    plot_evo,
+)
 
 
 def process_n_calc_2d(
@@ -334,9 +346,6 @@ def evol_mode(
     prod_conc_pt = []
     result_solve_ivp_all = []
 
-    else:
-        if verb > 1:
-            print("The evolution output directory already exists.")
     for i, profile in enumerate(tqdm(d, total=len(d), ncols=80)):
         try:
             (
@@ -359,6 +368,7 @@ def evol_mode(
                 report_as_yield,
                 quality=quality,
             )
+
             if len(result) != n_target:
                 prod_conc_pt.append(np.array([np.nan] * n_target))
             else:
@@ -463,7 +473,7 @@ def get_srps_1d(
             plotmode,
             verb,
         )
-        # TODO, not sure when, if at all, plot_2d_lsfer outout the csv files
+
         lfesr_csv = [s + ".csv" for s in tags[1:]]
         all_lfsers = [s + ".png" for s in tags[1:]]
         all_lfsers.extend(lfesr_csv)
@@ -813,7 +823,7 @@ def main():
             lfesr,
             verb,
         )
-        # TODO For some reason, sometimes the volcanic drops the last state
+        # For some reason, sometimes the volcanic drops the last state
         # Kinda adhoc fix for now
         tags_ = np.array([str(t) for t in df.columns[1:]], dtype=object)
         if tags_[-1] not in tags and tags_[-1].lower().startswith("p"):
@@ -895,7 +905,7 @@ def main():
                 if x2base == 0:
                     x2base = 0.5
 
-            with h5py.File("data_tv.h5", "w") as f:
+            with h5py.File("mkm_descr_phys.h5", "w") as f:
                 group = f.create_group("data")
                 # save each numpy array as a dataset in the group
                 group.create_dataset("xint", data=xint)
@@ -911,7 +921,7 @@ def main():
             amin = activity_grid.min()
             amax = activity_grid.max()
             if verb > 2:
-                with h5py.File("data_tv_a.h5", "w") as f:
+                with h5py.File("mkm_descr_phys_activity.h5", "w") as f:
                     group = f.create_group("data")
                     # save each numpy array as a dataset in the group
                     group.create_dataset("xint", data=xint)
@@ -953,7 +963,7 @@ def main():
                 smin = selectivity_ratio_.min()
                 smax = selectivity_ratio_.max()
                 if verb > 2:
-                    with h5py.File("data_tv_s.h5", "w") as f:
+                    with h5py.File("mkm_descr_phys_selectivity.h5", "w") as f:
                         group = f.create_group("data")
                         # save each numpy array as a dataset in the group
                         group.create_dataset("xint", data=xint)
@@ -984,7 +994,7 @@ def main():
                 sfilename = f"selectivity_{tag}_{screen_cond}.png"
                 dominant_indices = np.argmax(grid_d_fill, axis=0)
                 if verb > 2:
-                    with h5py.File("data_tv_a.h5", "w") as f:
+                    with h5py.File("mkm_descr_phys_activity.h5", "w") as f:
                         group = f.create_group("data")
                         # save each numpy array as a dataset in the group
                         group.create_dataset("xint", data=xint)
@@ -1164,7 +1174,6 @@ def main():
             if xbase == 0:
                 xbase = 5
 
-            out = []
             if not (comp_ci):
                 ci_ = np.full(prod_conc_.shape[0], None)
             prod_names = [i.replace("*", "") for i in states if "*" in i]
@@ -1182,11 +1191,10 @@ def main():
                     ybase=ybase,
                     xlabel=xlabel,
                     ylabel=ylabel,
-                    filename=f"km_volcano_{tag}_combo.png",
+                    filename=f"mkm_volcano_{tag}_combo.png",
                     plotmode=plotmode,
                     labels=prod_names,
                 )
-                out.append(f"km_volcano_{tag}_combo.png")
                 for i in range(prod_conc_.shape[0]):
                     plot_2d(
                         xint,
@@ -1202,10 +1210,9 @@ def main():
                         ms=ms,
                         xlabel=xlabel,
                         ylabel=ylabel,
-                        filename=f"km_volcano_{tag}_profile{i}.png",
+                        filename=f"mkm_volcano_{tag}_profile{i}.png",
                         plotmode=plotmode,
                     )
-                    out.append(f"km_volcano_{tag}_profile{i}.png")
                     plt.clf()
             else:
                 plot_2d(
@@ -1222,16 +1229,14 @@ def main():
                     ms=ms,
                     xlabel=xlabel,
                     ylabel=ylabel,
-                    filename=f"km_volcano_{tag}.png",
+                    filename=f"mkm_volcano_{tag}.png",
                     plotmode=plotmode,
                 )
-                out.append(f"km_volcano_{tag}.png")
 
-            # TODO will save ci later
             if verb > 1:
                 cb = np.array(cb, dtype="S")
                 ms = np.array(ms, dtype="S")
-                with h5py.File("data.h5", "w") as f:
+                with h5py.File("mkm_vp.h5", "w") as f:
                     group = f.create_group("data")
                     # save each numpy array as a dataset in the group
                     group.create_dataset("descr_all", data=xint)
@@ -1244,7 +1249,6 @@ def main():
                     group.create_dataset("xlabel", data=[xlabel.encode()])
                     group.create_dataset("ylabel", data=[ylabel.encode()])
                     group.create_dataset("labels", data=prod_names)
-                out.append("data.h5")
 
             print(
                 """\nI won't pray anymore
@@ -1340,7 +1344,7 @@ No one else can decide it.\n"""
         # Plotting and saving
         cb = np.array(cb, dtype="S")
         ms = np.array(ms, dtype="S")
-        with h5py.File("data.h5", "w") as f:
+        with h5py.File("mkm_vp_3d.h5", "w") as f:
             group = f.create_group("data")
             # save each numpy array as a dataset in the group
             group.create_dataset("xint", data=xint)
@@ -1391,7 +1395,7 @@ No one else can decide it.\n"""
             cmap="jet",
         )
         if verb > 2:
-            with h5py.File("data_a.h5", "w") as f:
+            with h5py.File("mkm_vp_3d_activity.h5", "w") as f:
                 group = f.create_group("data")
                 # save each numpy array as a dataset in the group
                 group.create_dataset("xint", data=xint)
@@ -1422,7 +1426,7 @@ No one else can decide it.\n"""
             smin = selectivity_ratio.min()
             smax = selectivity_ratio.max()
             if verb > 2:
-                with h5py.File("data_a.h5", "w") as f:
+                with h5py.File("mkm_vp_3d_selectivity.h5", "w") as f:
                     group = f.create_group("data")
                     # save each numpy array as a dataset in the group
                     group.create_dataset("xint", data=xint)
@@ -1465,7 +1469,7 @@ No one else can decide it.\n"""
             slabel = "Dominant product"
             sfilename = f"selectivity_{tag1}_{tag2}.png"
             if verb > 2:
-                with h5py.File("data_a.h5", "w") as f:
+                with h5py.File("mkm_vp_3d_selectivity.h5", "w") as f:
                     group = f.create_group("data")
                     # save each numpy array as a dataset in the group
                     group.create_dataset("xint", data=xint)

@@ -334,7 +334,6 @@ def calc_km(
     """
     idx_target_all = [states.index(i) for i in states if "*" in i]
 
-    # TODO, k_f and k_r concatenated
     if ks is not None:
         k_forward_all, k_reverse_all = np.split(ks, 2)
     else:
@@ -431,8 +430,7 @@ def calc_km(
             else:
                 success = True
 
-        # TODO more specific error handling
-        except Exception as e:
+        except Exception:
             if rtol == last_[0] and atol == last_[1]:
                 success = True
                 cont = True
@@ -469,7 +467,6 @@ def calc_km(
                 else:
                     success = True
 
-            # TODO more specific error handling
             except Exception as e:
                 if rtol == last_[0] and atol == last_[1]:
                     success = True
@@ -522,7 +519,7 @@ def calc_km(
                 Rp_.append(non_zero_values)
             Rp_ = np.abs([r[0] for r in Rp_])
 
-            # TODO: better way to find determining reactant conc
+            # TODO: better way to find reactant conc
             upper = np.min(initial_conc[R_idx] * Rp_)
 
             if report_as_yield:
@@ -798,7 +795,7 @@ def main():
         )
 
     states_ = [s.replace("*", "") for s in states]
-    plot_evo_save(result_solve_ivp, wdir, "", states_, x_scale, more_species_mkm)
+    plot_evo_save(result_solve_ivp, "", states_, x_scale, more_species_mkm)
 
     print("\n-------------Reactant Initial Concentration-------------\n")
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
@@ -813,4 +810,3 @@ def main():
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
     for i in p_indices:
         print("--[{}]: {:.4f}--".format(states[i], result_solve_ivp.y[i][-1]))
-

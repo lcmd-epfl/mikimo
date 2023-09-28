@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 import argparse
-import os
-import shutil
 import sys
 
 import h5py
@@ -140,7 +138,6 @@ Specifically, consider the following guidelines:
         xbase = 5
     ci_ = np.full(prod_conc_.shape[0], None)
 
-    out = []
     if prod_conc_.shape[0] > 1:
         plot_2d_combo(
             descr_all,
@@ -156,11 +153,10 @@ Specifically, consider the following guidelines:
             ybase=ybase,
             xlabel=xlabel,
             ylabel=ylabel,
-            filename=f"km_volcano_{tag}_combo_polished.png",
+            filename=f"mkm_volcano_{tag}_combo_polished.png",
             plotmode=plotmode,
             labels=labels,
         )
-        out.append(f"km_volcano_{tag}_combo_polished.png")
 
         for i in range(prod_conc_sm_all.shape[0]):
             plot_2d(
@@ -176,10 +172,9 @@ Specifically, consider the following guidelines:
                 ms=ms,
                 xlabel=xlabel,
                 ylabel=ylabel,
-                filename=f"km_volcano_{tag}_profile{i}.png",
+                filename=f"mkm_volcano_{tag}_profile{i}.png",
                 plotmode=plotmode,
             )
-            out.append(f"km_volcano_{tag}_profile{i}.png")
     else:
         plot_2d(
             descr_all,
@@ -194,16 +189,15 @@ Specifically, consider the following guidelines:
             ms=ms,
             xlabel=xlabel,
             ylabel=ylabel,
-            filename=f"km_volcano_{tag}_polished.png",
+            filename=f"mkm_volcano_{tag}_polished.png",
             plotmode=plotmode,
         )
-        out.append(f"km_volcano_{tag}_polished.png")
 
     if save:
         # create an HDF5 file
         cb = np.array(cb, dtype="S")
         ms = np.array(ms, dtype="S")
-        with h5py.File("data_polished.h5", "w") as f:
+        with h5py.File("mkm_vp_polished.h5", "w") as f:
             group = f.create_group("data")
             # save each numpy array as a dataset in the group
 
@@ -217,11 +211,3 @@ Specifically, consider the following guidelines:
             group.create_dataset("tag", data=[tag.encode()])
             group.create_dataset("xlabel", data=[xlabel.encode()])
             group.create_dataset("ylabel", data=[ylabel.encode()])
-        out.append("data_polished.h5")
-
-    aktun = filename.split("/")
-    if aktun[0] != filename:
-        aktun = "/".join(aktun[:-1])
-        for file in out:
-            destination_file = os.path.join(aktun, file)
-            shutil.move(file, destination_file)
