@@ -1184,7 +1184,7 @@ def main(
             print("\n")
 
     elif nd == 2:
-        sys.exit("Unavaiable for now")
+        sys.exit("Unavailable for now. Will be implemented in future versions!")
         (
             d,
             grids,
