@@ -7,7 +7,7 @@
         ☄️ Why use microkinetic modelling? ☄️
     </summary>
     <p>
-        <li>Elegant way to deal with complex reaction pathway thermodynamics and kinetics</li>
+        <li>Elegant way to deal with complex reaction pathway thermodynamics and kinetics.</li>
         <li>Accounts for reaction conditions: temperature effects, concentration effects, reaction time, etc.
     </p>
 </details>
@@ -18,8 +18,8 @@
         ☄️ What are microkinetic volcano plots? ☄️
     </summary>
     <p>
-        <li>Volcano plot:  plots the activity (or selectivity) of catalysts against a descriptor variable that uniquely determines a catalyst. Based on linear free energy scaling relationships. </li>
-        <li>microkinetic volcano plot: the activity/selectivity is expressed the final product concentrations, or ratio of concentrations, after a given time.
+        <li>Volcano plot: diagrams that show the activity (or selectivity) of catalysts plotted against a descriptor variable that identifies a specific catalyst. Based on linear free energy scaling relationships. </li>
+        <li>Microkinetic volcano plot: volcano plots in which the activity/selectivity is expressed as the final product concentration, or a ratio of concentrations, after a given time.
     </p>
 </details>
 
@@ -58,18 +58,18 @@ python setup.py install
 
 ## Usages [↑](#usages)
 
-The code requires two essential inputs for the analysis: energy data, reaction network (along with initial concentrations to be incorporated in the reaction network). All these files must be in the same directory.
+The code requires two essential inputs for the analysis: energy data and reaction network (along with initial concentrations to be incorporated in the reaction network). All these files must be in the same directory.
 
 - energy data: reaction_data (in csv or xlsx format)
 - reaction network: rxn_network (in csv or xlsx format)
 - (optional) kinetic data: kinetic_data (in csv or xlsx format)
 
 
-The energy data must be named "reaction_data" and share similar format as in `navicat_volcanic`. In cases involving multiple reaction pathways, the final column of each pathway (including those pathways leading to the resting state) should contain "Prod" (case-insensitive).
+The energy data must be named "reaction_data" and share similar format as in `navicat_volcanic` found [here](https://raw.githubusercontent.com/lcmd-epfl/volcanic). In cases involving multiple reaction pathways, the final column of each pathway (including those pathways leading to the resting state) should contain "Prod" (case-insensitive).
 
-The reaction network must be provided as a CSV or XLSX file named "rxn_network". Each row in the network represents an elementary step, while the columns represent the chemical species involved in the mechanism, excluding transition states. When filling in the reaction network, it is crucial to ensure that the species names match those in the energy data.
+The reaction network must be provided as a pandas-compatible csv or xlsx file named "rxn_network". Each row in the network represents an elementary step, while the columns represent the chemical species involved in the mechanism, excluding transition states. When filling in the reaction network, it is crucial to ensure that the species names match those in the energy data.
 
-For each step (denoted as *i*) in the reaction network, assign a value of *-n* to the species on the left side of the equation and *+n* (or simply *n*) to the species on the right side, where *n* represents the stoichiometric coefficient. If a chemical species is not involved in step i, leave the corresponding cell empty or fill it with 0.
+For each step (denoted as *i*) in the reaction network, assign a value of *-n* to the species on the left side of the elementary step equation and *+n* (or simply *n*) to the species on the right side, where *n* represents the stoichiometric coefficient. If a chemical species is not involved in step i, leave the corresponding cell empty or fill it with 0.
 
 The initial concentrations should be specified in the last row of the reaction network file. This row can be named "c0", "initial_conc," or "initial conc." 
 
@@ -128,12 +128,12 @@ python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 0
 python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 1 -ncore 24
 ```
 
-4. Constructiong the microkinetic activity/selectivity map for the catalytic competing carboamination and cyclopropanation of N-enoxyphathanalimides with alkenes (353.15 K, 1 d):
+4. Constructing the microkinetic activity/selectivity map for the catalytic competing carboamination and cyclopropanation of N-enoxyphathanalimides with alkenes (353.15 K, 1 d):
 ```python
 python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 2 -ncore 24
 ```
 
-5. Constructing the activity/selectivity map with time [2-24 hr] and temperature [273.15-423.15 K] as descriptors:
+5. Constructing an activity/selectivity map with time [2-24 hr] and temperature [273.15-423.15 K] as descriptors:
 
 ```python
 python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 -t 273.15 423.15 -ncore 24
@@ -155,9 +155,9 @@ If the kinetic profile is detected in the directory, the code will prompt the us
 
 2. Bridging states between otherwise separate pathways.
 
-3. Different TSs connecting the same 2 intermediates: just choose the lowest one.
+3. Different TSs connecting the same 2 intermediates: just choose the lowest one or compute an effective TS energy that corresponds to the sum of the two rate constants.
 
-To overcome these limitations and offer more flexibility, users have the option to input a kinetic profile named "kinetic_profile" in either CSV or XLSX format, replacing the conventional energy profile. However, this choice comes with the trade-off of disabling the ability to screen over a range of temperatures or use different temperature settings.
+To overcome these limitations and offer more flexibility, users have the option to input a kinetic profile named "kinetic_profile" in either csv or xlsx format, replacing the conventional energy profile. However, this choice comes with the trade-off of disabling the ability to screen over a range of temperatures or use different temperature settings.
 
 ## Citation [↑](#citation)
 
