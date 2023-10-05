@@ -43,6 +43,8 @@ The code runs on pure python with the following dependencies:
 - `h5py`
 - `fire`
 - `navicat_volcanic`
+- `openpyxl`
+- `tqdm` 
 
 ## Install [↑](#install)
 
