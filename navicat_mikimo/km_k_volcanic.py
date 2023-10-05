@@ -418,12 +418,7 @@ def evol_mode(
         df_ev.to_csv("prod_conc.csv", index=False)
         print(df_ev.to_string(index=False))
 
-    print(
-        """\nThis is a parade
-Even if I have to drag these feet of mine
-In exchange for this seeping pain
-I'll find happiness in abundance."""
-    )
+    print("\n")
 
 
 def get_srps_1d(
