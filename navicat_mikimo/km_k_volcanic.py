@@ -1186,13 +1186,7 @@ def main(
                     group.create_dataset("ylabel", data=[ylabel.encode()])
                     group.create_dataset("labels", data=prod_names)
 
-            print(
-                """\nI won't pray anymore
-The kindness that rained on this city
-I won't rely on it anymore
-My pain and my shape
-No one else can decide it.\n"""
-            )
+            print("\n")
 
     elif nd == 2:
         sys.exit("Unavaiable for now")
@@ -1443,9 +1437,4 @@ No one else can decide it.\n"""
                 id_labels=prod,
                 plotmode=plotmode,
             )
-        print(
-            """\nThe glow of that gigantic star
-That utopia of endless happiness
-I don't care if I never reach any of those
-I don't need anything else but I\n"""
-        )
+        print("\n")
