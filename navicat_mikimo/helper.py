@@ -84,7 +84,9 @@ def check_existence(wdir, verb):
     if os.path.exists(f"{wdir}kinetic_data.csv") or os.path.exists(
         f"{wdir}kinetic_data.xlsx"
     ):
-        kinetic_mode = yesno("kinetic_profile.csv exists, toggle the kinetic mode?")
+        kinetic_mode = yesno(
+            "kinetic_profile.csv exists Do you want to use kinetic information instead of the energy profile data"
+        )
 
     return kinetic_mode
 
@@ -138,7 +140,7 @@ def check_km_inp(df, df_network, mode="energy"):
             else:
                 clear = False
                 logging.warning(
-                    f"""\n{state} cannot be found in the reaction data, if it is make sure that the same name is used in both reaction data and network."""
+                    f"""\n{state} cannot be found in the reaction data, if it is there make sure that the same name is used in both reaction data and network."""
                 )
     elif mode == "kinetic":
         if int((df.shape[1] - 1) / 2) != df_network.shape[0]:
@@ -293,7 +295,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="timeout",
         type=int,
         default=60,
-        help="""Timeout for each integration run (default = 60 s). """,
+        help="""Timeout for each integration run. (default = 60 s) """,
     )
     parser.add_argument(
         "-iq",
@@ -301,7 +303,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="int_quality",
         type=int,
         default=1,
-        help="""Integration quality (0-2) (the higher, longer the integration, but smoother the plot) (default: 1)""",
+        help="""Integration quality (0-2). Higher values will take longer but yield a smoother plot. (default: 1)""",
     )
     parser.add_argument(
         "-pq",
@@ -309,7 +311,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="plot_quality",
         type=int,
         default=1,
-        help="""Plot quality (0-2) (default: 1)""",
+        help="""Plot quality (0-2). (default: 1)""",
     )
     parser.add_argument(
         "-nd",
@@ -329,7 +331,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="xscale",
         type=str,
         default="ls",
-        help="Time scale in the evolution plot (ls (log10(s)), s, lmin, min, h, day) (default=ls)",
+        help="Time scale in the evolution plot (ls (log10(s)), s, lmin, min, h, day). (default=ls)",
     )
     parser.add_argument(
         "-a",
@@ -346,7 +348,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="verb",
         type=int,
         default=2,
-        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv/h5 output files (default: 1)",
+        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv/h5 output files. (default: 1)",
     )
     parser.add_argument(
         "-ncore",
@@ -354,7 +356,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="ncore",
         type=int,
         default=1,
-        help="Number of cpu cores for the parallel computing (default: 1)",
+        help="Number of cpu cores for the parallel computing. (default: 1)",
     )
     parser.add_argument(
         "-ev",
@@ -367,7 +369,7 @@ def preprocess_data_mkm(arguments, mode):
         "-tt",
         dest="map",
         action="store_true",
-        help="""Toggle to construct time-temperature map
+        help="""Toggle to construct time-temperature map.
 Requires the input of a temperature range (-t temperature_1 temperature_2) and
 time range (-T time_1 time_2) in K and s respectively. (default: False)""",
     )

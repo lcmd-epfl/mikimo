@@ -67,7 +67,7 @@ def process_n_calc_2d(
         states (List[str]): Column names for reaction network states.
         timeout (int): Timeout for the calculation.
         report_as_yield (bool): Flag to report results as yield.
-        quality (int): Integration quality.
+        quality (int): Integration quality level.
         comp_ci (bool): Flag to compute confidence interval.
         verb (int): Verbosity level.
 

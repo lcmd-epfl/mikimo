@@ -744,7 +744,7 @@ def main(
 
     # %% selecting modes----------------------------------------------------------#
     if nd == 0:
-        d_actual = 10**d
+        d_actual = 10 ** d
         evol_mode(
             d_actual,
             df_network,
@@ -800,7 +800,7 @@ def main(
         rxn_network_all = df_network.to_numpy()[:, :]
 
         if screen_cond:
-            dgs = 10**dgs
+            dgs = 10 ** dgs
             if verb > 0:
                 print(
                     "\n------------Constructing physical-catalyst activity/selectivity map------------------\n"
@@ -979,8 +979,8 @@ def main(
                 )
 
         else:
-            dgs = 10**dgs
-            d = 10**d
+            dgs = 10 ** dgs
+            d = 10 ** d
 
             if verb > 0:
                 print("\n------------Constructing MKM volcano plot------------------\n")
