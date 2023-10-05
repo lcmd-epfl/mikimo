@@ -1245,13 +1245,7 @@ def main():
                     group.create_dataset("ylabel", data=[ylabel.encode()])
                     group.create_dataset("labels", data=prod_names)
 
-            print(
-                """\nI won't pray anymore
-The kindness that rained on this city
-I won't rely on it anymore
-My pain and my shape
-No one else can decide it.\n"""
-            )
+            print("\n")
 
     elif nd == 2:
         (
