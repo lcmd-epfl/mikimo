@@ -37,7 +37,8 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
         t = result_solve_ivp.t / 86400
         xlabel = "time (d)"
     else:
-        raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+        raise ValueError(
+            "x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
 
     plt.rc("axes", labelsize=18)
     plt.rc("xtick", labelsize=18)
@@ -106,7 +107,13 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
         )
 
     # additional INT-----------------
-    color_INT = ["#4251B3", "#3977BD", "#2F7794", "#7159EA", "#15AE9B", "#147F58"]
+    color_INT = [
+        "#4251B3",
+        "#3977BD",
+        "#2F7794",
+        "#7159EA",
+        "#15AE9B",
+        "#147F58"]
     if more_species_mkm is not None:
         for i in more_species_mkm:
             ax.plot(
@@ -134,8 +141,8 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     ymin = bround(ymin, ybase, type="min")
     plt.ylim(ymin, ymax)
     plt.yticks(np.arange(0, ymax + 0.1, ybase))
-
-    fig.savefig(f"mkm_{name}.png", dpi=400)
+    filename_out = str(f"mkm_{name}.png")
+    fig.savefig(filename_out, dpi=400)
 
 
 def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
@@ -162,7 +169,8 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
         t = result_solve_ivp.t / 86400
         xlabel = "time (d)"
     else:
-        raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+        raise ValueError(
+            "x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
 
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
@@ -227,7 +235,13 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
         )
 
     # additional INT-----------------
-    color_INT = ["#4251B3", "#3977BD", "#2F7794", "#7159EA", "#15AE9B", "#147F58"]
+    color_INT = [
+        "#4251B3",
+        "#3977BD",
+        "#2F7794",
+        "#7159EA",
+        "#15AE9B",
+        "#147F58"]
     if more_species_mkm is not None:
         for i in more_species_mkm:
             ax.plot(
@@ -246,13 +260,17 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
     plt.ylabel("Concentration (mol/l)")
     plt.legend()
     plt.tight_layout()
-    fig.savefig(f"mkm_{name}.png", dpi=400)
 
-    # TODO refine
-    np.savetxt(f"t_{name}.txt", result_solve_ivp.t)
-    np.savetxt(f"cat_{name}.txt", result_solve_ivp.y[0, :])
-    np.savetxt(f"Rs_{name}.txt", result_solve_ivp.y[r_indices])
-    np.savetxt(f"Ps_{name}.txt", result_solve_ivp.y[p_indices])
+    if name is None:
+        tail = ""
+    else:
+        tail = str(f"_{name}")
+
+    fig.savefig(f"mkm{tail}.png", dpi=400)
+    np.savetxt(f"t{tail}.txt", result_solve_ivp.t)
+    np.savetxt(f"cat{tail}.txt", result_solve_ivp.y[0, :])
+    np.savetxt(f"Rs{tail}.txt", result_solve_ivp.y[r_indices])
+    np.savetxt(f"Ps{tail}.txt", result_solve_ivp.y[p_indices])
 
 
 def plot_save_cond(x, Pfs, var, prod_name, verb=1):
@@ -268,8 +286,13 @@ def plot_save_cond(x, Pfs, var, prod_name, verb=1):
 
     for i, Pf in enumerate(Pfs):
         ax.plot(
-            x, Pf, "-", linewidth=1.5, color=color[i], alpha=0.95, label=prod_name[i]
-        )
+            x,
+            Pf,
+            "-",
+            linewidth=1.5,
+            color=color[i],
+            alpha=0.95,
+            label=prod_name[i])
         ax.scatter(
             x,
             Pf,
@@ -377,8 +400,13 @@ def plot_2d_combo(
     if plotmode == 0:
         for i, yi in enumerate(y):
             ax.plot(
-                x, yi, "-", linewidth=1.5, color=color[i], alpha=0.95, label=labels[i]
-            )
+                x,
+                yi,
+                "-",
+                linewidth=1.5,
+                color=color[i],
+                alpha=0.95,
+                label=labels[i])
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
                 avgs = []
@@ -387,8 +415,11 @@ def plot_2d_combo(
                     avgs.append((rb[i] + rb[i + 1]) / 2)
                 for i in rb:
                     ax.axvline(
-                        i, linestyle="dashed", color="black", linewidth=0.75, alpha=0.75
-                    )
+                        i,
+                        linestyle="dashed",
+                        color="black",
+                        linewidth=0.75,
+                        alpha=0.75)
 
     # mono color scatter plot
     elif plotmode > 0:
@@ -420,7 +451,8 @@ def plot_2d_combo(
                     )
             if ci[i] is not None:
                 plot_ci(ci[i], x, y[i], ax=ax)
-            plotpoints(ax, px, py[i], np.repeat([color[i]], len(px)), ms, plotmode)
+            plotpoints(ax, px, py[i], np.repeat(
+                [color[i]], len(px)), ms, plotmode)
 
     ymin, ymax = ax.get_ylim()
     ymax = bround(ymax, ybase, type="max")
@@ -464,8 +496,14 @@ def plot_3d_(
     levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
-        xint, yint, grid, levels=levels, norm=norm, cmap=cm.get_cmap(cmap, len(levels))
-    )
+        xint,
+        yint,
+        grid,
+        levels=levels,
+        norm=norm,
+        cmap=cm.get_cmap(
+            cmap,
+            len(levels)))
 
     # Labels and key
     xticks = np.arange(x1min, x1max + 0.1, x1base)
@@ -531,8 +569,14 @@ def plot_3d_np(
     levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
-        xint, yint, grid, levels=levels, norm=norm, cmap=cm.get_cmap(cmap, len(levels))
-    )
+        xint,
+        yint,
+        grid,
+        levels=levels,
+        norm=norm,
+        cmap=cm.get_cmap(
+            cmap,
+            len(levels)))
 
     # Labels and key
     xticks = np.arange(x1min, x1max + 0.1, x1base)
