@@ -98,7 +98,8 @@ def run_mkm_3d(
                 first_step=first_step,
             )
             success = True
-            c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
+            c_target_t = np.array([result_solve_ivp.y[i][-1]
+                                  for i in idx_target_all])
             return c_target_t
         except Exception as e:
             if rtol == last_[0] and atol == last_[1]:
@@ -144,7 +145,8 @@ def main():
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
+            if last_row_index.lower() in [
+                    "initial_conc", "c0", "initial conc"]:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
@@ -183,7 +185,8 @@ def main():
         combinations = list(
             itertools.product(range(len(temperatures_)), range(len(times_)))
         )
-        num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
+        num_chunks = total_combinations // ncore + \
+            (total_combinations % ncore > 0)
 
         for chunk_index in tqdm(range(num_chunks)):
             start_index = chunk_index * ncore
@@ -272,7 +275,8 @@ def main():
             min_ratio = -3
             max_ratio = 3
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
-            selectivity_ratio_ = np.clip(selectivity_ratio, min_ratio, max_ratio)
+            selectivity_ratio_ = np.clip(
+                selectivity_ratio, min_ratio, max_ratio)
             selectivity_ratio_ = np.nan_to_num(
                 selectivity_ratio_, nan=-3, posinf=3, neginf=-3
             )
@@ -310,7 +314,8 @@ def main():
                     group = f.create_group("data")
                     group.create_dataset("temperatures_", data=temperatures_)
                     group.create_dataset("times_", data=times_)
-                    group.create_dataset("dominant_indices", data=dominant_indices)
+                    group.create_dataset(
+                        "dominant_indices", data=dominant_indices)
             plot_3d_contour_regions_np(
                 temperatures_,
                 times_,
@@ -332,28 +337,34 @@ def main():
     else:
         if len(t_finals) == 1:
             if verb > 0:
-                print(f"-------Screening over temperature: {temperatures} K-------")
+                print(
+                    f"-------Screening over temperature: {temperatures} K-------")
             Pfs = np.zeros((len(temperatures), len(idx_target_all)))
             t_final = t_finals[0]
             t_span = (0, t_final)
 
             for i, temperature in enumerate(temperatures):
-                result, result_solve_ivp = calc_km(
-                    energy_profile_all,
-                    dgr_all,
-                    coeff_TS_all,
-                    rxn_network_all,
-                    temperature,
-                    t_span,
-                    initial_conc,
-                    states,
-                    timeout=60,
-                    report_as_yield=False,
-                    quality=2,
-                )
-                c_target_t = np.array(
-                    [result_solve_ivp.y[i][-1] for i in idx_target_all]
-                )
+
+                if ks is not None:
+                    sys.exit(
+                        "Cannot screen over temperatures with the kinetic profile")
+                else:
+                    result, result_solve_ivp = calc_km(
+                        energy_profile_all,
+                        dgr_all,
+                        coeff_TS_all,
+                        rxn_network_all,
+                        temperature,
+                        t_span,
+                        initial_conc,
+                        states,
+                        timeout=60,
+                        report_as_yield=False,
+                        quality=2,
+                    )
+                    c_target_t = np.array(
+                        [result_solve_ivp.y[i][-1] for i in idx_target_all]
+                    )
                 if plot_evo:
                     plot_evo_save(
                         result_solve_ivp,
@@ -363,30 +374,51 @@ def main():
                         more_species_mkm,
                     )
                 Pfs[i] = c_target_t
-            print(temperatures)
-            plot_save_cond(temperatures, Pfs.T, "Temperature (K)", prod_name, verb=verb)
+            plot_save_cond(
+                temperatures,
+                Pfs.T,
+                "Temperature (K)",
+                prod_name,
+                verb=verb)
 
         elif len(temperatures) == 1:
             if verb > 0:
-                print(f"-------Screening over reaction time: {t_finals} s-------\n")
+                print(
+                    f"-------Screening over reaction time: {t_finals} s-------\n")
             Pfs = np.zeros((len(t_finals), len(idx_target_all)))
             temperature = temperatures[0]
             for i, tf in enumerate(t_finals):
                 t_span = (0, tf)
-                result, result_solve_ivp = calc_km(
-                    energy_profile_all,
-                    dgr_all,
-                    coeff_TS_all,
-                    rxn_network_all,
-                    temperature,
-                    t_span,
-                    initial_conc,
-                    states,
-                    timeout=60,
-                    report_as_yield=False,
-                    quality=2,
-                    ks=ks,
-                )
+                if ks is not None:
+                    _, result_solve_ivp = calc_km(
+                        None,
+                        None,
+                        None,
+                        rxn_network_all,
+                        temperature,
+                        t_span,
+                        initial_conc,
+                        states,
+                        timeout=60,
+                        report_as_yield=False,
+                        quality=2,
+                        ks=ks,
+                    )
+                else:
+                    result, result_solve_ivp = calc_km(
+                        energy_profile_all,
+                        dgr_all,
+                        coeff_TS_all,
+                        rxn_network_all,
+                        temperature,
+                        t_span,
+                        initial_conc,
+                        states,
+                        timeout=60,
+                        report_as_yield=False,
+                        quality=2,
+                        ks=ks,
+                    )
                 c_target_t = np.array(
                     [result_solve_ivp.y[i][-1] for i in idx_target_all]
                 )
@@ -413,19 +445,35 @@ def main():
             for i, Tt in enumerate(combinations):
                 t_span = (0, Tt[0])
                 temperature = Tt[1]
-                result, result_solve_ivp = calc_km(
-                    energy_profile_all,
-                    dgr_all,
-                    coeff_TS_all,
-                    rxn_network_all,
-                    temperature,
-                    t_span,
-                    initial_conc,
-                    states,
-                    timeout=60,
-                    report_as_yield=False,
-                    quality=2,
-                )
+                if ks is not None:
+                    _, result_solve_ivp = calc_km(
+                        None,
+                        None,
+                        None,
+                        rxn_network_all,
+                        temperature,
+                        t_span,
+                        initial_conc,
+                        states,
+                        timeout=60,
+                        report_as_yield=False,
+                        quality=2,
+                        ks=ks,
+                    )
+                else:
+                    result, result_solve_ivp = calc_km(
+                        energy_profile_all,
+                        dgr_all,
+                        coeff_TS_all,
+                        rxn_network_all,
+                        temperature,
+                        t_span,
+                        initial_conc,
+                        states,
+                        timeout=60,
+                        report_as_yield=False,
+                        quality=2,
+                    )
                 c_target_t = np.array(
                     [result_solve_ivp.y[i][-1] for i in idx_target_all]
                 )
