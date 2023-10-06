@@ -128,7 +128,7 @@ def find_1_dv(d, tags, coeff, regress, verb=0):
             )
         dvs = [a, b, c]
     r2 = [r2s[i] for i in dvs]
-    dvs = [i + 1 for i in dvs]  # Recover the removed step of the reaction
+    dvs = [i for i in dvs]  # Recover the removed step of the reaction
     return dvs, r2
 
 
@@ -188,8 +188,6 @@ def process_n_calc_2d(
             print(f"Fail to compute at point {profile} in the volcano line due to {e}.")
         return np.array([np.nan] * n_target)
 
-
-# TODO: read k instead of E
 def process_n_calc_3d(
     coord: Tuple[int, int],
     grids: Tuple[np.ndarray, np.ndarray],
@@ -260,7 +258,6 @@ def process_n_calc_3d_ps(
     coord: Tuple[int, int],
     dgs: np.ndarray,
     t_points: np.ndarray,
-    fixed_condition: Union[float, int],
     n_target: int,
     rxn_network_all: np.ndarray,
     initial_conc: np.ndarray,
@@ -278,7 +275,6 @@ def process_n_calc_3d_ps(
         coord (Tuple[int, int]): Coordinate of the point in the descriptor/physical variable space.
         dgs (np.ndarray): Array of free energy profiles.
         t_points (np.ndarray): Array of temperature points.
-        fixed_condition (Union[float, int]): Fixed condition (either temperature or time).
         n_target (int): Number of products.
         df_network (pd.DataFrame): Reaction network DataFrame.
         tags (List[str]): Reaction data column names.
@@ -680,11 +676,6 @@ def main(
     elif len(times) == 1:
         t_span = (0, times[0])
     else:
-        try:
-            fixed_condition = temperatures[0]
-        except TypeError as e:
-            fixed_condition = 298.15
-        screen_cond = "vtime"
         nd = 1
         t_finals_log = np.log10(times)
         x2base = np.round((t_finals_log[1] - t_finals_log[0]) / 10, 1)
@@ -820,7 +811,6 @@ def main(
                         coord,
                         dgs,
                         t_points,
-                        fixed_condition,
                         n_target,
                         rxn_network_all,
                         initial_conc,

@@ -756,6 +756,7 @@ def main():
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
+        ks_actual = 10 ** ks
         _, result_solve_ivp = calc_km(
             None,
             None,
@@ -768,7 +769,7 @@ def main():
             timeout=60,
             report_as_yield=False,
             quality=2,
-            ks=ks,
+            ks=ks_actual,
         )
     else:
         (

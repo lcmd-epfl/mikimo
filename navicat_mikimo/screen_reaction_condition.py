@@ -137,6 +137,7 @@ def main():
             rxn_network_all,
         ) = process_data_mkm(dg, df_network, tags, states)
     else:
+        ks = 10 ** ks
         energy_profile_all = None
         dgr_all = None
         coeff_TS_all = None

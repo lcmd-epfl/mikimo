@@ -421,7 +421,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             except FileNotFoundError as e:
                 df = pd.read_csv(filename_csv)
             clear = check_km_inp(df, df_network, mode="kinetic")
-            ks = df.iloc[1].to_numpy()[1:].astype(np.float64)
+            ks = df.iloc[0].to_numpy()[1:].astype(np.float64)
             return (
                 None,
                 df_network,
@@ -597,7 +597,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 df = pd.read_csv(filename_csv)
 
             clear = check_km_inp(df, df_network, mode="kinetic")
-            ks = df.iloc[1].to_numpy()[1:].astype(np.float64)
+            ks = df.iloc[0].to_numpy()[1:].astype(np.float64)
             return (
                 None,
                 df_network,
