@@ -115,33 +115,38 @@ python replot.py [i]
 
 ## Examples [↑](#examples)
 
-1. Microkinetic modelling for Pd-catalyzed carbocyclization-borylation of enallene in the presence of chiral phosphoric acid at room temperature for 1 min of reaction time: 
+1. Microkinetic modelling for Pd-catalyzed carbocyclization-borylation of enallene in the presence of chiral phosphoric acid (298.15 K, 1 min): 
 ```python
 python -m navicat_mikimo mkm -d test_cases/pd_carbocylic_borylation/ -t 298.15 -Tf 60
 ```
 
-2. Microkinetic modelling for all profiles of the catalytic competing carboamination and cyclopropanation of N-enoxyphathanalimides with alkenes (353.15 K, 1 d):
+2. Microkinetic modelling for all profiles of the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
-python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 0
+python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 0
 ```
 
-3. Constructing the microkinetic volcano plot for the catalytic competing carboamination and cyclopropanation of N-enoxyphathanalimides with alkenes (353.15 K, 1 d):
+3. Constructing the microkinetic volcano plot for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
-python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 1 -ncore 24
+python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 1 -ncore 24
 ```
 
-4. Constructing the microkinetic activity/selectivity map for the catalytic competing carboamination and cyclopropanation of N-enoxyphathanalimides with alkenes (353.15 K, 1 d):
+4. Constructing the microkinetic activity and selectivity maps for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
-python -m navicat_mikimo vp -d test_cases/CA_CP_selectivity/ -t 353.15 -nd 2 -ncore 24
+python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 2 -ncore 24
 ```
 
-5. Constructing an activity/selectivity map with time [2-24 hr] and temperature [273.15-423.15 K] as descriptors:
+5. Constructing the microkinetic activity and selectivity maps with a descriptor variable representing catalyst and temperature [273.15-423.15 K] for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (2h):
+```python
+python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 273.15 423.15 -Tf 7200 -nd 1 -ncore 24
+```
+
+6. Constructing the microkinetic activity and selectivity maps with reaction time [2-24 hr] and temperature [273.15-423.15 K] as descriptors for the catalytic hydrosilylation of carbon dioxide with the Co pincer complex:
 
 ```python
 python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 -t 273.15 423.15 -ncore 24
 ```
 
-6. Using filtering to smooth the plot:
+7. Using filtering to smooth the plot:
 
 ```python
 python replot.py examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
