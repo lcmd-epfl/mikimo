@@ -84,7 +84,7 @@ The code offers three modes of operation:
 
 Once all input files are ready and `mikimo` is installed, several run options are available:
 
-1. Call just kinetic solver:
+1. Call just microkinetic solver:
 ```python
 python -m navicat_mikimo mkm -d [DIR]
 ```
@@ -98,17 +98,22 @@ python -m navicat_mikimo vp -d [DIR] -nd 0
 python -m navicat_mikimo vp -d [DIR] -nd 1
 ```
 
-3. To construct microkinetic activity/selectivity map:
+4. To construct microkinetic activity/selectivity map with a descriptor variable representing catalyst and temperature (or reaction time) (T1 and T2 are the lower and upper bounds of the temperature range, respectively):
+```python
+python -m navicat_mikimo vp -d [DIR] -nd 1 -t T1 T2
+```
+
+5. To construct microkinetic activity/selectivity map:
 ```python
 python -m navicat_mikimo vp -d [DIR] -nd 2
 ```
 
-4. To screen over reaction time and temperature:
+6. To screen over reaction time and temperature:
 ```python
 python -m navicat_mikimo cond -d [DIR] 
 ```
 
-5. To smooth the volcano plots generated: 
+7. To smooth the volcano plots generated: 
 ```python
 python replot.py [i]
 ```
@@ -125,22 +130,22 @@ python -m navicat_mikimo mkm -d test_cases/pd_carbocylic_borylation/ -t 298.15 -
 python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 0
 ```
 
-3. Constructing the microkinetic volcano plot for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
+3. Constructing microkinetic volcano plot for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
 python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 1 -ncore 24
 ```
 
-4. Constructing the microkinetic activity and selectivity maps for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
+4. Constructing microkinetic activity and selectivity maps for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
 python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 2 -ncore 24
 ```
 
-5. Constructing the microkinetic activity and selectivity maps with a descriptor variable representing catalyst and temperature [273.15-423.15 K] for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (2h):
+5. Constructing microkinetic activity and selectivity maps with a descriptor variable representing catalyst and temperature [273.15-423.15 K] for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (2h):
 ```python
 python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 273.15 423.15 -Tf 7200 -nd 1 -ncore 24
 ```
 
-6. Constructing the microkinetic activity and selectivity maps with reaction time [2-24 hr] and temperature [273.15-423.15 K] as descriptors for the catalytic hydrosilylation of carbon dioxide with the Co pincer complex:
+6. Constructing microkinetic activity and selectivity maps with reaction time [2-24 hr] and temperature [273.15-423.15 K] as descriptors for the catalytic hydrosilylation of carbon dioxide with the Co pincer complex:
 
 ```python
 python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 -t 273.15 423.15 -ncore 24
