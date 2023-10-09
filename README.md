@@ -60,7 +60,7 @@ python setup.py install
 
 ## Usages [↑](#usages)
 
-The code requires two essential inputs for the analysis: energy data and reaction network (along with initial concentrations to be incorporated in the reaction network). All these files must be in the same directory.
+The code requires two essential inputs for the analysis: energy data and reaction network (along with initial concentrations to be incorporated in the reaction network). All these files must be in the working directory or in the directory targeted with the `-d` option..
 
 - energy data: reaction_data (in csv or xlsx format)
 - reaction network: rxn_network (in csv or xlsx format)
@@ -157,9 +157,9 @@ python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 
 python replot.py examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
 ```
 
-You can find examples of reading h5 files and regenerating plots in the "examples" folder.
+You can find examples demonstrating how to read h5 files and regenerate plots in the "examples" folder.
 
-If the kinetic profile is detected in the directory, the code will prompt the user with an option to choose between using the kinetic profile instead of the energy profile. However, it's important to note that selecting the kinetic profile will restrict the user from screening over a range of temperatures or utilizing different temperature settings. 
+If the kinetic profile is detected in the directory, the code will prompt the user with an option to choose between using the kinetic profile instead of the energy profile. However, it's important to note that selecting the kinetic profile will restrict the user from screening over a range of temperatures or utilizing different temperature settings. Additionally, using the kinetic profile will limit the information about species names (for ax labelling purposes) and may worsen the quality of the linear scaling relationships in volcano plot generation.
 
 ## Known Limitations [↑](#limitation)
 
