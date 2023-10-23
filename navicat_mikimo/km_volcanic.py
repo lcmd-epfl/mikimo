@@ -12,31 +12,19 @@ import sklearn as sk
 from joblib import Parallel, delayed
 from navicat_volcanic.dv1 import curate_d, find_1_dv
 from navicat_volcanic.dv2 import find_2_dv
-from navicat_volcanic.helpers import (
-    bround,
-    group_data_points,
-    user_choose_1_dv,
-    user_choose_2_dv,
-)
+from navicat_volcanic.helpers import (bround, group_data_points,
+                                      user_choose_1_dv, user_choose_2_dv)
 from navicat_volcanic.plotting2d import calc_ci, plot_2d, plot_2d_lsfer
-from navicat_volcanic.plotting3d import (
-    get_bases,
-    plot_3d_contour,
-    plot_3d_contour_regions,
-)
+from navicat_volcanic.plotting3d import (get_bases, plot_3d_contour,
+                                         plot_3d_contour_regions)
 from scipy.interpolate import interp1d
 from tqdm import tqdm
 
 from . import km_k_volcanic
-from .helper import call_imputter, preprocess_data_mkm, process_data_mkm, yesno
+from .helper import call_imputter, preprocess_data_mkm, process_data_mkm
 from .kinetic_solver import calc_km
-from .plot_function import (
-    plot_2d_combo,
-    plot_3d_,
-    plot_3d_contour_regions_np,
-    plot_3d_np,
-    plot_evo,
-)
+from .plot_function import (plot_2d_combo, plot_3d_,
+                            plot_3d_contour_regions_np, plot_3d_np, plot_evo)
 
 
 def process_n_calc_2d(
@@ -1502,5 +1490,4 @@ def main():
             )
         print("\n")
 
-
-# TODO write test functions f0r
+#TODO test functions

@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import sklearn as sk
 from joblib import Parallel, delayed
+from navicat_volcanic.dv1 import curate_d
 from navicat_volcanic.dv2 import dv_collinear, find_2_dv
 from navicat_volcanic.helpers import (
     bround,
@@ -27,7 +28,7 @@ from navicat_volcanic.plotting3d import (
 from scipy.interpolate import interp1d
 from tqdm import tqdm
 
-from .helper import process_data_mkm, yesno
+from .helper import call_imputter
 from .kinetic_solver import calc_km
 from .plot_function import (
     plot_2d_combo,
@@ -852,6 +853,7 @@ def main(
             coeff[i] = False
             regress[i] = False
 
+    d, cb, ms = curate_d(d, regress, cb, ms, tags, imputer_strat, nstds=3, verb=verb)
     # %% selecting modes----------------------------------------------------------#
     if nd == 0:
         d_actual = 10**d
@@ -954,7 +956,7 @@ def main(
             if np.any(np.isnan(grid_d)):
                 grid_d_fill = np.zeros_like(grid_d)
                 for i, gridi in enumerate(grid_d):
-                    impuuter = call_imputter(imputer_strat)
+                    impuuter = call_imputer(imputer_strat)
                     impuuter.fit(gridi)
                     filled_data = impuuter.transform(gridi)
                     grid_d_fill[i] = filled_data
@@ -1554,4 +1556,4 @@ def main(
         print("\n")
 
 
-# TODO write test functions for
+# TODO test functions
