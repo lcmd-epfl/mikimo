@@ -756,7 +756,7 @@ def main():
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
-        ks_actual = 10 ** ks
+        ks_actual = 10**ks
         _, result_solve_ivp = calc_km(
             None,
             None,
@@ -796,7 +796,7 @@ def main():
         )
 
     states_ = [s.replace("*", "") for s in states]
-    plot_evo_save(result_solve_ivp, "", states_, x_scale, more_species_mkm)
+    plot_evo_save(result_solve_ivp, None, states_, x_scale, more_species_mkm)
 
     print("\n-------------Reactant Initial Concentration-------------\n")
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]

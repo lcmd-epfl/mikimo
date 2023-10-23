@@ -3,7 +3,7 @@ import itertools
 import multiprocessing
 import sys
 import warnings
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import h5py
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import sklearn as sk
 from joblib import Parallel, delayed
-from navicat_volcanic.dv2 import find_2_dv
+from navicat_volcanic.dv2 import dv_collinear, find_2_dv
 from navicat_volcanic.helpers import (
     bround,
     group_data_points,
@@ -132,7 +132,134 @@ def find_1_dv(d, tags, coeff, regress, verb=0):
     return dvs, r2
 
 
-# NOTE: got rid of CI for now
+def find_2_dv(d, tags, coeff, regress, verb=0):
+    assert isinstance(d, np.ndarray)
+    assert len(tags) == len(coeff)
+    if np.isclose(d[:, -1].std(), 0):
+        regress[-1] = False
+        if verb > 0:
+            print(f"\nReaction energy is constant. Assuming substrates are constant.")
+    tags = tags[:]
+    coeff = coeff[:]
+    regress = regress[:]
+    d = d[:, :]
+    lnsteps = range(d.shape[1])
+    regsteps = range(d[:, regress].shape[1])
+    pnsteps = itertools.combinations(lnsteps, r=2)
+    lpnsteps = [pair for pair in pnsteps]
+    pn = len(lpnsteps)
+    pcoeff = np.zeros(pn)
+    ptags = np.empty(pn, dtype=object)
+    for i, pair in enumerate(lpnsteps):
+        if coeff[pair[0]] or coeff[pair[1]]:
+            pcoeff[i] = 1
+        ptags[i] = tags[pair[0]] + " and " + tags[pair[1]]
+    # Regression diagnostics
+    maes = np.ones(pn)
+    r2s = np.ones(pn)
+    maps = np.ones(pn)
+    for idx, ij in enumerate(lpnsteps):
+        i = ij[0]
+        j = ij[1]
+        if verb > 0:
+            print(
+                f"\nTrying combination of {tags[i]} and {tags[j]} as descriptor variable:"
+            )
+        imaes = []
+        imaps = []
+        ir2s = []
+        for k in regsteps:
+            Y = d[:, regress][:, k]
+            XY = np.vstack([[d[:, i], d[:, j]], d[:, k]]).T
+            XY = XY[~np.isnan(XY).any(axis=1)]
+            X = XY[:, :2]
+            if dv_collinear(X, verb):
+                maes[idx] = np.nan
+                r2s[idx] = 0
+                maps[idx] = np.nan
+                break
+            Y = XY[:, 2]
+            # Fitting using scikit-learn LinearModel
+            reg = sk.linear_model.LinearRegression().fit(X, Y)
+            imaes.append(sk.metrics.mean_absolute_error(Y, reg.predict(X)))
+            imaps.append(sk.metrics.mean_absolute_percentage_error(Y, reg.predict(X)))
+            ir2s.append(reg.score(X, Y))
+            if verb > 1:
+                print(
+                    f"With a combination of {tags[i]} and {tags[j]} as descriptor, regressed {tags[k]} with r2 : {np.round(ir2s[-1],2)} and MAE: {np.round(imaes[-1],2)}"
+                )
+
+            if verb > 2:
+                print(
+                    f"Linear model has coefficients : {reg.coef_} \n and intercept {reg.intercept_}"
+                )
+        if verb > 2:
+            print(
+                f"\nWith a combination of {tags[i]} and {tags[j]} as descriptor the following r2 values were obtained : {np.round(ir2s,2)}"
+            )
+        maes[idx] = np.around(np.array(imaes).mean(), 4)
+        r2s[idx] = np.around(np.array(ir2s).mean(), 4)
+        maps[idx] = np.around(np.array(imaps).std(), 4)
+        if verb > 0:
+            print(
+                f"\nWith a combination of {tags[i]} and {tags[j]} as descriptor,\n the mean r2 is : {np.round(r2s[idx],2)},\n the mean MAE is :  {np.round(maes[idx],2)}\n the std MAPE is : {np.round(maps[idx],2)}\n"
+            )
+    criteria = []
+    criteria.append(
+        np.squeeze(np.where(r2s == np.nanmax(r2s[np.ma.make_mask(pcoeff)])))
+    )
+    criteria.append(
+        np.squeeze(np.where(maes == np.nanmin(maes[np.ma.make_mask(pcoeff)])))
+    )
+    criteria.append(
+        np.squeeze(np.where(maps == np.nanmin(maps[np.ma.make_mask(pcoeff)])))
+    )
+    for i, criterion in enumerate(criteria):
+        if isinstance(criterion, (np.ndarray)):
+            if any(criterion.shape):
+                if verb > 2:
+                    print(f"A random choice has been made to break a score tie.")
+                criterion = [idx for idx in criterion if np.ma.make_mask(pcoeff)[idx]]
+                criteria[i] = rng.choice(criterion, size=1)
+    a = int(criteria[0])
+    b = int(criteria[1])
+    c = int(criteria[2])
+    if a == b:
+        if a == c:
+            if verb >= 0:
+                print(
+                    f"All indicators agree: best descriptor is the combination {ptags[a]}"
+                )
+            dvs = [a]
+        else:
+            if verb >= 0:
+                print(
+                    f"Disagreement: best descriptors is either the combination \n{ptags[a]} or \n{ptags[c]}"
+                )
+            dvs = [a, c]
+    elif a == c:
+        if verb >= 0:
+            print(
+                f"Disagreement: best descriptors is either the combination \n{ptags[a]} or \n{ptags[b]}"
+            )
+        dvs = [a, b]
+    elif b == c:
+        if verb >= 0:
+            print(
+                f"Disagreement: best descriptors is either the combination \n{ptags[a]} or \n{ptags[b]}"
+            )
+        dvs = [a, b]
+    else:
+        if verb >= 0:
+            print(
+                f"Total disagreement: best descriptors is either the combination \n{ptags[a]} or \n{ptags[b]} or \n{ptags[c]}"
+            )
+        dvs = [a, b, c]
+    r2 = [r2s[i] for i in dvs]
+    dvs = [lpnsteps[i] for i in dvs]
+    return dvs, r2
+
+
 def process_n_calc_2d(
     profile: np.ndarray,
     n_target: int,
@@ -193,10 +320,9 @@ def process_n_calc_3d(
     coord: Tuple[int, int],
     grids: Tuple[np.ndarray, np.ndarray],
     n_target: int,
-    temperature: float,
     t_span: Tuple[float, float],
-    df_network: pd.DataFrame,
-    tags: List[str],
+    rxn_network_all: np.ndarray,
+    initial_conc: np.ndarray,
     states: List[str],
     timeout: int,
     report_as_yield: bool,
@@ -211,10 +337,9 @@ def process_n_calc_3d(
         coord (Tuple[int, int]): Coordinate.
         dgs (List[List[float]]): List of kinetic profiles for all coordinates.
         n_target (int): Number of products.
-        temperature (float): Temperature of the system.
         t_span (Tuple[float, float]): Time span for the simulation.
-        df_network (pd.DataFrame): Dataframe containing the reaction network information.
-        tags (List[str]): Reaction data column names.
+        rxn_network_all (np.ndarray): Array containing the reaction network information.
+        initial_conc (np.ndarray): Initial concentrations.
         states (List[str]): Reaction network column names.
         timeout (int): Timeout for the simulation.
         report_as_yield (bool): Flag indicating whether to report the results as yield or concentration.
@@ -226,29 +351,24 @@ def process_n_calc_3d(
     """
 
     try:
-        profile = [gridj[coord] for gridj in grids]
-        (
-            initial_conc,
-            energy_profile_all,
-            dgr_all,
-            coeff_TS_all,
-            rxn_network,
-        ) = process_data_mkm(profile, df_network, tags, states)
+        # NOTE note sure how the grid is organized
+        profile = np.array([gridj[coord] for gridj in grids])
+
         result, _ = calc_km(
-            energy_profile_all,
-            dgr_all,
-            coeff_TS_all,
-            rxn_network,
-            temperature,
+            None,
+            None,
+            None,
+            rxn_network_all,
+            None,
             t_span,
             initial_conc,
             states,
             timeout,
             report_as_yield,
             quality,
+            profile,
         )
         return result
-
     except Exception as e:
         if verb > 1:
             print(f"Fail to compute at point {profile} in the volcano line due to {e}.")
@@ -329,7 +449,6 @@ def evol_mode(
     n_target: int,
     x_scale: str,
     more_species_mkm: List[str],
-    wdir: str,
 ) -> None:
     """
     Execute the evolution mode: plotting evolution for all profiles in the reaction data.
@@ -523,7 +642,7 @@ def get_srps_1d(
     return dgs, d, sigma_dgs, X, xint, xmax, xmin, tag, tags, coeff, idx
 
 
-# NOTE not yet implemented to work with ks
+# NOTE okay for kinetic mode?
 def get_srps_2d(
     d: np.ndarray,
     tags: List[str],
@@ -578,10 +697,11 @@ def get_srps_2d(
         if verb > 1:
             print(f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor**\n")
     else:
-        idx1, idx2 = user_choose_2_dv(dvs, r2s, tags)
+        idx1, idx2 = user_choose_2_dv(dvs, r2s, np.insert(tags, 0, 0))
+        idx1 -= 1
+        idx2 -= 1
         if idx1 is None or idx2 is None:
             sys.exit("No descriptors are suitable for the user. Exiting.")
-
     X1, X2, tag1, tag2, tags, d, d2, coeff = get_reg_targets(
         idx1, idx2, d, tags, coeff, regress, mode="k"
     )
@@ -639,7 +759,6 @@ def main(
     lmargin,
     rmargin,
     verb,
-    wdir,
     imputer_strat,
     report_as_yield,
     timeout,
@@ -735,7 +854,7 @@ def main(
 
     # %% selecting modes----------------------------------------------------------#
     if nd == 0:
-        d_actual = 10 ** d
+        d_actual = 10**d
         evol_mode(
             d_actual,
             df_network,
@@ -749,7 +868,6 @@ def main(
             n_target,
             x_scale,
             more_species_mkm,
-            wdir,
         )
 
     elif nd == 1:
@@ -791,7 +909,7 @@ def main(
         rxn_network_all = df_network.to_numpy()[:, :]
 
         if screen_cond:
-            dgs = 10 ** dgs
+            dgs = 10**dgs
             if verb > 0:
                 print(
                     "\n------------Constructing physical-catalyst activity/selectivity map------------------\n"
@@ -969,8 +1087,8 @@ def main(
                 )
 
         else:
-            dgs = 10 ** dgs
-            d = 10 ** d
+            dgs = 10**dgs
+            d = 10**d
 
             if verb > 0:
                 print("\n------------Constructing MKM volcano plot------------------\n")
@@ -1179,7 +1297,6 @@ def main(
             print("\n")
 
     elif nd == 2:
-        sys.exit("Unavailable for now. Will be implemented in future versions!")
         (
             d,
             grids,
@@ -1216,7 +1333,15 @@ def main(
         total_combinations = len(xint) * len(yint)
         combinations = list(itertools.product(range(len(xint)), range(len(yint))))
         num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
+        grids = [g**10 for g in grids]
 
+        initial_conc = np.array([])
+        last_row_index = df_network.index[-1]
+        if isinstance(last_row_index, str):
+            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
+                initial_conc = df_network.iloc[-1:].to_numpy()[0]
+                df_network = df_network.drop(df_network.index[-1])
+        rxn_network_all = df_network.to_numpy()[:, :]
         # MKM
         for chunk_index in tqdm(range(num_chunks)):
             start_index = chunk_index * ncore
@@ -1228,10 +1353,9 @@ def main(
                     coord,
                     grids,
                     n_target,
-                    temperature,
                     t_span,
-                    df_network,
-                    tags,
+                    rxn_network_all,
+                    initial_conc,
                     states,
                     timeout,
                     report_as_yield,
@@ -1428,3 +1552,6 @@ def main(
                 plotmode=plotmode,
             )
         print("\n")
+
+
+# TODO write test functions for
