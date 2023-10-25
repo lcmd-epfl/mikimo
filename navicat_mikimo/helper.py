@@ -2,6 +2,7 @@ import argparse
 import logging
 import multiprocessing
 import os
+import sys
 from typing import List, Tuple
 
 import autograd.numpy as np
@@ -200,6 +201,14 @@ def preprocess_data_mkm(arguments, mode):
         type=str,
         help="Directory containing all required input files (reaction_data, rxn_network in csv or xlsx format)",
     )
+    parser.add_argument(
+        "-e",
+        "--eprofile_choice",
+        dest="profile_choice",
+        default=0,
+        type=int,
+        help="Choice of energy profile in the reaction data file. (default: 0 (topmost profile))",
+    )
 
     parser.add_argument(
         "-Tf",
@@ -380,6 +389,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         wdir = args.dir
         x_scale = args.xscale
         more_species_mkm = args.addition
+        profile_choice = args.profile_choice
 
         t_finals = args.time
         temperatures = args.temp
@@ -421,7 +431,10 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             except FileNotFoundError as e:
                 df = pd.read_csv(filename_csv)
             clear = check_km_inp(df, df_network, mode="kinetic")
-            ks = df.iloc[0].to_numpy()[1:].astype(np.float64)
+
+            if profile_choice > df.shape[0]:
+                sys.exit("The profile choice is out of range.")
+            ks = df.iloc[profile_choice].to_numpy()[1:].astype(np.float64)
             return (
                 None,
                 df_network,
@@ -442,7 +455,9 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             except FileNotFoundError as e:
                 df = pd.read_csv(filename_csv)
 
-            dg = df.iloc[0].to_numpy()[1:]
+            if profile_choice > df.shape[0]:
+                sys.exit("The profile choice is out of range.")
+            dg = df.iloc[profile_choice].to_numpy()[1:]
             dg = dg.astype(float)
             tags = df.columns.values[1:]
 
@@ -563,6 +578,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         more_species_mkm = args.addition
         imputer_strat = args.imputer_strat
         verb = args.verb
+        profile_choice = args.profile_choice
 
         t_finals = args.time
         temperatures = args.temp
@@ -596,8 +612,11 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             except FileNotFoundError as e:
                 df = pd.read_csv(filename_csv)
 
+            if profile_choice > df.shape[0]:
+                sys.exit("The profile choice is out of range.")
+
             clear = check_km_inp(df, df_network, mode="kinetic")
-            ks = df.iloc[0].to_numpy()[1:].astype(np.float64)
+            ks = df.iloc[profile_choice].to_numpy()[1:].astype(np.float64)
             return (
                 None,
                 df_network,
@@ -621,7 +640,11 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 df = pd.read_excel(filename_xlsx)
             except FileNotFoundError as e:
                 df = pd.read_csv(filename_csv)
-            dg = df.iloc[0].to_numpy()[1:]
+
+            if profile_choice > df.shape[0]:
+                sys.exit("The profile choice is out of range.")
+
+            dg = df.iloc[profile_choice].to_numpy()[1:]
             dg = dg.astype(float)
             tags = df.columns.values[1:]
 
