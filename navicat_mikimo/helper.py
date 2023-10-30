@@ -433,8 +433,12 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             clear = check_km_inp(df, df_network, mode="kinetic")
 
             if profile_choice > df.shape[0]:
-                sys.exit("The profile choice is out of range.")
+                sys.exit("The selected kinetic profile is out of range.")
             ks = df.iloc[profile_choice].to_numpy()[1:].astype(np.float64)
+            if np.isnan(ks).any():
+                sys.exit(
+                    "The selected kinetic profile is incomplete (due to the presence of NaN)."
+                )
             return (
                 None,
                 df_network,
@@ -456,8 +460,12 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 df = pd.read_csv(filename_csv)
 
             if profile_choice > df.shape[0]:
-                sys.exit("The profile choice is out of range.")
+                sys.exit("The selected energy profile is out of range.")
             dg = df.iloc[profile_choice].to_numpy()[1:]
+            if np.isnan(dg).any():
+                sys.exit(
+                    "The selected energy profile is incomplete (due to the presence of NaN)."
+                )
             dg = dg.astype(float)
             tags = df.columns.values[1:]
 
@@ -613,10 +621,14 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 df = pd.read_csv(filename_csv)
 
             if profile_choice > df.shape[0]:
-                sys.exit("The profile choice is out of range.")
+                sys.exit("The selected kinetic profile is out of range.")
 
             clear = check_km_inp(df, df_network, mode="kinetic")
             ks = df.iloc[profile_choice].to_numpy()[1:].astype(np.float64)
+            if np.isnan(ks).any():
+                sys.exit(
+                    "The selected kinetic profile is incomplete (due to the presence of NaN)."
+                )
             return (
                 None,
                 df_network,
@@ -642,10 +654,14 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 df = pd.read_csv(filename_csv)
 
             if profile_choice > df.shape[0]:
-                sys.exit("The profile choice is out of range.")
+                sys.exit("The selected energy profile is out of range.")
 
             dg = df.iloc[profile_choice].to_numpy()[1:]
             dg = dg.astype(float)
+            if np.isnan(dg).any():
+                sys.exit(
+                    "The selected energy profile is incomplete (due to the presence of NaN)."
+                )
             tags = df.columns.values[1:]
 
             clear = check_km_inp(df, df_network)
