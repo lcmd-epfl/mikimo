@@ -390,7 +390,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         x_scale = args.xscale
         more_species_mkm = args.addition
         profile_choice = args.profile_choice
-
+        quality = args.int_quality
         t_finals = args.time
         temperatures = args.temp
 
@@ -435,7 +435,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             if profile_choice > df.shape[0]:
                 sys.exit("The selected kinetic profile is out of range.")
             ks = df.iloc[profile_choice].to_numpy()[1:].astype(np.float64)
-            if np.isnan(ks).any():
+            if pd.isnull(ks).any():
                 sys.exit(
                     "The selected kinetic profile is incomplete (due to the presence of NaN)."
                 )
@@ -450,6 +450,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 more_species_mkm,
                 wdir,
                 ks,
+                quality,
             )
         else:
             filename_xlsx = f"{wdir}/reaction_data.xlsx"
@@ -462,7 +463,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             if profile_choice > df.shape[0]:
                 sys.exit("The selected energy profile is out of range.")
             dg = df.iloc[profile_choice].to_numpy()[1:]
-            if np.isnan(dg).any():
+            if pd.isnull(dg).any():
                 sys.exit(
                     "The selected energy profile is incomplete (due to the presence of NaN)."
                 )
@@ -487,6 +488,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 more_species_mkm,
                 wdir,
                 ks,
+                quality,
             )
 
     elif mode == "mkm_screening":
@@ -587,7 +589,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         imputer_strat = args.imputer_strat
         verb = args.verb
         profile_choice = args.profile_choice
-
+        quality = args.int_quality
         t_finals = args.time
         temperatures = args.temp
 
@@ -625,7 +627,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
 
             clear = check_km_inp(df, df_network, mode="kinetic")
             ks = df.iloc[profile_choice].to_numpy()[1:].astype(np.float64)
-            if np.isnan(ks).any():
+            if pd.isnull(ks).any():
                 sys.exit(
                     "The selected kinetic profile is incomplete (due to the presence of NaN)."
                 )
@@ -644,6 +646,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 imputer_strat,
                 verb,
                 ks,
+                quality,
             )
         else:
             filename_xlsx = f"{wdir}/reaction_data.xlsx"
@@ -658,7 +661,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
 
             dg = df.iloc[profile_choice].to_numpy()[1:]
             dg = dg.astype(float)
-            if np.isnan(dg).any():
+            if pd.isnull(dg).any():
                 sys.exit(
                     "The selected energy profile is incomplete (due to the presence of NaN)."
                 )
@@ -686,6 +689,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 imputer_strat,
                 verb,
                 ks,
+                quality,
             )
 
 

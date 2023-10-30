@@ -124,6 +124,7 @@ def main():
         imputer_strat,
         verb,
         ks,
+        quality,
     ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_cond")
 
     idx_target_all = [states.index(i) for i in states if "*" in i]
@@ -137,7 +138,7 @@ def main():
             rxn_network_all,
         ) = process_data_mkm(dg, df_network, tags, states)
     else:
-        ks = 10 ** ks
+        ks = 10**ks
         energy_profile_all = None
         dgr_all = None
         coeff_TS_all = None
@@ -338,7 +339,6 @@ def main():
             t_span = (0, t_final)
 
             for i, temperature in enumerate(temperatures):
-
                 if ks is not None:
                     sys.exit("Cannot screen over temperatures with the kinetic profile")
                 else:
@@ -353,7 +353,7 @@ def main():
                         states,
                         timeout=60,
                         report_as_yield=False,
-                        quality=2,
+                        quality=quality,
                     )
                     c_target_t = np.array(
                         [result_solve_ivp.y[i][-1] for i in idx_target_all]
@@ -388,7 +388,7 @@ def main():
                         states,
                         timeout=60,
                         report_as_yield=False,
-                        quality=2,
+                        quality=quality,
                         ks=ks,
                     )
                 else:
@@ -403,7 +403,7 @@ def main():
                         states,
                         timeout=60,
                         report_as_yield=False,
-                        quality=2,
+                        quality=quality,
                         ks=ks,
                     )
                 c_target_t = np.array(
@@ -444,7 +444,7 @@ def main():
                         states,
                         timeout=60,
                         report_as_yield=False,
-                        quality=2,
+                        quality=quality,
                         ks=ks,
                     )
                 else:
@@ -459,7 +459,7 @@ def main():
                         states,
                         timeout=60,
                         report_as_yield=False,
-                        quality=2,
+                        quality=quality,
                     )
                 c_target_t = np.array(
                     [result_solve_ivp.y[i][-1] for i in idx_target_all]

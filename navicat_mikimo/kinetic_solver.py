@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# TODO waRN IF THERE IS MISSING DATA
 
 import sys
 import warnings
@@ -745,6 +746,7 @@ def main():
         more_species_mkm,
         wdir,
         ks,
+        quality,
     ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")
 
     if ks is not None:
@@ -768,7 +770,7 @@ def main():
             states,
             timeout=60,
             report_as_yield=False,
-            quality=2,
+            quality=quality,
             ks=ks_actual,
         )
     else:
