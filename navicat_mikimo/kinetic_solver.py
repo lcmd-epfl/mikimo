@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-# TODO waRN IF THERE IS MISSING DATA
-
 import sys
 import warnings
 from typing import Callable, List, Tuple, Union
@@ -8,6 +6,7 @@ from typing import Callable, List, Tuple, Union
 import autograd.numpy as np
 import scipy
 from autograd import jacobian
+from numpy import char
 from numpy.testing import assert_allclose
 from scipy.constants import R, calorie, h, k, kilo
 from scipy.integrate import solve_ivp
@@ -139,12 +138,15 @@ def calc_k(
         k_reverse_all (np.ndarray): Reaction rates of all backward steps.
     """
 
-    if not isinstance(energy_profile_all, np.ndarray):
-        energy_profile_all = np.asarray(energy_profile_all)
+    energy_profile_all = [
+        np.asarray(e) if not isinstance(e, np.ndarray) else e
+        for e in energy_profile_all
+    ]
     if not isinstance(dgr_all, np.ndarray):
         dgr_all = np.asarray(dgr_all)
-    if not isinstance(coeff_TS_all, np.ndarray):
-        coeff_TS_all = np.asarray(coeff_TS_all)
+    coeff_TS_all = [
+        np.asarray(e) if not isinstance(e, np.ndarray) else e for e in coeff_TS_all
+    ]
 
     k_forward_all = np.empty(0)
     k_reverse_all = np.empty(0)
@@ -250,24 +252,20 @@ def system_KE_DE(
     """
 
     boundary = np.zeros((initial_conc.shape[0], 2))
-    tolerance = 1
-    R_idx = [
-        i for i, s in enumerate(states) if s.lower().startswith("r") and "INT" not in s
-    ]
-    P_idx = [
-        i for i, s in enumerate(states) if s.lower().startswith("p") and "INT" not in s
-    ]
-    INT_idx = [
-        i for i in range(1, initial_conc.shape[0]) if i not in R_idx and i not in P_idx
-    ]
+    TOLERANCE = 1
+    r_idx = np.where(char.startswith(states, "R") & ~char.startswith(states, "INT"))[0]
+    p_idx = np.where(char.startswith(states, "P") & ~char.startswith(states, "INT"))[0]
+    int_idx = np.setdiff1d(
+        np.arange(1, initial_conc.shape[0]), np.concatenate([r_idx, p_idx])
+    )
 
-    boundary[0] = [0 - tolerance, initial_conc[0] + tolerance]
-    for i in R_idx:
-        boundary[i] = [0 - tolerance, initial_conc[i] + tolerance]
-    for i in P_idx:
-        boundary[i] = [0 - tolerance, np.max(initial_conc[R_idx]) + tolerance]
-    for i in INT_idx:
-        boundary[i] = [0 - tolerance, initial_conc[0] + tolerance]
+    boundary[0] = [0 - TOLERANCE, initial_conc[0] + TOLERANCE]
+    for i in r_idx:
+        boundary[i] = [0 - TOLERANCE, initial_conc[i] + TOLERANCE]
+    for i in p_idx:
+        boundary[i] = [0 - TOLERANCE, np.max(initial_conc[r_idx]) + TOLERANCE]
+    for i in int_idx:
+        boundary[i] = [0 - TOLERANCE, initial_conc[0] + TOLERANCE]
 
     def bound_decorator(boundary):
         def decorator(func):
@@ -276,25 +274,18 @@ def system_KE_DE(
                 violate_low_idx = np.where(y < boundary[:, 0])
                 violate_up_idx = np.where(y > boundary[:, 1])
                 if np.any(violate_up_idx[0]) and np.any(violate_low_idx[0]):
-                    try:
-                        y[violate_low_idx] = boundary[violate_low_idx, 0]
-                        y[violate_up_idx] = boundary[violate_up_idx, 1]
-                        # dy_dt[violate_low_idx] = dy_dt[violate_low_idx] + (boundary[violate_low_idx, 0] - y[violate_low_idx])/2
-                        # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
-                        dy_dt[violate_low_idx] = 0
-                        dy_dt[violate_up_idx] = 0
-                    except TypeError as err:
-                        y_ = np.array(y._value)
-                        dy_dt_ = np.array(dy_dt._value)
-                        # arraybox failure
-                        y_[violate_low_idx] = boundary[violate_low_idx, 0]
-                        y_[violate_up_idx] = boundary[violate_up_idx, 1]
-                        # dy_dt[violate_low_idx] = dy_dt[violate_low_idx] + (boundary[violate_low_idx, 0] - y[violate_low_idx])/2
-                        # dy_dt[violate_up_idx] = dy_dt[violate_up_idx] + (boundary[violate_up_idx, 1] - y[violate_up_idx])/2
-                        dy_dt_[violate_low_idx] = 0
-                        dy_dt_[violate_up_idx] = 0
-                        dy_dt = np.array(dy_dt_)
-                        y = np.array(y_)
+                    if not (isinstance(y, np.ndarray)) or not (
+                        isinstance(dy_dt, np.ndarray)
+                    ):
+                        y = np.array(y._value)
+                        dy_dt = np.array(dy_dt._value)
+
+                    y[violate_low_idx] = boundary[violate_low_idx, 0]
+                    y[violate_up_idx] = boundary[violate_up_idx, 1]
+                    dy_dt[violate_low_idx] = 0
+                    dy_dt[violate_up_idx] = 0
+                    dy_dt = np.asarray(dy_dt)
+                    y = np.asarray(y)
                 return dy_dt
 
             return wrapper
@@ -303,10 +294,12 @@ def system_KE_DE(
 
     @bound_decorator(boundary)
     def _dydt(t, y):
-        dydt = np.empty_like(y)
-        for a in range(initial_conc.shape[0]):
-            dydt[a] = calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
-        return dydt
+        return np.array(
+            [
+                calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
+                for a in range(initial_conc.shape[0])
+            ]
+        )
 
     _dydt.jac = jacobian(_dydt, argnum=1)
 
@@ -421,7 +414,7 @@ def calc_km(
     success = False
     cont = False
 
-    while success == False:
+    while not success:
         atol = atol_values.pop(0)
         rtol = rtol_values.pop(0)
         try:
@@ -438,14 +431,7 @@ def calc_km(
                 first_step=first_step,
                 timeout=timeout,
             )
-            # timeout
-            if result_solve_ivp == "Shiki":
-                if rtol == last_[0] and atol == last_[1]:
-                    success = True
-                    cont = True
-                continue
-            else:
-                success = True
+            success = True
 
         except Exception:
             if rtol == last_[0] and atol == last_[1]:
@@ -475,16 +461,9 @@ def calc_km(
                     first_step=first_step,
                     timeout=timeout,
                 )
-                # timeout
-                if result_solve_ivp == "Shiki":
-                    if rtol == last_[0] and atol == last_[1]:
-                        success = True
-                        cont = True
-                    continue
-                else:
-                    success = True
+                success = True
 
-            except Exception as e:
+            except Exception:
                 if rtol == last_[0] and atol == last_[1]:
                     success = True
                     cont = True
@@ -504,7 +483,7 @@ def calc_km(
                 first_step=first_step,
                 timeout=timeout,
             )
-        except Exception as e:
+        except Exception:
             # Last resort
             result_solve_ivp = solve_ivp(
                 dydt,
@@ -521,38 +500,35 @@ def calc_km(
             )
 
     try:
-        if result_solve_ivp != "Shiki":
-            c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
+        c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
 
-            R_idx = [
-                i
-                for i, s in enumerate(states)
-                if s.lower().startswith("r") and "INT" not in s
-            ]
-            Rp = rxn_network_all[:, R_idx]
-            Rp_ = []
-            for col in range(Rp.shape[1]):
-                non_zero_values = Rp[:, col][Rp[:, col] != 0]
-                Rp_.append(non_zero_values)
-            Rp_ = np.abs([r[0] for r in Rp_])
+        r_idx = [
+            i
+            for i, s in enumerate(states)
+            if s.lower().startswith("r") and "INT" not in s
+        ]
+        reactant_nx = rxn_network_all[:, r_idx]
+        reactant_nx_2 = []
+        for col in range(reactant_nx.shape[1]):
+            non_zero_values = reactant_nx[:, col][reactant_nx[:, col] != 0]
+            reactant_nx_2.append(non_zero_values)
+        reactant_nx_2 = np.abs([r[0] for r in reactant_nx_2])
 
-            # TODO: better way to find reactant conc
-            upper = np.min(initial_conc[R_idx] * Rp_)
+        # TODO: better way to find reactant conc
+        upper = np.min(initial_conc[r_idx] * reactant_nx_2)
 
-            if report_as_yield:
-                c_target_yield = c_target_t / upper * 100
-                c_target_yield[c_target_yield > 100] = 100
-                c_target_yield[c_target_yield < 0] = 0
-                return c_target_yield, result_solve_ivp
-
-            else:
-                c_target_t[c_target_t < 0] = 0
-                c_target_t = np.minimum(c_target_t, upper)
-                return c_target_t, result_solve_ivp
+        if report_as_yield:
+            c_target_yield = c_target_t / upper * 100
+            c_target_yield[c_target_yield > 100] = 100
+            c_target_yield[c_target_yield < 0] = 0
+            return c_target_yield, result_solve_ivp
 
         else:
-            return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
-    except Exception as err:
+            c_target_t[c_target_t < 0] = 0
+            c_target_t = np.minimum(c_target_t, upper)
+            return c_target_t, result_solve_ivp
+
+    except Exception:
         return np.array([np.NaN] * len(idx_target_all)), result_solve_ivp
 
 
@@ -584,6 +560,8 @@ def test_get_k():
 
     assert_allclose(k_forward, expected_k_forward)
     assert_allclose(k_reverse, expected_k_reverse)
+
+    print("All test cases for get_k passed!")
 
 
 def test_add_rate():
@@ -669,7 +647,7 @@ def test_add_rate():
 
     assert_allclose(rate, expected_rate)
 
-    print("All test cases passed!")
+    print("All test cases for add_rate passed!")
 
 
 def test_calc_dX_dt():
@@ -701,7 +679,6 @@ def test_calc_dX_dt():
     )
 
     dX_dt = calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
-    print(dX_dt)
     assert_allclose(dX_dt, expected_dX_dt)
 
     # Test case 3
@@ -747,7 +724,109 @@ def test_calc_dX_dt():
 
     assert_allclose(dX_dt, expected_dX_dt)
 
-    print("All test cases passed!")
+    print("All test cases for calc_dX_dt passed!")
+
+
+def test_system_KE_DE():
+    initial_conc = np.array(
+        [
+            0.05,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            5.0,
+            0.0,
+        ]
+    )
+    states = [
+        "INT9",
+        "INT14",
+        "P-HCOO[Si]*",
+        "INT18",
+        "P-CH$_2$(O[Si])$_2$*",
+        "INT23",
+        "R-CO2",
+        "R-SiH",
+        "P-CH$_3$(O[Si])*",
+    ]
+    k_forward_all = np.array(
+        [
+            5.40010507e08,
+            7.50982280e02,
+            9.54375156e05,
+            7.77518443e12,
+            1.50371544e01,
+            7.77518443e12,
+        ]
+    )
+    k_reverse_all = np.array(
+        [
+            1.20718427e-04,
+            7.77518443e12,
+            7.77518443e12,
+            5.79219149e01,
+            7.77518443e12,
+            2.16647075e-22,
+        ]
+    )
+    rxn_network_all = np.array(
+        [
+            [-1.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, -1.0, 0.0],
+            [1.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [-1.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, -1.0, 0.0],
+            [-1.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, -1.0, 1.0],
+        ]
+    )
+    print(rxn_network_all.shape)
+    dydt = system_KE_DE(
+        k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states
+    )
+    max_step = np.nan
+    first_step = np.min(
+        [
+            1e-14,
+            1 / 27e9,
+            np.finfo(np.float16).eps,
+            np.finfo(np.float32).eps,
+            np.nextafter(np.float16(0), np.float16(1)),
+        ]
+    )
+    result_solve_ivp = solve_ivp(
+        dydt,
+        (0, 86400),
+        initial_conc,
+        method="BDF",
+        dense_output=True,
+        rtol=1e-6,
+        atol=1e-9,
+        # jac=dydt.jac,
+        max_step=max_step,
+        first_step=first_step,
+    )
+    print(result_solve_ivp)
+    idx_target_all = [states.index(i) for i in states if "*" in i]
+    c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
+
+    R_idx = [
+        i for i, s in enumerate(states) if s.lower().startswith("r") and "INT" not in s
+    ]
+    Rp = rxn_network_all[:, R_idx]
+    Rp_ = []
+    for col in range(Rp.shape[1]):
+        non_zero_values = Rp[:, col][Rp[:, col] != 0]
+        Rp_.append(non_zero_values)
+    Rp_ = np.abs([r[0] for r in Rp_])
+    upper = np.min(initial_conc[R_idx] * Rp_)
+    c_target_t[c_target_t < 0] = 0
+    c_target_t = np.minimum(c_target_t, upper)
+    c_target_t = np.around(c_target_t, decimals=4)
+    expected_c_target_t = np.array([6.336e-01, 3.160e-01, 0.000])
+    assert_allclose(c_target_t, expected_c_target_t)
 
 
 def main():
@@ -760,7 +839,6 @@ def main():
         temperature,
         x_scale,
         more_species_mkm,
-        wdir,
         ks,
         quality,
     ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")

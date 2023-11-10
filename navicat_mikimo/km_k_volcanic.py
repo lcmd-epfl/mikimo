@@ -32,8 +32,8 @@ from .helper import call_imputter
 from .kinetic_solver import calc_km
 from .plot_function import (
     plot_2d_combo,
-    plot_3d_,
     plot_3d_contour_regions_np,
+    plot_3d_m,
     plot_3d_np,
     plot_evo,
 )
@@ -467,7 +467,6 @@ def evol_mode(
         n_target (int): Number of targets.
         x_scale (float): Time scale for the x-axis.
         more_species_mkm (List[str]): Additional species to be included in the evolution plot.
-        wdir (str): Output directory.
 
     Returns:
         None
@@ -1419,7 +1418,7 @@ def main(
         activity_grid = np.sum(grid_d_fill, axis=0)
         amin = activity_grid.min()
         amax = activity_grid.max()
-        plot_3d_(
+        plot_3d_m(
             xint,
             yint,
             activity_grid.T,

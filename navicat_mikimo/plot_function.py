@@ -7,8 +7,6 @@ from matplotlib.ticker import FuncFormatter
 from navicat_volcanic.helpers import bround
 from navicat_volcanic.plotting2d import beautify_ax
 
-from .helper import yesno
-
 matplotlib.use("Agg")
 
 
@@ -18,34 +16,29 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
 
-    if x_scale == "ls":
-        t = np.log10(result_solve_ivp.t)
-        xlabel = "log(time) (s)"
-    elif x_scale == "s":
-        t = result_solve_ivp.t
-        xlabel = "time (s)"
-    elif x_scale == "lmin":
-        t = np.log10(result_solve_ivp.t / 60)
-        xlabel = "log(time) (min)"
-    elif x_scale == "min":
-        t = result_solve_ivp.t / 60
-        xlabel = "time (min)"
-    elif x_scale == "h":
-        t = result_solve_ivp.t / 3600
-        xlabel = "time (h)"
-    elif x_scale == "d":
-        t = result_solve_ivp.t / 86400
-        xlabel = "time (d)"
-    else:
+    scale_mapping = {
+        "ls": (np.log10, "log(time) (s)"),
+        "s": (lambda x: x, "time (s)"),
+        "lmin": (lambda x: np.log10(x / 60), "log(time) (min)"),
+        "min": (lambda x: x / 60, "time (min)"),
+        "h": (lambda x: x / 3600, "time (h)"),
+        "d": (lambda x: x / 86400, "time (d)"),
+    }
+    if x_scale not in scale_mapping:
         raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
+    t_transform, xlabel = scale_mapping[x_scale]
+    t = t_transform(result_solve_ivp.t)
 
-    plt.rc("axes", labelsize=18)
-    plt.rc("xtick", labelsize=18)
-    plt.rc("ytick", labelsize=18)
-    plt.rc("font", size=18)
+    matplotlib.rcParams.update(
+        {
+            "axes.labelsize": 18,
+            "xtick.labelsize": 18,
+            "ytick.labelsize": 18,
+            "font.size": 18,
+        }
+    )
 
-    fig = plt.figure(figsize=(8, 6))
-    ax = fig.add_subplot(1, 1, 1)
+    fig, ax = plt.subplots(figsize=(8, 6))
 
     # Catalyst---------
     ax.plot(
@@ -59,7 +52,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     )
 
     # Reactant--------------------------
-    color_R = [
+    color_reactant = [
         "#008F73",
         "#1AC182",
         "#1AC145",
@@ -75,7 +68,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
             t,
             result_solve_ivp.y[i, :],
             linestyle="-",
-            c=color_R[n],
+            c=color_reactant[n],
             linewidth=2,
             alpha=0.85,
             zorder=1,
@@ -83,7 +76,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
         )
 
     # Product--------------------------
-    color_P = [
+    color_prod = [
         "#D80828",
         "#F57D13",
         "#55000A",
@@ -98,7 +91,7 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
             t,
             result_solve_ivp.y[i, :],
             linestyle="-",
-            c=color_P[n],
+            c=color_prod[n],
             linewidth=2,
             alpha=0.85,
             zorder=1,
@@ -106,14 +99,21 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
         )
 
     # additional INT-----------------
-    color_INT = ["#4251B3", "#3977BD", "#2F7794", "#7159EA", "#15AE9B", "#147F58"]
+    color_intermediate = [
+        "#4251B3",
+        "#3977BD",
+        "#2F7794",
+        "#7159EA",
+        "#15AE9B",
+        "#147F58",
+    ]
     if more_species_mkm is not None:
         for i in more_species_mkm:
             ax.plot(
                 t,
                 result_solve_ivp.y[i, :],
                 linestyle="dashdot",
-                c=color_INT[i],
+                c=color_intermediate[i],
                 linewidth=2,
                 alpha=0.85,
                 zorder=1,
@@ -139,31 +139,30 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
 
 
 def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
-    """use in screen_cond"""
+    """use in mkm mode"""
     r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
     p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
 
-    if x_scale == "ls":
-        t = np.log10(result_solve_ivp.t)
-        xlabel = "log(time) (s)"
-    elif x_scale == "s":
-        t = result_solve_ivp.t
-        xlabel = "time (s)"
-    elif x_scale == "lmin":
-        t = np.log10(result_solve_ivp.t / 60)
-        xlabel = "log(time) (min)"
-    elif x_scale == "min":
-        t = result_solve_ivp.t / 60
-        xlabel = "time (min)"
-    elif x_scale == "h":
-        t = result_solve_ivp.t / 3600
-        xlabel = "time (h)"
-    elif x_scale == "d":
-        t = result_solve_ivp.t / 86400
-        xlabel = "time (d)"
-    else:
+    scale_mapping = {
+        "ls": (np.log10, "log(time) (s)"),
+        "s": (lambda x: x, "time (s)"),
+        "lmin": (lambda x: np.log10(x / 60), "log(time) (min)"),
+        "min": (lambda x: x / 60, "time (min)"),
+        "h": (lambda x: x / 3600, "time (h)"),
+        "d": (lambda x: x / 86400, "time (d)"),
+    }
+    if x_scale not in scale_mapping:
         raise ValueError("x_scale must be 'ls', 's', 'lmin', 'min', 'h', or 'd'")
-
+    t_transform, xlabel = scale_mapping[x_scale]
+    t = t_transform(result_solve_ivp.t)
+    matplotlib.rcParams.update(
+        {
+            "axes.labelsize": 18,
+            "xtick.labelsize": 18,
+            "ytick.labelsize": 18,
+            "font.size": 18,
+        }
+    )
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
     )
@@ -180,7 +179,7 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
     )
 
     # Reactant--------------------------
-    color_R = [
+    color_reactant = [
         "#008F73",
         "#1AC182",
         "#1AC145",
@@ -196,7 +195,7 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
             t,
             result_solve_ivp.y[i, :],
             "-",
-            c=color_R[n],
+            c=color_reactant[n],
             linewidth=1.5,
             alpha=0.85,
             zorder=1,
@@ -204,7 +203,7 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
         )
 
     # Product--------------------------
-    color_P = [
+    color_prod = [
         "#D80828",
         "#F57D13",
         "#55000A",
@@ -219,7 +218,7 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
             t,
             result_solve_ivp.y[i, :],
             "-",
-            c=color_P[n],
+            c=color_prod[n],
             linewidth=1.5,
             alpha=0.85,
             zorder=1,
@@ -227,14 +226,21 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
         )
 
     # additional INT-----------------
-    color_INT = ["#4251B3", "#3977BD", "#2F7794", "#7159EA", "#15AE9B", "#147F58"]
+    color_intermediate = [
+        "#4251B3",
+        "#3977BD",
+        "#2F7794",
+        "#7159EA",
+        "#15AE9B",
+        "#147F58",
+    ]
     if more_species_mkm is not None:
         for i in more_species_mkm:
             ax.plot(
                 t,
                 result_solve_ivp.y[i, :],
                 linestyle="dashdot",
-                c=color_INT[i],
+                c=color_intermediate[i],
                 linewidth=1.5,
                 alpha=0.85,
                 zorder=1,
@@ -260,10 +266,15 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
 
 
 def plot_save_cond(x, Pfs, var, prod_name, verb=1):
-    plt.rc("axes", labelsize=10)
-    plt.rc("xtick", labelsize=10)
-    plt.rc("ytick", labelsize=10)
-    plt.rc("font", size=10)
+    """used in cond mode, to plot var vs product concentration"""
+    matplotlib.rcParams.update(
+        {
+            "axes.labelsize": 10,
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "font.size": 10,
+        }
+    )
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
     )
@@ -285,17 +296,16 @@ def plot_save_cond(x, Pfs, var, prod_name, verb=1):
             zorder=2,
         )
 
-    # plt.xlim(xmin - (xmax-xmin)*0.1, xmax + (xmax-xmin)*0.1)
-    # plt.ylim(0, np.round(np.max(Pfs),1) + 0.15)
     plt.legend(loc="best")
     plt.xlabel(var)
     plt.ylabel("Product concentration (M)")
-    plt.savefig(f"{var}_screen.png", dpi=400, transparent=True)
+    fig.savefig(f"{var}_screen.png", dpi=400)
 
-    data_dict = dict()
-    data_dict[var] = x
-    for i, Pf in enumerate(Pfs):
-        data_dict[prod_name[i]] = Pf
+    if "Temperature" in var:
+        var = "temperature"
+    elif "Time" in var:
+        var = "time"
+    data_dict = {var: x, **{prod_name[i]: Pf for i, Pf in enumerate(Pfs)}}
 
     df = pd.DataFrame(data_dict)
     df.to_csv(f"{var}_screen.csv", index=False)
@@ -356,7 +366,7 @@ def plot_2d_combo(
     plotmode=1,
     labels=None,
 ):
-    color = [
+    COLORS = [
         "#FF6347",
         "#32CD32",
         "#4169E1",
@@ -381,7 +391,7 @@ def plot_2d_combo(
     if plotmode == 0:
         for i, yi in enumerate(y):
             ax.plot(
-                x, yi, "-", linewidth=1.5, color=color[i], alpha=0.95, label=labels[i]
+                x, yi, "-", linewidth=1.5, color=COLORS[i], alpha=0.95, label=labels[i]
             )
             ax = beautify_ax(ax)
             if rid is not None and rb is not None:
@@ -402,7 +412,7 @@ def plot_2d_combo(
                 yi,
                 "-",
                 linewidth=1.5,
-                color=color[i],
+                color=COLORS[i],
                 alpha=0.95,
                 zorder=1,
                 label=labels[i],
@@ -424,7 +434,7 @@ def plot_2d_combo(
                     )
             if ci[i] is not None:
                 plot_ci(ci[i], x, y[i], ax=ax)
-            plotpoints(ax, px, py[i], np.repeat([color[i]], len(px)), ms, plotmode)
+            plotpoints(ax, px, py[i], np.repeat([COLORS[i]], len(px)), ms, plotmode)
 
     ymin, ymax = ax.get_ylim()
     ymax = bround(ymax, ybase, type="max")
@@ -432,10 +442,10 @@ def plot_2d_combo(
     plt.ylim(0, ymax)
     plt.yticks(np.arange(0, ymax + 0.1, ybase))
     plt.legend(fontsize=10, loc="upper right", frameon=False, borderpad=0)
-    plt.savefig(filename)
+    fig.savefig(filename, dpi=400)
 
 
-def plot_3d_(
+def plot_3d_m(
     xint,
     yint,
     grid,
@@ -457,6 +467,7 @@ def plot_3d_(
     ms="o",
     cmap="seismic",
 ):
+    """for vp mode, nd=2"""
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
     )
@@ -524,6 +535,7 @@ def plot_3d_np(
     filename="plot.png",
     cmap="seismic",
 ):
+    """Like plot_3d_m but without points, for the mkm maps (t,T) or ([t,T], descriptor))"""
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
     )
@@ -538,7 +550,6 @@ def plot_3d_np(
         xint, yint, grid, levels=levels, norm=norm, cmap=cm.get_cmap(cmap, len(levels))
     )
 
-    # Labels and key
     xticks = np.arange(x1min, x1max + 0.1, x1base)
     yticks = np.arange(x2min, x2max + 0.1, x2base)
     plt.xlabel(x1label)
@@ -580,6 +591,7 @@ def plot_3d_contour_regions_np(
     nunique=2,
     id_labels=[],
 ):
+    """Like plot_3d_np, but for when there are more than 2 products"""
     fig, ax = plt.subplots(
         frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
     )

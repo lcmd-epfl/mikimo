@@ -11,6 +11,8 @@ import pandas as pd
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 
+logging.basicConfig(level=logging.WARNING)
+
 
 def call_imputter(imp_alg):
     """
@@ -62,8 +64,7 @@ def check_existence(wdir, verb):
         c0_exist = any([last_row_index.lower() in rows_to_search])
         k_exist = all([column in df.columns for column in columns_to_search])
         if not c0_exist:
-            logging.critical(
-                "Initial concentration not found in rxn_network.csv.")
+            logging.critical("Initial concentration not found in rxn_network.csv.")
 
     else:
         logging.critical("rxn_network.csv not found.")
@@ -147,7 +148,8 @@ def check_km_inp(
     if mode == "energy":
         # all INT names in nx are the same as in the profile
         missing_states = [
-            state for state in states_network_int if state not in states_profile]
+            state for state in states_network_int if state not in states_profile
+        ]
         if missing_states:
             clear = False
             logging.warning(
@@ -164,8 +166,7 @@ def check_km_inp(
     # initial conc
     if len(states_network) != len(initial_conc):
         clear = False
-        logging.warning(
-            "\nYour initial concentration seems wrong. Double check!")
+        logging.warning("\nYour initial concentration seems wrong. Double check!")
 
     # check network sanity
     mask = (~df_network.isin([-1, 1])).all(axis=1)
@@ -230,7 +231,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="time",
         type=float,
         nargs="+",
-        help="Total reaction time (s) (default: 1 day)",
+        help="Total reaction time (s) (default: 1 day (86400 s)))",
     )
     parser.add_argument(
         "-t",
@@ -275,8 +276,7 @@ def preprocess_data_mkm(arguments, mode):
     )
     parser.add_argument(
         "-p",
-        "-percent",
-        "--p",
+        "--p" "-percent",
         "--percent",
         dest="percent",
         action="store_true",
@@ -370,8 +370,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="verb",
         type=int,
         default=2,
-        help="""Verbosity level of the code. Higher is more verbose and vice versa.
-        Set to at least 2 to generate csv/h5 output files. (default: 1)""",
+        help="Verbosity level of the code. Higher is more verbose and vice versa. Set to at least 2 to generate csv/h5 output files. (default: 1)",
     )
     parser.add_argument(
         "-ncore",
@@ -410,8 +409,8 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
 
         if t_finals is None:
             if verb > 0:
-                print("No time input, use the default value of 54800 s (1d).")
-            t_finals = 54800
+                print("No time input, use the default value of 86400 s (1d).")
+            t_finals = 86400
         elif len(t_finals) == 1:
             t_finals = t_finals[0]
         elif len(t_finals) > 1:
@@ -461,7 +460,6 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 temperatures,
                 x_scale,
                 more_species_mkm,
-                wdir,
                 ks,
                 quality,
             )
@@ -499,7 +497,6 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             temperatures,
             x_scale,
             more_species_mkm,
-            wdir,
             ks,
             quality,
         )
@@ -526,8 +523,8 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         times = args.time
         temperatures = args.temp
 
-        filename_csv = Path(wdir, "rxn_network.csv")
-        df_network = pd.read_csv(filename_csv, index_col=0)
+        nx_path = Path(wdir, "rxn_network.csv")
+        df_network = pd.read_csv(nx_path, index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])
@@ -576,7 +573,6 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             lmargin,
             rmargin,
             verb,
-            wdir,
             imputer_strat,
             report_as_yield,
             timeout,
@@ -610,7 +606,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         temperatures = args.temp
 
         if t_finals is None:
-            t_finals = [54800]
+            t_finals = [86400]
         elif len(t_finals) == 1:
             t_finals = [t_finals[0]]
         elif len(t_finals) > 1:
@@ -624,8 +620,8 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             pass
 
         kinetic_mode = check_existence(wdir, verb)
-        rnx = f"{wdir}/rxn_network.csv"
-        df_network = pd.read_csv(rnx, index_col=0)
+        nx_path = Path(wdir, "rxn_network.csv")
+        df_network = pd.read_csv(nx_path, index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
 
@@ -709,14 +705,9 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         )
 
 
-def process_data_mkm(dg: np.ndarray,
-                     df_network: pd.DataFrame,
-                     tags: List[str],
-                     states: List[str]) -> Tuple[np.ndarray,
-                                                 List[np.ndarray],
-                                                 List[float],
-                                                 List[np.ndarray],
-                                                 np.ndarray]:
+def process_data_mkm(
+    dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
+) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
     """
     Processes data for micokinetic modeling.
 
@@ -750,18 +741,22 @@ def process_data_mkm(dg: np.ndarray,
     df_all = pd.DataFrame([dg], columns=tags)  # %%
     species_profile = tags  # %%
     all_df = []
-    df_ = pd.DataFrame({"R": np.zeros(len(df_all))})
+    df_corr_profiles = pd.DataFrame({"R": np.zeros(len(df_all))})
 
     for i in range(1, len(species_profile)):
         if species_profile[i].lower().startswith("p"):
-            df_ = pd.concat(
-                [df_, df_all[species_profile[i]]], ignore_index=False, axis=1
+            df_corr_profiles = pd.concat(
+                [df_corr_profiles, df_all[species_profile[i]]],
+                ignore_index=False,
+                axis=1,
             )
-            all_df.append(df_)
-            df_ = pd.DataFrame({"R": np.zeros(len(df_all))})
+            all_df.append(df_corr_profiles)
+            df_corr_profiles = pd.DataFrame({"R": np.zeros(len(df_all))})
         else:
-            df_ = pd.concat(
-                [df_, df_all[species_profile[i]]], ignore_index=False, axis=1
+            df_corr_profiles = pd.concat(
+                [df_corr_profiles, df_all[species_profile[i]]],
+                ignore_index=False,
+                axis=1,
             )
 
     for i in range(len(all_df) - 1):
@@ -779,8 +774,7 @@ def process_data_mkm(dg: np.ndarray,
             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
         # int to which new cycle is connected (the first -1)
 
-        if df_network.columns.to_list()[
-                branch_step + 1].lower().startswith("p"):
+        if df_network.columns.to_list()[branch_step + 1].lower().startswith("p"):
             # conneting profiles
             cp_idx = branch_step
         else:
@@ -938,8 +932,7 @@ def test_process_data_mkm():
 
     assert np.array_equal(dgr_all, dgr_all_expected)
     assert len(coeff_ts_all) == len(coeff_ts_all_expected)
-    for coeff_ts, coeff_ts_expected in zip(
-            coeff_ts_all, coeff_ts_all_expected):
+    for coeff_ts, coeff_ts_expected in zip(coeff_ts_all, coeff_ts_all_expected):
         assert np.array_equal(coeff_ts, coeff_ts_expected)
 
     assert np.array_equal(rxn_network_all, rxn_network_all_expected)

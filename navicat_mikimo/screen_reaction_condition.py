@@ -100,10 +100,9 @@ def run_mkm_3d(
             success = True
             c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
             return c_target_t
-        except Exception as e:
+        except Exception:
             if rtol == last_[0] and atol == last_[1]:
                 success = True
-                cont = True
                 return np.array([np.NaN] * len(idx_target_all))
             continue
 
@@ -173,16 +172,16 @@ def main():
         x2min = bround(t_finals_log[0], x2base, "min")
         x2max = bround(t_finals_log[1], x2base, "max")
 
-        temperatures_ = np.linspace(x1min, x1max, npoints)
-        times_ = np.logspace(x2min, x2max, npoints)
-        Tts = np.meshgrid(temperatures_, times_)
+        temperatures_space = np.linspace(x1min, x1max, npoints)
+        times_space = np.logspace(x2min, x2max, npoints)
+        phys_var_grid = np.meshgrid(temperatures_space, times_space)
 
         n_target = len([states.index(i) for i in states if "*" in i])
         grid = np.zeros((npoints, npoints))
         grid_d = np.array([grid] * n_target)
-        total_combinations = len(temperatures_) * len(times_)
+        total_combinations = len(temperatures_space) * len(times_space)
         combinations = list(
-            itertools.product(range(len(temperatures_)), range(len(times_)))
+            itertools.product(range(len(temperatures_space)), range(len(times_space)))
         )
         num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
 
@@ -193,7 +192,7 @@ def main():
 
             results = Parallel(n_jobs=ncore)(
                 delayed(run_mkm_3d)(
-                    Tts,
+                    phys_var_grid,
                     loc,
                     energy_profile_all,
                     dgr_all,
@@ -220,12 +219,12 @@ def main():
         else:
             grid_d_fill = grid_d
 
-        times_ = np.log10(times_)
+        times_space = np.log10(times_space)
         with h5py.File("mkm_time_temperature.h5", "w") as f:
             group = f.create_group("data")
             # save each numpy array as a dataset in the group
-            group.create_dataset("temperatures_", data=temperatures_)
-            group.create_dataset("times_", data=times_)
+            group.create_dataset("temperatures_", data=temperatures_space)
+            group.create_dataset("times_", data=times_space)
             group.create_dataset("agrid", data=grid_d_fill)
 
         x1label = "Temperatures [K]"
@@ -241,14 +240,13 @@ def main():
         if verb > 2:
             with h5py.File("mkm_time_temperature_activity.h5", "w") as f:
                 group = f.create_group("data")
-                # save each numpy array as a dataset in the group
-                group.create_dataset("temperatures_", data=temperatures_)
-                group.create_dataset("times_", data=times_)
+                group.create_dataset("temperatures", data=temperatures_space)
+                group.create_dataset("times", data=times_space)
                 group.create_dataset("agrid", data=activity_grid)
 
         plot_3d_np(
-            temperatures_,
-            times_,
+            temperatures_space,
+            times_space,
             activity_grid.T,
             amin,
             amax,
@@ -282,12 +280,12 @@ def main():
             if verb > 2:
                 with h5py.File("mkm_time_temperature_selectivity.h5", "w") as f:
                     group = f.create_group("data")
-                    group.create_dataset("temperatures_", data=temperatures_)
-                    group.create_dataset("times_", data=times_)
+                    group.create_dataset("temperatures_", data=temperatures_space)
+                    group.create_dataset("times_", data=times_space)
                     group.create_dataset("sgrid", data=selectivity_ratio_)
             plot_3d_np(
-                temperatures_,
-                times_,
+                temperatures_space,
+                times_space,
                 selectivity_ratio_.T,
                 smin,
                 smax,
@@ -309,12 +307,12 @@ def main():
             if verb > 2:
                 with h5py.File("mkm_time_temperature_selectivity.h5", "w") as f:
                     group = f.create_group("data")
-                    group.create_dataset("temperatures_", data=temperatures_)
-                    group.create_dataset("times_", data=times_)
+                    group.create_dataset("temperatures", data=temperatures_space)
+                    group.create_dataset("times", data=times_space)
                     group.create_dataset("dominant_indices", data=dominant_indices)
             plot_3d_contour_regions_np(
-                temperatures_,
-                times_,
+                temperatures_space,
+                times_space,
                 dominant_indices.T,
                 x1min,
                 x1max,
@@ -334,7 +332,7 @@ def main():
         if len(t_finals) == 1:
             if verb > 0:
                 print(f"-------Screening over temperature: {temperatures} K-------")
-            Pfs = np.zeros((len(temperatures), len(idx_target_all)))
+            final_prod_concs = np.zeros((len(temperatures), len(idx_target_all)))
             t_final = t_finals[0]
             t_span = (0, t_final)
 
@@ -342,7 +340,7 @@ def main():
                 if ks is not None:
                     sys.exit("Cannot screen over temperatures with the kinetic profile")
                 else:
-                    result, result_solve_ivp = calc_km(
+                    _, result_solve_ivp = calc_km(
                         energy_profile_all,
                         dgr_all,
                         coeff_TS_all,
@@ -366,13 +364,19 @@ def main():
                         x_scale,
                         more_species_mkm,
                     )
-                Pfs[i] = c_target_t
-            plot_save_cond(temperatures, Pfs.T, "Temperature (K)", prod_name, verb=verb)
+                final_prod_concs[i] = c_target_t
+            plot_save_cond(
+                temperatures,
+                final_prod_concs.T,
+                "Temperature (K)",
+                prod_name,
+                verb=verb,
+            )
 
         elif len(temperatures) == 1:
             if verb > 0:
                 print(f"-------Screening over reaction time: {t_finals} s-------\n")
-            Pfs = np.zeros((len(t_finals), len(idx_target_all)))
+            final_prod_concs = np.zeros((len(t_finals), len(idx_target_all)))
             temperature = temperatures[0]
             for i, tf in enumerate(t_finals):
                 t_span = (0, tf)
@@ -392,7 +396,7 @@ def main():
                         ks=ks,
                     )
                 else:
-                    result, result_solve_ivp = calc_km(
+                    _, result_solve_ivp = calc_km(
                         energy_profile_all,
                         dgr_all,
                         coeff_TS_all,
@@ -417,8 +421,10 @@ def main():
                         x_scale,
                         more_species_mkm,
                     )
-                Pfs[i] = c_target_t
-            plot_save_cond(t_finals, Pfs.T, "Time [s]", prod_name, verb=verb)
+                final_prod_concs[i] = c_target_t
+            plot_save_cond(
+                t_finals, final_prod_concs.T, "Time [s]", prod_name, verb=verb
+            )
 
         elif len(t_finals) > 1 and len(temperatures) > 1:
             if verb > 0:
@@ -428,7 +434,7 @@ def main():
                 print(f"{t_finals} s")
                 print(f"{temperatures} K\n")
             combinations = list(itertools.product(t_finals, temperatures))
-            Pfs = np.zeros((len(combinations), len(idx_target_all)))
+            final_prod_concs = np.zeros((len(combinations), len(idx_target_all)))
             for i, Tt in enumerate(combinations):
                 t_span = (0, Tt[0])
                 temperature = Tt[1]
@@ -448,7 +454,7 @@ def main():
                         ks=ks,
                     )
                 else:
-                    result, result_solve_ivp = calc_km(
+                    _, result_solve_ivp = calc_km(
                         energy_profile_all,
                         dgr_all,
                         coeff_TS_all,
@@ -472,13 +478,13 @@ def main():
                         x_scale,
                         more_species_mkm,
                     )
-                Pfs[i] = c_target_t
+                final_prod_concs[i] = c_target_t
 
             data_dict = dict()
             data_dict["time (S)"] = [Tt[0] for Tt in combinations]
             data_dict["temperature (K)"] = [Tt[1] for Tt in combinations]
-            for i, Pf in enumerate(Pfs.T):
-                data_dict[prod_name[i]] = Pf
+            for i, product_conc in enumerate(final_prod_concs.T):
+                data_dict[prod_name[i]] = product_conc
 
             df = pd.DataFrame(data_dict)
             df.to_csv(f"time_temperature_screen.csv", index=False)

@@ -14,14 +14,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="""Replotting with Varied Filtering Method Parameters. Available for 2D volcano plots only.
 
-To enhance the clarity of the plotted data, we recommend exploring different parameter settings for the filtering method. 
+To enhance the clarity of the plotted data, we recommend exploring different parameter settings for the filtering method.
 Specifically, consider the following guidelines:
 
 1. Smaller Window Size retains greater resemblance to the original data.
 2. Increased Polynomial Order creates a plot that closely aligns with the original data.
 3. Larger Window Size and Polynomial Order creates a smoother plot, but may deviate from the original plot.
-            """
-    )
+            """)
 
     parser.add_argument("i", help="h5py file from km_volcanic")
     parser.add_argument(
@@ -113,7 +112,8 @@ Specifically, consider the following guidelines:
     prod_conc_sm_all = []
     for i, prod_conc in enumerate(prod_conc_):
         if filtering_method == "savgol":
-            prod_conc_sm = savgol_filter(prod_conc, window_length[i], polyorder[i])
+            prod_conc_sm = savgol_filter(
+                prod_conc, window_length[i], polyorder[i])
         elif filtering_method == "wiener":
             prod_conc_sm = wiener(prod_conc, window_length[i])
         else:
