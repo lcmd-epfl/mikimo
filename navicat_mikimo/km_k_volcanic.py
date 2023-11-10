@@ -69,7 +69,9 @@ def find_1_dv(d, tags, coeff, regress, verb=0):
             Y = XY[:, 1]
             reg = sk.linear_model.LinearRegression().fit(X, Y)
             imaes.append(sk.metrics.mean_absolute_error(Y, reg.predict(X)))
-            imaps.append(sk.metrics.mean_absolute_percentage_error(Y, reg.predict(X)))
+            imaps.append(
+                sk.metrics.mean_absolute_percentage_error(
+                    Y, reg.predict(X)))
             ir2s.append(reg.score(X, Y))
             if verb > 1:
                 print(
@@ -183,7 +185,9 @@ def find_2_dv(d, tags, coeff, regress, verb=0):
             # Fitting using scikit-learn LinearModel
             reg = sk.linear_model.LinearRegression().fit(X, Y)
             imaes.append(sk.metrics.mean_absolute_error(Y, reg.predict(X)))
-            imaps.append(sk.metrics.mean_absolute_percentage_error(Y, reg.predict(X)))
+            imaps.append(
+                sk.metrics.mean_absolute_percentage_error(
+                    Y, reg.predict(X)))
             ir2s.append(reg.score(X, Y))
             if verb > 1:
                 print(
@@ -220,7 +224,8 @@ def find_2_dv(d, tags, coeff, regress, verb=0):
             if any(criterion.shape):
                 if verb > 2:
                     print(f"A random choice has been made to break a score tie.")
-                criterion = [idx for idx in criterion if np.ma.make_mask(pcoeff)[idx]]
+                criterion = [idx for idx in criterion if np.ma.make_mask(pcoeff)[
+                    idx]]
                 criteria[i] = rng.choice(criterion, size=1)
     a = int(criteria[0])
     b = int(criteria[1])
@@ -313,7 +318,8 @@ def process_n_calc_2d(
             return result
     except Exception as e:
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line due to {e}.")
+            print(
+                f"Fail to compute at point {profile} in the volcano line due to {e}.")
         return np.array([np.nan] * n_target)
 
 
@@ -372,7 +378,8 @@ def process_n_calc_3d(
         return result
     except Exception as e:
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line due to {e}.")
+            print(
+                f"Fail to compute at point {profile} in the volcano line due to {e}.")
         return np.array([np.nan] * n_target)
 
 
@@ -433,7 +440,8 @@ def process_n_calc_3d_ps(
 
     except Exception as e:
         if verb > 1:
-            print(f"Fail to compute at point {profile} in the volcano line due to {e}.")
+            print(
+                f"Fail to compute at point {profile} in the volcano line due to {e}.")
         return np.array([np.nan] * n_target)
 
 
@@ -515,7 +523,12 @@ def evol_mode(
             result_solve_ivp_all.append(result_solve_ivp)
 
             states_ = [s.replace("*", "") for s in states]
-            plot_evo(result_solve_ivp, names[i], states_, x_scale, more_species_mkm)
+            plot_evo(
+                result_solve_ivp,
+                names[i],
+                states_,
+                x_scale,
+                more_species_mkm)
 
         except Exception as e:
             print(f"Cannot perform mkm for {names[i]}.")
@@ -537,22 +550,27 @@ def evol_mode(
     print("\n")
 
 
-def get_srps_1d(
-    d: np.ndarray,
-    tags: List[str],
-    coeff: np.ndarray,
-    regress: bool,
-    lfesrs_idx: Optional[List[int]],
-    cb: float,
-    ms: float,
-    xbase: float,
-    lmargin: float,
-    rmargin: float,
-    npoints: int,
-    plotmode: str,
-    lfesr: bool,
-    verb: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str], np.ndarray, int]:
+def get_srps_1d(d: np.ndarray,
+                tags: List[str],
+                coeff: np.ndarray,
+                regress: bool,
+                lfesrs_idx: Optional[List[int]],
+                cb: float,
+                ms: float,
+                xbase: float,
+                lmargin: float,
+                rmargin: float,
+                npoints: int,
+                plotmode: str,
+                lfesr: bool,
+                verb: int,
+                ) -> Tuple[np.ndarray,
+                           np.ndarray,
+                           np.ndarray,
+                           np.ndarray,
+                           List[str],
+                           np.ndarray,
+                           int]:
     """
     Get the simulated reaction (kinetic) profiles (SRP) in case of a single descriptor
     ,kinetic mode.
@@ -589,7 +607,8 @@ def get_srps_1d(
     if lfesrs_idx:
         idx = lfesrs_idx[0]
         if verb > 1:
-            print(f"\n**Manually chose {tags[idx]} as a descriptor variable**\n")
+            print(
+                f"\n**Manually chose {tags[idx]} as a descriptor variable**\n")
     else:
         idx = user_choose_1_dv(dvs, r2s, tags)  # choosing descp
         if idx is None:
@@ -614,7 +633,8 @@ def get_srps_1d(
         lfesr_csv = [s + ".csv" for s in tags[1:]]
         all_lfsers.extend(lfesr_csv)
 
-    X, tag, tags, d, d2, coeff = get_reg_targets(idx, d, tags, coeff, regress, mode="k")
+    X, tag, tags, d, d2, coeff = get_reg_targets(
+        idx, d, tags, coeff, regress, mode="k")
     lnsteps = range(d.shape[1])
     xmax = bround(X.max() + rmargin, xbase)
     xmin = bround(X.min() - lmargin, xbase)
@@ -695,7 +715,8 @@ def get_srps_2d(
         "Require 2 lfesrs_idx for activity/seclectivity map"
         idx1, idx2 = lfesrs_idx
         if verb > 1:
-            print(f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor**\n")
+            print(
+                f"\n**Manually chose {tags[idx1]} and {tags[idx2]} as descriptor**\n")
     else:
         idx1, idx2 = user_choose_2_dv(dvs, r2s, np.insert(tags, 0, 0))
         idx1 -= 1
@@ -712,7 +733,8 @@ def get_srps_2d(
     x2max = bround(X2.max() + rmargin, x2base, "max")
     x2min = bround(X2.min() - lmargin, x2base, "min")
     if verb > 1:
-        print(f"Range of descriptors set to [{x1min}, {x1max}] and [{x2min}, {x2max}].")
+        print(
+            f"Range of descriptors set to [{x1min}, {x1max}] and [{x2min}, {x2max}].")
     xint = np.linspace(x1min, x1max, npoints)
     yint = np.linspace(x2min, x2max, npoints)
     grids = []
@@ -846,13 +868,13 @@ def main(
                     f"Assuming field {tag} corresponds to a non-energy descriptor variable."
                 )
             start_des = tag.upper().find("DESCRIPTOR")
-            tags[i] = "".join(
-                [i for i in tag[:start_des]] + [i for i in tag[start_des + 10 :]]
-            )
+            tags[i] = "".join([i for i in tag[:start_des]] +
+                              [i for i in tag[start_des + 10:]])
             coeff[i] = False
             regress[i] = False
 
-    d, cb, ms = curate_d(d, regress, cb, ms, tags, imputer_strat, nstds=3, verb=verb)
+    d, cb, ms = curate_d(d, regress, cb, ms, tags,
+                         imputer_strat, nstds=3, verb=verb)
     # %% selecting modes----------------------------------------------------------#
     if nd == 0:
         d_actual = 10**d
@@ -904,7 +926,8 @@ def main(
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
+            if last_row_index.lower() in [
+                    "initial_conc", "c0", "initial conc"]:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
@@ -922,7 +945,8 @@ def main(
             combinations = list(
                 itertools.product(range(len(xint)), range(len(t_points)))
             )
-            num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
+            num_chunks = total_combinations // ncore + \
+                (total_combinations % ncore > 0)
 
             # MKM
             for chunk_index in tqdm(range(num_chunks)):
@@ -1022,7 +1046,8 @@ def main(
                 min_ratio = -3
                 max_ratio = 3
                 selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
-                selectivity_ratio_ = np.clip(selectivity_ratio, min_ratio, max_ratio)
+                selectivity_ratio_ = np.clip(
+                    selectivity_ratio, min_ratio, max_ratio)
                 selectivity_ratio_ = np.nan_to_num(
                     selectivity_ratio_, nan=-3, posinf=3, neginf=-3
                 )
@@ -1036,8 +1061,10 @@ def main(
                         group.create_dataset("yint", data=t_points)
                         group.create_dataset("sgrid", data=selectivity_ratio_)
                         group.create_dataset("tag", data=[tag.encode()])
-                        group.create_dataset("x1label", data=[x1label.encode()])
-                        group.create_dataset("x2label", data=[x2label.encode()])
+                        group.create_dataset(
+                            "x1label", data=[x1label.encode()])
+                        group.create_dataset(
+                            "x2label", data=[x2label.encode()])
                 plot_3d_np(
                     xint,
                     t_points,
@@ -1067,8 +1094,10 @@ def main(
                         group.create_dataset("yint", data=t_points)
                         group.create_dataset("sgrid", data=dominant_indices)
                         group.create_dataset("tag", data=[tag.encode()])
-                        group.create_dataset("x1label", data=[x1label.encode()])
-                        group.create_dataset("x2label", data=[x2label.encode()])
+                        group.create_dataset(
+                            "x1label", data=[x1label.encode()])
+                        group.create_dataset(
+                            "x2label", data=[x2label.encode()])
                 plot_3d_contour_regions_np(
                     xint,
                     t_points,
@@ -1298,26 +1327,31 @@ def main(
             print("\n")
 
     elif nd == 2:
-        (
-            d,
-            grids,
-            xint,
-            yint,
-            X1,
-            X2,
-            x1max,
-            x2max,
-            x1min,
-            x2max,
-            tag1,
-            tag2,
-            tags,
-            coeff,
-            idx1,
-            idx2,
-        ) = get_srps_2d(
-            d, tags, coeff, regress, lfesrs_idx, lmargin, rmargin, npoints, verb
-        )
+        (d,
+         grids,
+         xint,
+         yint,
+         X1,
+         X2,
+         x1max,
+         x2max,
+         x1min,
+         x2max,
+         tag1,
+         tag2,
+         tags,
+         coeff,
+         idx1,
+         idx2,
+         ) = get_srps_2d(d,
+                         tags,
+                         coeff,
+                         regress,
+                         lfesrs_idx,
+                         lmargin,
+                         rmargin,
+                         npoints,
+                         verb)
         tags_ = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if len(grids) != len(tags_) and tags_[-1].lower().startswith("p"):
             print("\n***Forgot the last state******\n")
@@ -1332,14 +1366,20 @@ def main(
         grid = np.zeros((npoints, npoints))
         grid_d = np.array([grid] * n_target)
         total_combinations = len(xint) * len(yint)
-        combinations = list(itertools.product(range(len(xint)), range(len(yint))))
-        num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
+        combinations = list(
+            itertools.product(
+                range(
+                    len(xint)), range(
+                    len(yint))))
+        num_chunks = total_combinations // ncore + \
+            (total_combinations % ncore > 0)
         grids = [g**10 for g in grids]
 
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
+            if last_row_index.lower() in [
+                    "initial_conc", "c0", "initial conc"]:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
@@ -1464,7 +1504,8 @@ def main(
             min_ratio = -3
             max_ratio = 3
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
-            selectivity_ratio_ = np.clip(selectivity_ratio, min_ratio, max_ratio)
+            selectivity_ratio_ = np.clip(
+                selectivity_ratio, min_ratio, max_ratio)
             selectivity_ratio_ = np.nan_to_num(
                 selectivity_ratio_, nan=-3, posinf=3, neginf=-3
             )
@@ -1519,7 +1560,8 @@ def main(
                     # save each numpy array as a dataset in the group
                     group.create_dataset("xint", data=xint)
                     group.create_dataset("yint", data=yint)
-                    group.create_dataset("dominant_indices", data=dominant_indices)
+                    group.create_dataset(
+                        "dominant_indices", data=dominant_indices)
                     group.create_dataset("px", data=px)
                     group.create_dataset("py", data=py)
                     group.create_dataset("cb", data=cb)

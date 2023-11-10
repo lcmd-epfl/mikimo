@@ -58,13 +58,14 @@ def check_existence(wdir, verb):
     columns_to_search = ["k_forward", "k_reverse"]
     if Path(wdir, "rxn_network.csv").exists():
         if verb > 2:
-            logging.debug("rxn_network.csv exists")
+            logging.info("rxn_network.csv exists")
         df = pd.read_csv(f"{wdir}/rxn_network.csv", index_col=0)
         last_row_index = df.index[-1]
         c0_exist = any([last_row_index.lower() in rows_to_search])
         k_exist = all([column in df.columns for column in columns_to_search])
         if not c0_exist:
-            logging.critical("Initial concentration not found in rxn_network.csv.")
+            logging.critical(
+                "Initial concentration not found in rxn_network.csv.")
 
     else:
         logging.critical("rxn_network.csv not found.")
@@ -77,7 +78,7 @@ def check_existence(wdir, verb):
 
     if energy_exist:
         if verb > 2:
-            logging.debug("Found reaction data file.")
+            logging.info("Found reaction data file.")
         if k_exist:
             logging.info("Both energy data and rate constants are provided.")
     else:
@@ -148,8 +149,7 @@ def check_km_inp(
     if mode == "energy":
         # all INT names in nx are the same as in the profile
         missing_states = [
-            state for state in states_network_int if state not in states_profile
-        ]
+            state for state in states_network_int if state not in states_profile]
         if missing_states:
             clear = False
             logging.warning(
@@ -166,7 +166,8 @@ def check_km_inp(
     # initial conc
     if len(states_network) != len(initial_conc):
         clear = False
-        logging.warning("\nYour initial concentration seems wrong. Double check!")
+        logging.warning(
+            "\nYour initial concentration seems wrong. Double check!")
 
     # check network sanity
     mask = (~df_network.isin([-1, 1])).all(axis=1)
@@ -705,9 +706,14 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         )
 
 
-def process_data_mkm(
-    dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
-) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
+def process_data_mkm(dg: np.ndarray,
+                     df_network: pd.DataFrame,
+                     tags: List[str],
+                     states: List[str]) -> Tuple[np.ndarray,
+                                                 List[np.ndarray],
+                                                 List[float],
+                                                 List[np.ndarray],
+                                                 np.ndarray]:
     """
     Processes data for micokinetic modeling.
 
@@ -774,7 +780,8 @@ def process_data_mkm(
             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
         # int to which new cycle is connected (the first -1)
 
-        if df_network.columns.to_list()[branch_step + 1].lower().startswith("p"):
+        if df_network.columns.to_list()[
+                branch_step + 1].lower().startswith("p"):
             # conneting profiles
             cp_idx = branch_step
         else:
@@ -932,7 +939,8 @@ def test_process_data_mkm():
 
     assert np.array_equal(dgr_all, dgr_all_expected)
     assert len(coeff_ts_all) == len(coeff_ts_all_expected)
-    for coeff_ts, coeff_ts_expected in zip(coeff_ts_all, coeff_ts_all_expected):
+    for coeff_ts, coeff_ts_expected in zip(
+            coeff_ts_all, coeff_ts_all_expected):
         assert np.array_equal(coeff_ts, coeff_ts_expected)
 
     assert np.array_equal(rxn_network_all, rxn_network_all_expected)
