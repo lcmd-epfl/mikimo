@@ -28,7 +28,7 @@
 * [Install](#install-)
 * [Usages](#usages-)
 * [Examples](#examples-)
-* [Limitation](#limitation-)
+* [Limitations](#limitations-)
 * [Citation](#citation-)
 
 
@@ -161,7 +161,7 @@ You can find examples demonstrating how to read h5 files and regenerate plots in
 
 If the kinetic profile is detected in the directory, the code will prompt the user with an option to choose between using the kinetic profile instead of the energy profile. However, it's important to note that selecting the kinetic profile will restrict the user from screening over a range of temperatures or utilizing different temperature settings. Additionally, using the kinetic profile will limit the information about species names (for ax labelling purposes) and may worsen the quality of the linear scaling relationships in volcano plot generation.
 
-## Limitations [↑](#limitation)
+## Limitations [↑](#limitations)
 
 1. Overlapping states of different pathways before the reference state (starting point).
 
