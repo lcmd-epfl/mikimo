@@ -3,6 +3,7 @@ import logging
 import multiprocessing
 import os
 import sys
+from pathlib import Path
 from typing import List, Tuple
 
 import autograd.numpy as np
@@ -42,49 +43,56 @@ def yesno(question):
         return yesno(question)
     if ans == "y":
         return True
-    return False
+    else:
+        return False
 
 
 def check_existence(wdir, verb):
+    """Check for the existence of necessary files."""
     kinetic_mode = False
     k_exist = False
 
     rows_to_search = ["c0", "initial_conc", "initial conc"]
     columns_to_search = ["k_forward", "k_reverse"]
-    if os.path.exists(f"{wdir}/rxn_network.csv"):
+    if Path(wdir, "rxn_network.csv").exists():
         if verb > 2:
-            print("rxn_network.csv exists")
+            logging.debug("rxn_network.csv exists")
         df = pd.read_csv(f"{wdir}/rxn_network.csv", index_col=0)
         last_row_index = df.index[-1]
         c0_exist = any([last_row_index.lower() in rows_to_search])
         k_exist = all([column in df.columns for column in columns_to_search])
-        if not (c0_exist):
-            logging.critical("Initial concentration not found in rxn_network.csv.")
+        if not c0_exist:
+            logging.critical(
+                "Initial concentration not found in rxn_network.csv.")
 
     else:
         logging.critical("rxn_network.csv not found.")
 
-    filename = f"{wdir}/reaction_data"
+    filename = "reaction_data"
     extensions = [".csv", ".xls", ".xlsx"]
-
-    energy_exist = any(os.path.isfile(filename + extension) for extension in extensions)
+    energy_exist = any(
+        Path(wdir, filename + extension).is_file() for extension in extensions
+    )
 
     if energy_exist:
         if verb > 2:
-            print("Found reaction data file.")
+            logging.debug("Found reaction data file.")
         if k_exist:
-            print("Both energy data and rate constants are provided.")
+            logging.info("Both energy data and rate constants are provided.")
     else:
         if k_exist:
-            print("reaction_data file not found, but rate constants are provided.")
+            logging.info(
+                "reaction_data file not found, but rate constants are provided."
+            )
         else:
             logging.critical(
                 "reaction_data file not found and rate constants are not provided."
             )
 
-    if os.path.exists(f"{wdir}kinetic_data.csv") or os.path.exists(
-        f"{wdir}kinetic_data.xlsx"
-    ):
+    kinetic_exists = os.path.exists(
+        os.path.join(wdir, "kinetic_data.csv")
+    ) or os.path.exists(os.path.join(wdir, "kinetic_data.xlsx"))
+    if kinetic_exists:
         kinetic_mode = yesno(
             "kinetic_profile.csv exists Do you want to use kinetic information instead of the energy profile data"
         )
@@ -92,7 +100,9 @@ def check_existence(wdir, verb):
     return kinetic_mode
 
 
-def check_km_inp(df, df_network, mode="energy"):
+def check_km_inp(
+    df: pd.DataFrame, df_network: pd.DataFrame, mode: str = "energy"
+) -> bool:
     """
     Check the validity of input data for kinetic or energy mode.
 
@@ -108,6 +118,7 @@ def check_km_inp(df, df_network, mode="energy"):
     # extract initial conditions
     initial_conc = np.array([])
     last_row_index = df_network.index[-1]
+
     if isinstance(last_row_index, str):
         if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
             initial_conc = df_network.iloc[-1:].to_numpy()[0]
@@ -135,14 +146,14 @@ def check_km_inp(df, df_network, mode="energy"):
 
     if mode == "energy":
         # all INT names in nx are the same as in the profile
-        for state in states_network_int:
-            if state in states_profile:
-                pass
-            else:
-                clear = False
-                logging.warning(
-                    f"""\n{state} cannot be found in the reaction data, if it is there make sure that the same name is used in both reaction data and network."""
-                )
+        missing_states = [
+            state for state in states_network_int if state not in states_profile]
+        if missing_states:
+            clear = False
+            logging.warning(
+                f"""The following states cannot be found in the reaction data: {', '.join(missing_states)}.
+                If they are there, make sure that the same name is used in both reaction data and network."""
+            )
     elif mode == "kinetic":
         if int((df.shape[1] - 1) / 2) != df_network.shape[0]:
             clear = False
@@ -153,7 +164,8 @@ def check_km_inp(df, df_network, mode="energy"):
     # initial conc
     if len(states_network) != len(initial_conc):
         clear = False
-        logging.warning("\nYour initial concentration seems wrong. Double check!")
+        logging.warning(
+            "\nYour initial concentration seems wrong. Double check!")
 
     # check network sanity
     mask = (~df_network.isin([-1, 1])).all(axis=1)
@@ -164,18 +176,18 @@ def check_km_inp(df, df_network, mode="energy"):
         for s in weird_step:
             print(f"\nYour step {s} is likely wrong.")
 
-    mask_R = (~df_network.iloc[:, r_indices].isin([-1])).all(axis=0).to_numpy()
-    if np.any(mask_R):
+    mask_r = (~df_network.iloc[:, r_indices].isin([-1])).all(axis=0).to_numpy()
+    if mask_r.any():
         clear = False
         logging.warning(
-            f"\nThe reactant location: {states_network[r_indices[mask_R]]} is likely wrong."
+            f"\nThe reactant location: {states_network[r_indices[mask_r.any()]]} is likely wrong."
         )
 
-    mask_P = (~df_network.iloc[:, p_indices].isin([1])).all(axis=0).to_numpy()
-    if np.any(mask_P):
+    mask_p = (~df_network.iloc[:, p_indices].isin([1])).all(axis=0).to_numpy()
+    if mask_p.any():
         clear = False
         logging.warning(
-            f"\nThe product location: {states_network[p_indices[mask_P]]} is likely wrong."
+            f"\nThe product location: {states_network[p_indices[mask_p.any()]]} is likely wrong."
         )
 
     return clear
@@ -263,7 +275,8 @@ def preprocess_data_mkm(arguments, mode):
     )
     parser.add_argument(
         "-p",
-        "--p" "-percent",
+        "-percent",
+        "--p",
         "--percent",
         dest="percent",
         action="store_true",
@@ -357,7 +370,8 @@ def preprocess_data_mkm(arguments, mode):
         dest="verb",
         type=int,
         default=2,
-        help="Verbosity level of the code. Higher is more verbose and viceversa. Set to at least 2 to generate csv/h5 output files. (default: 1)",
+        help="""Verbosity level of the code. Higher is more verbose and vice versa.
+        Set to at least 2 to generate csv/h5 output files. (default: 1)""",
     )
     parser.add_argument(
         "-ncore",
@@ -416,7 +430,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 print("Temperature input is a range, use the first value.")
             temperatures = temperatures[0]
 
-        rnx = f"{wdir}/rxn_network.csv"
+        rnx = Path(wdir, "rxn_network.csv")
         df_network = pd.read_csv(rnx, index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
@@ -424,13 +438,12 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         kinetic_mode = check_existence(wdir, verb)
         ks = None
         if kinetic_mode:
-            filename_xlsx = f"{wdir}/kinetic_data.xlsx"
-            filename_csv = f"{wdir}/kinetic_data.csv"
-            try:
+            filename_xlsx = Path(wdir, "kinetic_data.xlsx")
+            filename_csv = Path(wdir, "kinetic_data.csv")
+            if os.path.exists(filename_xlsx):
                 df = pd.read_excel(filename_xlsx)
-            except FileNotFoundError as e:
+            elif os.path.exists(filename_csv):
                 df = pd.read_csv(filename_csv)
-            clear = check_km_inp(df, df_network, mode="kinetic")
 
             if profile_choice > df.shape[0]:
                 sys.exit("The selected kinetic profile is out of range.")
@@ -452,44 +465,44 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 ks,
                 quality,
             )
-        else:
-            filename_xlsx = f"{wdir}/reaction_data.xlsx"
-            filename_csv = f"{wdir}/reaction_data.csv"
-            try:
-                df = pd.read_excel(filename_xlsx)
-            except FileNotFoundError as e:
-                df = pd.read_csv(filename_csv)
 
-            if profile_choice > df.shape[0]:
-                sys.exit("The selected energy profile is out of range.")
-            dg = df.iloc[profile_choice].to_numpy()[1:]
-            if pd.isnull(dg).any():
-                sys.exit(
-                    "The selected energy profile is incomplete (due to the presence of NaN)."
-                )
-            dg = dg.astype(float)
-            tags = df.columns.values[1:]
+        filename_xlsx = Path(wdir, "reaction_data.xlsx")
+        filename_csv = Path(wdir, "reaction_data.csv")
+        try:
+            df = pd.read_excel(filename_xlsx)
+        except FileNotFoundError:
+            df = pd.read_csv(filename_csv)
 
-            clear = check_km_inp(df, df_network)
-
-            if not (clear):
-                print("\nRecheck your reaction network and your reaction data.\n")
-            else:
-                if verb > 0:
-                    print("\nMKM inputs appear to be valid.\n")
-            return (
-                dg,
-                df_network,
-                tags,
-                states,
-                t_finals,
-                temperatures,
-                x_scale,
-                more_species_mkm,
-                wdir,
-                ks,
-                quality,
+        if profile_choice > df.shape[0]:
+            sys.exit("The selected energy profile is out of range.")
+        dg = df.iloc[profile_choice].to_numpy()[1:]
+        if pd.isnull(dg).any():
+            sys.exit(
+                "The selected energy profile is incomplete (due to the presence of NaN)."
             )
+        dg = dg.astype(float)
+        tags = df.columns.values[1:]
+
+        clear = check_km_inp(df, df_network)
+
+        if not clear:
+            print("\nRecheck your reaction network and your reaction data.\n")
+        else:
+            if verb > 0:
+                print("\nMKM inputs appear to be valid.\n")
+        return (
+            dg,
+            df_network,
+            tags,
+            states,
+            t_finals,
+            temperatures,
+            x_scale,
+            more_species_mkm,
+            wdir,
+            ks,
+            quality,
+        )
 
     elif mode == "mkm_screening":
         lmargin = args.lmargin
@@ -513,29 +526,32 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         times = args.time
         temperatures = args.temp
 
-        df_network = pd.read_csv(f"{wdir}/rxn_network.csv", index_col=0)
+        filename_csv = Path(wdir, "rxn_network.csv")
+        df_network = pd.read_csv(filename_csv, index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])
 
         kinetic_mode = check_existence(wdir, verb)
         if kinetic_mode:
-            filename_xlsx = f"{wdir}/kinetic_data.xlsx"
-            filename_csv = f"{wdir}/kinetic_data.csv"
-            try:
+            filename_xlsx = Path(wdir, "kinetic_data.xlsx")
+            filename_csv = Path(wdir, "kinetic_data.csv")
+            if os.path.exists(filename_xlsx):
                 df = pd.read_excel(filename_xlsx)
-            except FileNotFoundError as e:
+            elif os.path.exists(filename_csv):
                 df = pd.read_csv(filename_csv)
             clear = check_km_inp(df, df_network, mode="kinetic")
         else:
-            filename_xlsx = f"{wdir}/reaction_data.xlsx"
-            filename_csv = f"{wdir}/reaction_data.csv"
-            try:
+            filename_xlsx = Path(wdir, "reaction_data.xlsx")
+            filename_csv = Path(wdir, "reaction_data.csv")
+
+            if os.path.exists(filename_xlsx):
                 df = pd.read_excel(filename_xlsx)
-            except FileNotFoundError as e:
+            elif os.path.exists(filename_csv):
                 df = pd.read_csv(filename_csv)
+
             clear = check_km_inp(df, df_network)
-            if not (clear):
+            if not clear:
                 print("\nRecheck your reaction network and your reaction data.\n")
             else:
                 if verb > 0:
@@ -598,14 +614,14 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         elif len(t_finals) == 1:
             t_finals = [t_finals[0]]
         elif len(t_finals) > 1:
-            t_finals = t_finals
+            pass
 
         if temperatures is None:
             temperatures = [298.15]
         elif len(temperatures) == 1:
             temperatures = [temperatures[0]]
         elif len(temperatures) > 1:
-            temperatures = temperatures
+            pass
 
         kinetic_mode = check_existence(wdir, verb)
         rnx = f"{wdir}/rxn_network.csv"
@@ -615,11 +631,11 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
 
         ks = None
         if kinetic_mode:
-            filename_xlsx = f"{wdir}/kinetic_data.xlsx"
-            filename_csv = f"{wdir}/kinetic_data.csv"
-            try:
+            filename_xlsx = Path(wdir, "kinetic_data.xlsx")
+            filename_csv = Path(wdir, "kinetic_data.csv")
+            if os.path.exists(filename_xlsx):
                 df = pd.read_excel(filename_xlsx)
-            except FileNotFoundError as e:
+            elif os.path.exists(filename_csv):
                 df = pd.read_csv(filename_csv)
 
             if profile_choice > df.shape[0]:
@@ -648,54 +664,59 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
                 ks,
                 quality,
             )
-        else:
-            filename_xlsx = f"{wdir}/reaction_data.xlsx"
-            filename_csv = f"{wdir}/reaction_data.csv"
-            try:
-                df = pd.read_excel(filename_xlsx)
-            except FileNotFoundError as e:
-                df = pd.read_csv(filename_csv)
 
-            if profile_choice > df.shape[0]:
-                sys.exit("The selected energy profile is out of range.")
+        filename_xlsx = Path(wdir, "reaction_data.xlsx")
+        filename_csv = Path(wdir, "reaction_data.csv")
+        if os.path.exists(filename_xlsx):
+            df = pd.read_excel(filename_xlsx)
+        elif os.path.exists(filename_csv):
+            df = pd.read_csv(filename_csv)
 
-            dg = df.iloc[profile_choice].to_numpy()[1:]
-            dg = dg.astype(float)
-            if pd.isnull(dg).any():
-                sys.exit(
-                    "The selected energy profile is incomplete (due to the presence of NaN)."
-                )
-            tags = df.columns.values[1:]
+        if profile_choice > df.shape[0]:
+            sys.exit("The selected energy profile is out of range.")
 
-            clear = check_km_inp(df, df_network)
-
-            if not (clear):
-                print("\nRecheck your reaction network and your reaction data.\n")
-            else:
-                if verb > 0:
-                    print("\nMKM inputs appear to be valid.\n")
-            return (
-                dg,
-                df_network,
-                tags,
-                states,
-                t_finals,
-                temperatures,
-                x_scale,
-                more_species_mkm,
-                plot_evo,
-                map_tt,
-                ncore,
-                imputer_strat,
-                verb,
-                ks,
-                quality,
+        dg = df.iloc[profile_choice].to_numpy()[1:]
+        dg = dg.astype(float)
+        if pd.isnull(dg).any():
+            sys.exit(
+                "The selected energy profile is incomplete (due to the presence of NaN)."
             )
+        tags = df.columns.values[1:]
+
+        clear = check_km_inp(df, df_network)
+
+        if not clear:
+            print("\nRecheck your reaction network and your reaction data.\n")
+        else:
+            if verb > 0:
+                print("\nMKM inputs appear to be valid.\n")
+        return (
+            dg,
+            df_network,
+            tags,
+            states,
+            t_finals,
+            temperatures,
+            x_scale,
+            more_species_mkm,
+            plot_evo,
+            map_tt,
+            ncore,
+            imputer_strat,
+            verb,
+            ks,
+            quality,
+        )
 
 
-def process_data_mkm(
-    dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
-) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
+def process_data_mkm(dg: np.ndarray,
+                     df_network: pd.DataFrame,
+                     tags: List[str],
+                     states: List[str]) -> Tuple[np.ndarray,
+                                                 List[np.ndarray],
+                                                 List[float],
+                                                 List[np.ndarray],
+                                                 np.ndarray]:
     """
     Processes data for micokinetic modeling.
 
@@ -711,14 +732,15 @@ def process_data_mkm(
             initial_conc (numpy.ndarray): Initial concentrations.
             energy_profile_all (list): List of energy profiles.
             dgr_all (list): List of reaction free energies.
-            coeff_TS_all (list): List of coefficient arrays.
+            coeff_ts_all (list): List of coefficient arrays.
             rxn_network_all (numpy.ndarray): Reaction networks.
     """
     # extract initial conditions
     initial_conc = np.array([])
     last_row_index = df_network.index[-1]
     if isinstance(last_row_index, str):
-        if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
+        last_row_index_lower = last_row_index.lower()
+        if last_row_index_lower in ["initial_conc", "c0", "initial conc"]:
             initial_conc = df_network.iloc[-1:].to_numpy()[0]
             df_network = df_network.drop(df_network.index[-1])
 
@@ -749,7 +771,7 @@ def process_data_mkm(
                 df_network[all_df[i + 1].columns[1]].to_numpy() == 1
             )[0][0]
             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[1])[0]
-        except KeyError as e:
+        except KeyError:
             # due to TS as the first column of the profile
             branch_step = np.where(
                 df_network[all_df[i + 1].columns[2]].to_numpy() == 1
@@ -757,7 +779,8 @@ def process_data_mkm(
             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
         # int to which new cycle is connected (the first -1)
 
-        if df_network.columns.to_list()[branch_step + 1].lower().startswith("p"):
+        if df_network.columns.to_list()[
+                branch_step + 1].lower().startswith("p"):
             # conneting profiles
             cp_idx = branch_step
         else:
@@ -777,16 +800,16 @@ def process_data_mkm(
 
     energy_profile_all = []
     dgr_all = []
-    coeff_TS_all = []
+    coeff_ts_all = []
     for df in all_df:
         energy_profile = df.values[0][:-1]
         rxn_species = df.columns.to_list()[:-1]
         dgr_all.append(df.values[0][-1])
-        coeff_TS = [1 if "TS" in element else 0 for element in rxn_species]
-        coeff_TS_all.append(np.array(coeff_TS))
+        coeff_ts = [1 if "TS" in element else 0 for element in rxn_species]
+        coeff_ts_all.append(np.array(coeff_ts))
         energy_profile_all.append(np.array(energy_profile))
 
-    return initial_conc, energy_profile_all, dgr_all, coeff_TS_all, rxn_network_all
+    return initial_conc, energy_profile_all, dgr_all, coeff_ts_all, rxn_network_all
 
 
 def test_process_data_mkm():
@@ -878,7 +901,7 @@ def test_process_data_mkm():
         np.array([5.5, 27.1]),
     ]
     dgr_all_expected = np.array([2.2, -6.4, -13.4])
-    coeff_TS_all_expected = [
+    coeff_ts_all_expected = [
         np.array([0, 1, 0, 1, 0, 1]),
         np.array([0, 1, 0, 1, 0, 1]),
         np.array([0, 1]),
@@ -900,7 +923,7 @@ def test_process_data_mkm():
         initial_conc,
         energy_profile_all,
         dgr_all,
-        coeff_TS_all,
+        coeff_ts_all,
         rxn_network_all,
     ) = process_data_mkm(dg, df_network, tags, states)
 
@@ -908,10 +931,15 @@ def test_process_data_mkm():
     assert np.array_equal(initial_conc, initial_conc_expected)
 
     assert len(energy_profile_all) == len(energy_profile_all_expected)
-    for i in range(len(energy_profile_all)):
-        assert np.array_equal(energy_profile_all[i], energy_profile_all_expected[i])
+    for profile, profile_expected in zip(
+        energy_profile_all, energy_profile_all_expected
+    ):
+        assert np.array_equal(profile, profile_expected)
+
     assert np.array_equal(dgr_all, dgr_all_expected)
-    assert len(coeff_TS_all) == len(coeff_TS_all_expected)
-    for i in range(len(coeff_TS_all)):
-        assert np.array_equal(coeff_TS_all[i], coeff_TS_all_expected[i])
+    assert len(coeff_ts_all) == len(coeff_ts_all_expected)
+    for coeff_ts, coeff_ts_expected in zip(
+            coeff_ts_all, coeff_ts_all_expected):
+        assert np.array_equal(coeff_ts, coeff_ts_expected)
+
     assert np.array_equal(rxn_network_all, rxn_network_all_expected)

@@ -17,6 +17,9 @@ from .plot_function import plot_evo_save
 
 warnings.filterwarnings("ignore")
 
+R_: float = R * (1 / calorie) * (1 / kilo)
+kb_h: float = k / h
+
 
 def eyring(
     dG_ddag: Union[float, np.ndarray], temperature: float
@@ -32,9 +35,47 @@ def eyring(
         float or array-like: Eyring rate constant(s).
 
     """
-    R_: float = R * (1 / calorie) * (1 / kilo)
-    kb_h: float = k / h
+    if temperature == 0:
+        raise ValueError("Temperature cannot be zero.")
     return kb_h * temperature * np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
+
+
+def get_dG_ddag(energy_profile, dgr, coeff_TS):
+    # compute all dG_ddag in the profile
+    n_S = energy_profile.size
+    n_TS = np.count_nonzero(coeff_TS)
+    n_I = np.count_nonzero(coeff_TS == 0)
+
+    try:
+        assert energy_profile.size == coeff_TS.size
+    except AssertionError:
+        warnings.warn(
+            f"WARNING: The species number {n_S} does not seem to match the identified intermediates ({n_I}) plus TS ({n_TS})."
+        )
+
+    matrix_T_I = np.zeros((n_I, 2))
+
+    j = 0
+    for i in range(n_S):
+        if coeff_TS[i] == 0:
+            matrix_T_I[j, 0] = energy_profile[i]
+            if i < n_S - 1:
+                if coeff_TS[i + 1] == 1:
+                    matrix_T_I[j, 1] = energy_profile[i + 1]
+                if coeff_TS[i + 1] == 0:
+                    if energy_profile[i + 1] > energy_profile[i]:
+                        matrix_T_I[j, 1] = energy_profile[i + 1]
+                    else:
+                        matrix_T_I[j, 1] = energy_profile[i]
+                j += 1
+            if i == n_S - 1:
+                if dgr > energy_profile[i]:
+                    matrix_T_I[j, 1] = dgr
+                else:
+                    matrix_T_I[j, 1] = energy_profile[i]
+
+    dG_ddag = matrix_T_I[:, 1] - matrix_T_I[:, 0]
+    return dG_ddag
 
 
 def get_k(
@@ -57,57 +98,25 @@ def get_k(
         k_reverse (array-like): Reaction rates of all backward steps (order as k-1, k-2, ...).
     """
 
-    def get_dG_ddag(energy_profile, dgr, coeff_TS):
-        # compute all dG_ddag in the profile
-        n_S = energy_profile.size
-        n_TS = np.count_nonzero(coeff_TS)
-        n_I = np.count_nonzero(coeff_TS == 0)
-
-        try:
-            assert energy_profile.size == coeff_TS.size
-        except AssertionError:
-            print(
-                f"WARNING: The species number {n_S} does not seem to match the identified intermediates ({n_I}) plus TS ({n_TS})."
-            )
-
-        matrix_T_I = np.zeros((n_I, 2))
-
-        j = 0
-        for i in range(n_S):
-            if coeff_TS[i] == 0:
-                matrix_T_I[j, 0] = energy_profile[i]
-                if i < n_S - 1:
-                    if coeff_TS[i + 1] == 1:
-                        matrix_T_I[j, 1] = energy_profile[i + 1]
-                    if coeff_TS[i + 1] == 0:
-                        if energy_profile[i + 1] > energy_profile[i]:
-                            matrix_T_I[j, 1] = energy_profile[i + 1]
-                        else:
-                            matrix_T_I[j, 1] = energy_profile[i]
-                    j += 1
-                if i == n_S - 1:
-                    if dgr > energy_profile[i]:
-                        matrix_T_I[j, 1] = dgr
-                    else:
-                        matrix_T_I[j, 1] = energy_profile[i]
-
-        dG_ddag = matrix_T_I[:, 1] - matrix_T_I[:, 0]
-        return dG_ddag
+    if not isinstance(energy_profile, np.ndarray):
+        energy_profile = np.asarray(energy_profile)
+    if not isinstance(coeff_TS, np.ndarray):
+        coeff_TS = np.asarray(coeff_TS)
 
     dG_ddag_forward = get_dG_ddag(energy_profile, dgr, coeff_TS)
-    coeff_TS_reverse = coeff_TS[::-1]
+    coeff_TS_reverse = np.flip(coeff_TS)
     coeff_TS_reverse = np.insert(coeff_TS_reverse, 0, 0)
     coeff_TS_reverse = coeff_TS_reverse[:-1]
-    energy_profile_reverse = energy_profile[::-1]
+    energy_profile_reverse = np.flip(energy_profile)
     energy_profile_reverse = energy_profile_reverse[:-1]
     energy_profile_reverse = energy_profile_reverse - dgr
     energy_profile_reverse = np.insert(energy_profile_reverse, 0, 0)
     dG_ddag_reverse = get_dG_ddag(energy_profile_reverse, -dgr, coeff_TS_reverse)
 
     k_forward = eyring(dG_ddag_forward, temperature)
-    k_reverse = eyring(dG_ddag_reverse, temperature)
+    k_reverse = np.flip(eyring(dG_ddag_reverse, temperature))
 
-    return k_forward, k_reverse[::-1]
+    return k_forward, k_reverse
 
 
 def calc_k(
@@ -129,18 +138,26 @@ def calc_k(
         k_forward_all (np.ndarray): Reaction rates of all forward steps.
         k_reverse_all (np.ndarray): Reaction rates of all backward steps.
     """
-    k_forward_all = []
-    k_reverse_all = []
+
+    if not isinstance(energy_profile_all, np.ndarray):
+        energy_profile_all = np.asarray(energy_profile_all)
+    if not isinstance(dgr_all, np.ndarray):
+        dgr_all = np.asarray(dgr_all)
+    if not isinstance(coeff_TS_all, np.ndarray):
+        coeff_TS_all = np.asarray(coeff_TS_all)
+
+    k_forward_all = np.empty(0)
+    k_reverse_all = np.empty(0)
 
     for energy_profile, dgr, coeff_TS in zip(energy_profile_all, dgr_all, coeff_TS_all):
         k_forward, k_reverse = get_k(
             energy_profile, dgr, coeff_TS, temperature=temperature
         )
-        k_forward_all.extend(k_forward)
-        k_reverse_all.extend(k_reverse)
+        k_forward_all = np.append(k_forward_all, k_forward)
+        k_reverse_all = np.append(k_reverse_all, k_reverse)
 
-    k_forward_all = np.array(k_forward_all)
-    k_reverse_all = np.array(k_reverse_all)
+    k_forward_all = np.asarray(k_forward_all)
+    k_reverse_all = np.asarray(k_reverse_all)
 
     return k_forward_all, k_reverse_all
 
@@ -149,7 +166,7 @@ def add_rate(
     y: np.ndarray,
     k_forward_all: np.ndarray,
     k_reverse_all: np.ndarray,
-    rxn_network_all: np.ndarray,
+    rxn_network_all: np.matrix,
     a: int,
 ) -> float:
     """
@@ -167,13 +184,13 @@ def add_rate(
     """
 
     rate = 0
-    left_species = np.where(rxn_network_all[a, :] < 0)
-    right_species = np.where(rxn_network_all[a, :] > 0)
+    reactant_indices = np.nonzero(rxn_network_all[a, :] < 0)[0]
+    product_indices = np.nonzero(rxn_network_all[a, :] > 0)[0]
     rate += k_forward_all[a] * np.prod(
-        y[left_species] ** np.abs(rxn_network_all[a, left_species])[0]
+        y[reactant_indices] ** np.abs(rxn_network_all[a, reactant_indices])[0]
     )
     rate -= k_reverse_all[a] * np.prod(
-        y[right_species] ** np.abs(rxn_network_all[a, right_species])[0]
+        y[product_indices] ** np.abs(rxn_network_all[a, product_indices])[0]
     )
 
     return rate
@@ -286,10 +303,9 @@ def system_KE_DE(
 
     @bound_decorator(boundary)
     def _dydt(t, y):
-        dydt = [None for _ in range(initial_conc.shape[0])]
+        dydt = np.empty_like(y)
         for a in range(initial_conc.shape[0]):
             dydt[a] = calc_dX_dt(y, k_forward_all, k_reverse_all, rxn_network_all, a)
-        dydt = np.array(dydt)
         return dydt
 
     _dydt.jac = jacobian(_dydt, argnum=1)
