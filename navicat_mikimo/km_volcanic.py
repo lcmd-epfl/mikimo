@@ -1048,7 +1048,7 @@ def main():
             if interpolate:
                 if verb > 0:
                     print(
-                        f"Performing microkinetics modelling for the volcano line ({n_point_calc} points)."
+                        f"Performing microkinetics modeling for the volcano line ({n_point_calc} points)."
                     )
                 selected_indices = np.round(
                     np.linspace(0, len(dgs) - 1, n_point_calc)
@@ -1065,7 +1065,7 @@ def main():
                 trun_dgs = dgs
                 if verb > 0:
                     print(
-                        f"Performing microkinetics modelling for the volcano line ({npoints})."
+                        f"Performing microkinetics modeling for the volcano line ({npoints})."
                     )
             prod_conc = np.zeros((len(dgs), n_target))
             ci = np.zeros((len(dgs), n_target))
@@ -1128,7 +1128,7 @@ def main():
             ci_ = ci_.T
             # Volcano points
             print(
-                f"Performing microkinetics modelling for every profiles in the reaction date ({len(d)} profiles)."
+                f"Performing microkinetics modeling for every profiles in the reaction date ({len(d)} profiles)."
             )
 
             prod_conc_pt = np.zeros((len(d), n_target))

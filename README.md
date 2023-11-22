@@ -4,7 +4,7 @@
 
 <details>
     <summary style="cursor: pointer;">
-        ☄️ Why use microkinetic modelling? ☄️
+        ☄️ Why use microkinetic modeling? ☄️
     </summary>
     <p>
         <li>Elegant way to deal with complex reaction pathway thermodynamics and kinetics.</li>
@@ -88,7 +88,7 @@ Once all input files are ready and `mikimo` is installed, several run options ar
 ```python
 python -m navicat_mikimo mkm -d [DIR]
 ```
-2. Microkinetic modelling for all reaction profiles:
+2. Microkinetic modeling for all reaction profiles:
 ```python
 python -m navicat_mikimo vp -d [DIR] -nd 0
 ```
@@ -120,12 +120,12 @@ python replot.py [i]
 
 ## Examples [↑](#examples)
 
-1. Microkinetic modelling for Pd-catalyzed carbocyclization-borylation of enallene in the presence of chiral phosphoric acid (298.15 K, 1 min): 
+1. Microkinetic modeling for Pd-catalyzed carbocyclization-borylation of enallene in the presence of chiral phosphoric acid (298.15 K, 1 min): 
 ```python
 python -m navicat_mikimo mkm -d test_cases/pd_carbocylic_borylation/ -t 298.15 -Tf 60
 ```
 
-2. Microkinetic modelling for all profiles of the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
+2. Microkinetic modeling for all profiles of the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
 python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 0
 ```
