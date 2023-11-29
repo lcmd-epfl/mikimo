@@ -98,8 +98,7 @@ def run_mkm_3d(
                 first_step=first_step,
             )
             success = True
-            c_target_t = np.array([result_solve_ivp.y[i][-1]
-                                  for i in idx_target_all])
+            c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
             return c_target_t
         except Exception:
             if rtol == last_[0] and atol == last_[1]:
@@ -145,8 +144,7 @@ def main():
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in [
-                    "initial_conc", "c0", "initial conc"]:
+            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
@@ -183,12 +181,9 @@ def main():
         grid_d = np.array([grid] * n_target)
         total_combinations = len(temperatures_space) * len(times_space)
         combinations = list(
-            itertools.product(
-                range(
-                    len(temperatures_space)), range(
-                    len(times_space))))
-        num_chunks = total_combinations // ncore + \
-            (total_combinations % ncore > 0)
+            itertools.product(range(len(temperatures_space)), range(len(times_space)))
+        )
+        num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
 
         for chunk_index in tqdm(range(num_chunks)):
             start_index = chunk_index * ncore
@@ -232,8 +227,8 @@ def main():
             group.create_dataset("times_", data=times_space)
             group.create_dataset("agrid", data=grid_d_fill)
 
-        x1label = "Temperatures [K]"
-        x2label = "log$_{10}$(Time) [s]"
+        x1label = "temperatures [K]"
+        x2label = "log$_{10}$(time) [s]"
 
         alabel = "Total product concentration [M]"
         afilename = f"time_temperature_activity_map.png"
@@ -276,8 +271,7 @@ def main():
             min_ratio = -3
             max_ratio = 3
             selectivity_ratio = np.log10(grid_d_fill[0] / grid_d_fill[1])
-            selectivity_ratio_ = np.clip(
-                selectivity_ratio, min_ratio, max_ratio)
+            selectivity_ratio_ = np.clip(selectivity_ratio, min_ratio, max_ratio)
             selectivity_ratio_ = np.nan_to_num(
                 selectivity_ratio_, nan=-3, posinf=3, neginf=-3
             )
@@ -286,8 +280,7 @@ def main():
             if verb > 2:
                 with h5py.File("mkm_time_temperature_selectivity.h5", "w") as f:
                     group = f.create_group("data")
-                    group.create_dataset(
-                        "temperatures_", data=temperatures_space)
+                    group.create_dataset("temperatures_", data=temperatures_space)
                     group.create_dataset("times_", data=times_space)
                     group.create_dataset("sgrid", data=selectivity_ratio_)
             plot_3d_np(
@@ -314,11 +307,9 @@ def main():
             if verb > 2:
                 with h5py.File("mkm_time_temperature_selectivity.h5", "w") as f:
                     group = f.create_group("data")
-                    group.create_dataset(
-                        "temperatures", data=temperatures_space)
+                    group.create_dataset("temperatures", data=temperatures_space)
                     group.create_dataset("times", data=times_space)
-                    group.create_dataset(
-                        "dominant_indices", data=dominant_indices)
+                    group.create_dataset("dominant_indices", data=dominant_indices)
             plot_3d_contour_regions_np(
                 temperatures_space,
                 times_space,
@@ -340,17 +331,14 @@ def main():
     else:
         if len(t_finals) == 1:
             if verb > 0:
-                print(
-                    f"-------Screening over temperature: {temperatures} K-------")
-            final_prod_concs = np.zeros(
-                (len(temperatures), len(idx_target_all)))
+                print(f"-------Screening over temperature: {temperatures} K-------")
+            final_prod_concs = np.zeros((len(temperatures), len(idx_target_all)))
             t_final = t_finals[0]
             t_span = (0, t_final)
 
             for i, temperature in enumerate(temperatures):
                 if ks is not None:
-                    sys.exit(
-                        "Cannot screen over temperatures with the kinetic profile")
+                    sys.exit("Cannot screen over temperatures with the kinetic profile")
                 else:
                     _, result_solve_ivp = calc_km(
                         energy_profile_all,
@@ -380,15 +368,14 @@ def main():
             plot_save_cond(
                 temperatures,
                 final_prod_concs.T,
-                "Temperature (K)",
+                "temperature (K)",
                 prod_name,
                 verb=verb,
             )
 
         elif len(temperatures) == 1:
             if verb > 0:
-                print(
-                    f"-------Screening over reaction time: {t_finals} s-------\n")
+                print(f"-------Screening over reaction time: {t_finals} s-------\n")
             final_prod_concs = np.zeros((len(t_finals), len(idx_target_all)))
             temperature = temperatures[0]
             for i, tf in enumerate(t_finals):
@@ -447,8 +434,7 @@ def main():
                 print(f"{t_finals} s")
                 print(f"{temperatures} K\n")
             combinations = list(itertools.product(t_finals, temperatures))
-            final_prod_concs = np.zeros(
-                (len(combinations), len(idx_target_all)))
+            final_prod_concs = np.zeros((len(combinations), len(idx_target_all)))
             for i, Tt in enumerate(combinations):
                 t_span = (0, Tt[0])
                 temperature = Tt[1]
