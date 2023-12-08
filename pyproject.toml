@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools", "wheel", "cython>=0.29.22", "numpy"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,12 +8,6 @@ version = "2.0.1"
 authors = [
   { name = "pregabalin_Hoshiyomi", email = "thanapat.worakul@epfl.ch" },
 ]
-
-[tool.cythonize]
-# specify Cython file patterns
-sources = ["navicat_mikimo/*.pyx"]
-
-
 description = "microkinetic modeling code for homogeneous catalytic reactions"
 keywords = ["computational chemistry utility"]
 readme = "README.md"
