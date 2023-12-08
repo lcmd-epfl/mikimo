@@ -13,30 +13,19 @@ import sklearn as sk
 from joblib import Parallel, delayed
 from navicat_volcanic.dv1 import curate_d
 from navicat_volcanic.dv2 import dv_collinear, find_2_dv
-from navicat_volcanic.helpers import (
-    bround,
-    group_data_points,
-    user_choose_1_dv,
-    user_choose_2_dv,
-)
-from navicat_volcanic.plotting2d import calc_ci, get_reg_targets, plot_2d, plot_2d_lsfer
-from navicat_volcanic.plotting3d import (
-    get_bases,
-    plot_3d_contour,
-    plot_3d_contour_regions,
-)
+from navicat_volcanic.helpers import (bround, group_data_points,
+                                      user_choose_1_dv, user_choose_2_dv)
+from navicat_volcanic.plotting2d import (calc_ci, get_reg_targets, plot_2d,
+                                         plot_2d_lsfer)
+from navicat_volcanic.plotting3d import (get_bases, plot_3d_contour,
+                                         plot_3d_contour_regions)
 from scipy.interpolate import interp1d
 from tqdm import tqdm
 
 from .helper import call_imputter
-from .kinetic_solver import calc_km
-from .plot_function import (
-    plot_2d_combo,
-    plot_3d_contour_regions_np,
-    plot_3d_m,
-    plot_3d_np,
-    plot_evo,
-)
+from .kinetic_solver_runner import calc_km
+from .plot_function import (plot_2d_combo, plot_3d_contour_regions_np,
+                            plot_3d_m, plot_3d_np, plot_evo)
 
 warnings.filterwarnings("ignore")
 
@@ -1127,7 +1116,7 @@ def main(
             if interpolate:
                 if verb > 0:
                     print(
-                        f"Performing microkinetics modeling for the volcano line ({n_point_calc} points)."
+                        f"Performing microkinetics modelling for the volcano line ({n_point_calc} points)."
                     )
                 selected_indices = np.round(
                     np.linspace(0, len(dgs) - 1, n_point_calc)
@@ -1144,7 +1133,7 @@ def main(
                 trun_dgs = dgs
                 if verb > 0:
                     print(
-                        f"Performing microkinetics modeling for the volcano line ({npoints})."
+                        f"Performing microkinetics modelling for the volcano line ({npoints})."
                     )
             prod_conc = np.zeros((len(dgs), n_target))
 
@@ -1186,7 +1175,7 @@ def main(
             prod_conc_ = prod_conc_.T
             # Volcano points
             print(
-                f"Performing microkinetics modeling for the volcano line ({len(d)})."
+                f"Performing microkinetics modelling for the volcano line ({len(d)})."
             )
 
             prod_conc_pt = np.zeros((len(d), n_target))

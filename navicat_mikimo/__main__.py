@@ -2,12 +2,12 @@ import sys
 
 import fire
 
-from . import kinetic_solver, km_volcanic, screen_reaction_condition
+from . import kinetic_solver_runner, km_volcanic, screen_reaction_condition
 
 
 def run(mode):
     """
-    Perform microkinetic modeling (mkm) for homogeneous reaction using energy data and the coulping with volcanic to perform mkm in a high-throughput fashion.
+    Perform microkinetic modelling (mkm) for homogeneous reaction using energy data and the coulping with volcanic to perform mkm in a high-throughput fashion.
 
     Run mikimo by the specified mode, which can be one of the following:
     - 'mkm': Perform a single MKM run using the top-most row in the reaction data file.
@@ -26,7 +26,7 @@ def run(mode):
         None
     """
     if mode == "mkm":
-        sys.exit(kinetic_solver.main())
+        sys.exit(kinetic_solver_runner.main())
     elif mode == "vp":
         sys.exit(km_volcanic.main())
     elif mode == "cond":

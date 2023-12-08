@@ -4,10 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "navicat_mikimo"
-version = "1.0.1"
+version = "2.0.1"
 authors = [
   { name = "pregabalin_Hoshiyomi", email = "thanapat.worakul@epfl.ch" },
 ]
+
+[tool.cythonize]
+# specify Cython file patterns
+sources = ["navicat_mikimo/*.pyx"]
+
+
 description = "microkinetic modeling code for homogeneous catalytic reactions"
 keywords = ["computational chemistry utility"]
 readme = "README.md"
