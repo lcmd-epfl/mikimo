@@ -33,7 +33,7 @@
 
 
 ## Dependencies [↑](#dependencies)
-The code runs on pure python with the following dependencies: 
+The code runs on Python and Cython (>=0.29.22) with the following dependencies: 
 - `numpy`
 - `scipy`
 - `autograd`
@@ -55,7 +55,7 @@ pip install .
 or 
 
 ```python
-python setup.py install
+python setup.py install build_ext --inplace
 ```
 
 ## Usages [↑](#usages)
