@@ -87,7 +87,6 @@ def system_KE_DE(
                 for a in range(initial_conc.shape[0])
             ]
         )
-        print(res)
         return res
 
     _dydt.jac = jacobian(_dydt, argnum=1)
@@ -570,7 +569,6 @@ def test_system_KE_DE():
             [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, -1.0, 1.0],
         ]
     )
-    print(rxn_network_all.shape)
     dydt = system_KE_DE(
         k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states
     )
@@ -592,11 +590,9 @@ def test_system_KE_DE():
         dense_output=True,
         rtol=1e-6,
         atol=1e-9,
-        # jac=dydt.jac,
         max_step=max_step,
         first_step=first_step,
     )
-    print(result_solve_ivp)
     idx_target_all = [states.index(i) for i in states if "*" in i]
     c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
 

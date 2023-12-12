@@ -705,6 +705,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         )
 
 
+# NOTE typing stil fucks up: energyies/ loop can be written better
 def process_data_mkm(
     dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
 ) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
@@ -734,11 +735,12 @@ def process_data_mkm(
         if last_row_index_lower in ["initial_conc", "c0", "initial conc"]:
             initial_conc = df_network.iloc[-1:].to_numpy()[0]
             df_network = df_network.drop(df_network.index[-1])
-    initial_conc = initial_conc.astype(np.float32)
+    initial_conc = initial_conc.astype(np.float64)
     rxn_network_all = df_network.to_numpy()[:, :].astype(np.int32)
 
     # energy data-------------------------------------------
-    df_all = pd.DataFrame([dg], columns=tags)  # %%
+    df_all = pd.DataFrame([dg], columns=tags)
+    df_all = df_all.astype(np.float64)
     species_profile = tags  # %%
     all_df = []
     df_corr_profiles = pd.DataFrame({"R": np.zeros(len(df_all))})
