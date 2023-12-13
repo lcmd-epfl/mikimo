@@ -705,7 +705,112 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         )
 
 
-# NOTE typing stil fucks up: energyies/ loop can be written better
+# to change all dgr_all to np.ndarray
+# def process_data_mkm(
+#     dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
+# ) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
+#     """
+#     Processes data for micokinetic modeling.
+
+#     Args:
+#         dg (numpy.array): free energy profile.
+#         df_network (pandas.DataFrame): Dataframe containing reaction network information.
+#         c0 (numpy.array): Initial conditions.
+#         tags (list): Column names for the free energy profile.
+#         states (list): Column names for the reaction network.
+
+#     Returns:
+#         Tuple: A tuple containing the following:
+#             initial_conc (numpy.ndarray): Initial concentrations.
+#             energy_profile_all (list): List of energy profiles.
+#             dgr_all (list): List of reaction free energies.
+#             coeff_ts_all (list): List of coefficient arrays.
+#             rxn_network_all (numpy.ndarray): Reaction networks.
+#     """
+#     # extract initial conditions
+#     initial_conc = np.array([])
+#     last_row_index = df_network.index[-1]
+#     if isinstance(last_row_index, str):
+#         last_row_index_lower = last_row_index.lower()
+#         if last_row_index_lower in ["initial_conc", "c0", "initial conc"]:
+#             initial_conc = df_network.iloc[-1:].to_numpy()[0]
+#             df_network = df_network.drop(df_network.index[-1])
+#     initial_conc = initial_conc.astype(np.float64)
+#     rxn_network_all = df_network.to_numpy()[:, :].astype(np.int32)
+
+#     # energy data-------------------------------------------
+#     df_all = pd.DataFrame([dg], columns=tags)
+#     df_all = df_all.astype(np.float64)
+#     species_profile = tags  # %%
+#     all_df = []
+#     df_corr_profiles = pd.DataFrame({"R": np.zeros(len(df_all))})
+
+#     for i in range(1, len(species_profile)):
+#         if species_profile[i].lower().startswith("p"):
+#             df_corr_profiles = pd.concat(
+#                 [df_corr_profiles, df_all[species_profile[i]]],
+#                 ignore_index=False,
+#                 axis=1,
+#             )
+#             all_df.append(df_corr_profiles)
+#             df_corr_profiles = pd.DataFrame({"R": np.zeros(len(df_all))})
+#         else:
+#             df_corr_profiles = pd.concat(
+#                 [df_corr_profiles, df_all[species_profile[i]]],
+#                 ignore_index=False,
+#                 axis=1,
+#             )
+
+#     for i in range(len(all_df) - 1):
+#         try:
+#             # step where branching is (the first 1)
+#             branch_step = np.where(
+#                 df_network[all_df[i + 1].columns[1]].to_numpy() == 1
+#             )[0][0]
+#             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[1])[0]
+#         except KeyError:
+#             # due to TS as the first column of the profile
+#             branch_step = np.where(
+#                 df_network[all_df[i + 1].columns[2]].to_numpy() == 1
+#             )[0][0]
+#             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
+#         # int to which new cycle is connected (the first -1)
+
+#         if df_network.columns.to_list()[branch_step + 1].lower().startswith("p"):
+#             # conneting profiles
+#             cp_idx = branch_step
+#         else:
+#             # int to which new cycle is connected (the first -1)
+#             cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
+
+#         # state to insert
+#         if states[loc_nx[0] - 1].lower().startswith("p") and not (
+#             states[loc_nx[0]].lower().startswith("p")
+#         ):
+#             # conneting profiles
+#             state_insert = all_df[i].columns[-1]
+#         else:
+#             state_insert = states[cp_idx]
+#         all_df[i + 1]["R"] = df_all[state_insert].values
+#         all_df[i + 1].rename(columns={"R": state_insert}, inplace=True)
+
+#     energy_profile_all = []
+#     dgr_all = []
+#     coeff_ts_all = []
+#     for df in all_df:
+#         energy_profile = df.iloc[0, :-1].values
+#         rxn_species = df.columns.to_list()[:-1]
+#         dgr_all.append(df.values[0][-1])
+#         coeff_ts = np.array(
+#             [1 if "TS" in element else 0 for element in rxn_species], dtype=np.int32
+#         )
+#         coeff_ts_all.append(coeff_ts)
+#         energy_profile_all.append(np.array(energy_profile).astype(np.float64))
+#     rxn_network_all = np.ascontiguousarray(rxn_network_all)
+
+#     return initial_conc, energy_profile_all, dgr_all, coeff_ts_all, rxn_network_all
+
+
 def process_data_mkm(
     dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
 ) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
@@ -798,13 +903,16 @@ def process_data_mkm(
     dgr_all = []
     coeff_ts_all = []
     for df in all_df:
-        energy_profile = df.values[0][:-1]
+        energy_profile = df.iloc[0, :-1].values
         rxn_species = df.columns.to_list()[:-1]
         dgr_all.append(df.values[0][-1])
-        coeff_ts = [1 if "TS" in element else 0 for element in rxn_species]
-        coeff_ts_all.append(np.array(coeff_ts).astype(np.int32))
-        energy_profile_all.append(np.array(energy_profile))
+        coeff_ts = np.array(
+            [1 if "TS" in element else 0 for element in rxn_species], dtype=np.int32
+        )
+        coeff_ts_all.append(coeff_ts)
+        energy_profile_all.append(np.array(energy_profile).astype(np.float64))
     rxn_network_all = np.ascontiguousarray(rxn_network_all)
+
     return initial_conc, energy_profile_all, dgr_all, coeff_ts_all, rxn_network_all
 
 
