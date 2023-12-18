@@ -154,7 +154,7 @@ python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 
 7. Using filtering to smooth the plot:
 
 ```python
-python replot.py examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
+python -m navicat_mikimo replot examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
 ```
 
 You can find examples demonstrating how to read h5 files and regenerate plots in the "examples" folder.

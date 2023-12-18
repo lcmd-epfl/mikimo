@@ -2,7 +2,7 @@ import sys
 
 import fire
 
-from . import kinetic_solver, km_volcanic, screen_reaction_condition
+from . import kinetic_solver, km_volcanic, replot, screen_reaction_condition
 
 
 def run(mode):
@@ -18,9 +18,10 @@ def run(mode):
     - For 'mkm' mode: navicat_mikimo mkm
     - For 'vp' mode: navicat_mikimo vp
     - For 'cond' mode: navicat_mikimo cond
+    - to call replot: `replot`
 
     Args:
-        mode (str): The mode to run [Valid choices: 'mkm', 'vp', or 'cond'].
+        mode (str): The mode to run [Valid choices: 'mkm', 'vp', 'cond', 'replot'].
 
     Returns:
         None
@@ -31,6 +32,8 @@ def run(mode):
         sys.exit(km_volcanic.main())
     elif mode == "cond":
         sys.exit(screen_reaction_condition.main())
+    elif mode == "replot":
+        sys.exit(replot.main)
 
 
 def main():
