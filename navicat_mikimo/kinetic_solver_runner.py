@@ -103,7 +103,6 @@ def calc_km(
     t_span: Tuple,
     initial_conc: np.ndarray,
     states: List,
-    timeout: float,
     report_as_yield: bool,
     quality: int,
     ks=None,
@@ -120,7 +119,6 @@ def calc_km(
         t_span (Tuple): Time span for the simulation.
         initial_conc (np.ndarray): Array of initial concentrations of all species.
         states (List): List of state labels for all species.
-        timeout (float): Timeout for the simulation.
         report_as_yield (bool): Flag indicating whether to report the results as yield or concentration.
         quality (int, optional): Quality level of the integration. Defaults to 0.
         ks (np.ndarray): Array of rate constants for all reactions.
@@ -216,7 +214,6 @@ def calc_km(
                 # jac=dydt.jac,
                 max_step=max_step,
                 first_step=first_step,
-                timeout=timeout,
             )
             success = True
 
@@ -246,7 +243,6 @@ def calc_km(
                     atol=atol,
                     max_step=max_step,
                     first_step=first_step,
-                    timeout=timeout,
                 )
                 success = True
 
@@ -268,7 +264,6 @@ def calc_km(
                 atol=1e-9,
                 max_step=max_step,
                 first_step=first_step,
-                timeout=timeout,
             )
         except Exception:
             # Last resort
@@ -282,8 +277,6 @@ def calc_km(
                 atol=1e-9,
                 max_step=max_step,
                 first_step=first_step,
-                # jac=dydt.jac,
-                timeout=timeout + 10,
             )
 
     try:
@@ -646,7 +639,6 @@ def main():
             t_span,
             initial_conc,
             states,
-            timeout=60,
             report_as_yield=False,
             quality=quality,
             ks=ks_actual,
@@ -669,7 +661,6 @@ def main():
             t_span,
             initial_conc,
             states,
-            timeout=60,
             report_as_yield=False,
             quality=2,
             ks=None,
