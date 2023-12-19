@@ -64,7 +64,7 @@ Specifically, consider the following guidelines:
         help="Flag to save a new data. (default: False)",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[2:])
     filename = args.i
     filtering_method = args.filter
     window_length = args.window_length

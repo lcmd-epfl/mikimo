@@ -33,7 +33,7 @@ def run(mode):
     elif mode == "cond":
         sys.exit(screen_reaction_condition.main())
     elif mode == "replot":
-        sys.exit(replot.main)
+        sys.exit(replot.main())
 
 
 def main():
