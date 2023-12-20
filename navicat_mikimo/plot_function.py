@@ -163,9 +163,7 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
             "font.size": 18,
         }
     )
-    fig, ax = plt.subplots(
-        frameon=False, figsize=[4.2, 3], dpi=300, constrained_layout=True
-    )
+    fig, ax = plt.subplots(figsize=[8, 6])
     # Catalyst--------------------------
     ax.plot(
         t,
@@ -247,6 +245,9 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
                 label=states[i],
             )
 
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible
+
     beautify_ax(ax)
     plt.xlabel(xlabel)
     plt.ylabel("Concentration (mol/l)")
@@ -283,7 +284,13 @@ def plot_save_cond(x, Pfs, var, prod_name, verb=1):
 
     for i, Pf in enumerate(Pfs):
         ax.plot(
-            x, Pf, "-", linewidth=1.5, color=color[i], alpha=0.95, label=prod_name[i]
+            x,
+            Pf,
+            "-",
+            linewidth=1.5,
+            color=color[i],
+            alpha=0.95,
+            label=prod_name[i][2:].replace("*", ""),
         )
         ax.scatter(
             x,
