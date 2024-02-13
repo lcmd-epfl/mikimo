@@ -313,6 +313,13 @@ def preprocess_data_mkm(arguments, mode):
         help="""Toggle to plot LFESRs. (default: False)""",
     )
     parser.add_argument(
+        "--timeout",
+        dest="timeout",
+        type=int,
+        default=60,
+        help="""Timeout for each integration run. (default = 60 s) """,
+    )
+    parser.add_argument(
         "-iq",
         "--iq",
         dest="int_quality",
@@ -502,6 +509,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         wdir = args.dir
         imputer_strat = args.imputer_strat
         report_as_yield = args.percent
+        timeout = args.timeout
         quality = args.int_quality
         p_quality = args.plot_quality
         plotmode = args.plotmode
@@ -567,6 +575,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             verb,
             imputer_strat,
             report_as_yield,
+            timeout,
             quality,
             p_quality,
             plotmode,
