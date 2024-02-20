@@ -11,17 +11,15 @@ from navicat_volcanic.helpers import bround
 from scipy.integrate import solve_ivp
 from tqdm import tqdm
 
-from .helper import preprocess_data_mkm, process_data_mkm
+from .helper import preprocess_data_mkm, process_data_mkm, call_imputter
 from .kinetic_solver import calc_k, system_KE_DE
 from .kinetic_solver_runner import calc_km
-from .km_volcanic import call_imputter
 from .plot_function import (
     plot_3d_contour_regions_np,
     plot_3d_np,
     plot_evo_save,
     plot_save_cond,
 )
-
 
 def run_mkm_3d(
     grid: Tuple[np.ndarray, np.ndarray],
@@ -60,7 +58,7 @@ def run_mkm_3d(
     )
     assert k_forward_all.shape[0] == rxn_network_all.shape[0]
     assert k_reverse_all.shape[0] == rxn_network_all.shape[0]
-
+    
     dydt = system_KE_DE(
         k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states
     )
@@ -94,14 +92,14 @@ def run_mkm_3d(
                 dense_output=True,
                 rtol=rtol,
                 atol=atol,
-                jac=dydt.jac,
                 max_step=max_step,
                 first_step=first_step,
             )
             success = True
             c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
             return c_target_t
-        except Exception:
+        except Exception as e:
+            print(e)
             if rtol == last_[0] and atol == last_[1]:
                 success = True
                 return np.array([np.NaN] * len(idx_target_all))
@@ -213,9 +211,9 @@ def main():
         if np.any(np.isnan(grid_d)):
             grid_d_fill = np.zeros_like(grid_d)
             for i, gridi in enumerate(grid_d):
-                impuuter = call_imputter(imputer_strat)
-                impuuter.fit(gridi)
-                filled_data = impuuter.transform(gridi)
+                imputer = call_imputter(imputer_strat)
+                imputer.fit(gridi)
+                filled_data = imputer.transform(gridi)
                 grid_d_fill[i] = filled_data
         else:
             grid_d_fill = grid_d
@@ -350,7 +348,6 @@ def main():
                         t_span,
                         initial_conc,
                         states,
-                        timeout=60,
                         report_as_yield=False,
                         quality=quality,
                     )
@@ -391,7 +388,6 @@ def main():
                         t_span,
                         initial_conc,
                         states,
-                        timeout=60,
                         report_as_yield=False,
                         quality=quality,
                         ks=ks,
@@ -406,7 +402,6 @@ def main():
                         t_span,
                         initial_conc,
                         states,
-                        timeout=60,
                         report_as_yield=False,
                         quality=quality,
                         ks=ks,
@@ -449,7 +444,6 @@ def main():
                         t_span,
                         initial_conc,
                         states,
-                        timeout=60,
                         report_as_yield=False,
                         quality=quality,
                         ks=ks,
@@ -464,7 +458,6 @@ def main():
                         t_span,
                         initial_conc,
                         states,
-                        timeout=60,
                         report_as_yield=False,
                         quality=quality,
                     )

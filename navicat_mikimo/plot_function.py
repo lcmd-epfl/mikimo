@@ -483,6 +483,8 @@ def plot_3d_m(
     ax = beautify_ax(ax)
 
     increment = np.round((ymax - ymin) / 10, 1)
+    if increment == 0:
+        increment = 0.05
     levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
@@ -551,6 +553,8 @@ def plot_3d_np(
     ax = beautify_ax(ax)
 
     increment = np.round((ymax - ymin) / 10, 1)
+    if increment == 0:
+        increment = 0.05
     levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
