@@ -1265,14 +1265,6 @@ def main():
         combinations = list(itertools.product(range(len(xint)), range(len(yint))))
         num_chunks = total_combinations // ncore + (total_combinations % ncore > 0)
 
-        initial_conc = np.array([])
-        last_row_index = df_network.index[-1]
-        if isinstance(last_row_index, str):
-            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
-                initial_conc = df_network.iloc[-1:].to_numpy()[0]
-                df_network = df_network.drop(df_network.index[-1])
-        rxn_network_all = df_network.to_numpy()[:, :]
-
         # MKM
         for chunk_index in tqdm(range(num_chunks)):
             start_index = chunk_index * ncore
@@ -1284,9 +1276,10 @@ def main():
                     coord,
                     grids,
                     n_target,
+                    temperature,
                     t_span,
-                    rxn_network_all,
-                    initial_conc,
+                    df_network,
+                    tags,
                     states,
                     report_as_yield,
                     quality,
