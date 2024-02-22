@@ -785,6 +785,7 @@ def main(
     elif len(times) == 1:
         t_span = (0, times[0])
     else:
+        screen_cond = "vtime"
         nd = 1
         t_finals_log = np.log10(times)
         x2base = np.round((t_finals_log[1] - t_finals_log[0]) / 10, 1)
