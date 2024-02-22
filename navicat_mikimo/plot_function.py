@@ -483,6 +483,8 @@ def plot_3d_m(
     ax = beautify_ax(ax)
 
     increment = np.round((ymax - ymin) / 10, 1)
+    if increment == 0:
+        increment = 0.05
     levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
@@ -490,14 +492,14 @@ def plot_3d_m(
     )
 
     # Labels and key
-    xticks = np.arange(x1min, x1max + 0.1, x1base)
-    yticks = np.arange(x2min, x2max + 0.1, x2base)
+    xticks = np.arange(x1min, x1max + increment, x1base)
+    yticks = np.arange(x2min, x2max + increment, x2base)
     plt.xlabel(x1label)
     plt.ylabel(x2label)
     plt.xlim(np.min(xticks), np.max(xticks))
     plt.ylim(np.min(yticks), np.max(yticks))
-    plt.xticks(np.arange(x1min, x1max + 0.1, x1base))
-    plt.yticks(np.arange(x2min, x2max + 0.1, x2base))
+    plt.xticks(xticks)
+    plt.yticks(yticks)
 
     def fmt(x, pos):
         return "%.0f" % x
@@ -505,7 +507,7 @@ def plot_3d_m(
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=3)
     # tick_labels = ['{:.2f}'.format(value) for value in levels]
-    tick_positions = np.arange(ymin, ymax + 0.1, increment)
+    tick_positions = np.arange(ymin, ymax + increment, increment)
     tick_labels = [f"{value:.1f}" for value in tick_positions]
 
     cbar.set_ticks(tick_positions)
@@ -551,14 +553,16 @@ def plot_3d_np(
     ax = beautify_ax(ax)
 
     increment = np.round((ymax - ymin) / 10, 1)
+    if increment == 0:
+        increment = 0.05
     levels = np.arange(ymin, ymax + increment, increment / 100)
 
     cset = ax.contourf(
         xint, yint, grid, levels=levels, norm=norm, cmap=cm.get_cmap(cmap, len(levels))
     )
 
-    xticks = np.arange(x1min, x1max + 0.1, x1base)
-    yticks = np.arange(x2min, x2max + 0.1, x2base)
+    xticks = np.arange(x1min, x1max + increment, x1base)
+    yticks = np.arange(x2min, x2max + increment, x2base)
     plt.xlabel(x1label)
     plt.ylabel(x2label)
     plt.xlim(np.min(xticks), np.max(xticks))
@@ -572,7 +576,7 @@ def plot_3d_np(
     cbar = fig.colorbar(cset, format=FuncFormatter(fmt))
     cbar.set_label(ylabel, labelpad=3)
     # tick_labels = ['{:.2f}'.format(value) for value in levels]
-    tick_positions = np.arange(ymin, ymax + 0.1, increment)
+    tick_positions = np.arange(ymin, ymax + increment, increment)
     tick_labels = [f"{value:.1f}" for value in tick_positions]
 
     cbar.set_ticks(tick_positions)
