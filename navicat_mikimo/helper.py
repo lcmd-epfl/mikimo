@@ -49,7 +49,7 @@ def yesno(question):
         return False
 
 
-def check_existence(wdir, verb):
+def check_existence(wdir, verb, kinetic_mode):
     """Check for the existence of necessary files."""
     kinetic_mode = False
     k_exist = False
@@ -93,12 +93,12 @@ def check_existence(wdir, verb):
     kinetic_exists = os.path.exists(
         os.path.join(wdir, "kinetic_data.csv")
     ) or os.path.exists(os.path.join(wdir, "kinetic_data.xlsx"))
-    if kinetic_exists:
-        kinetic_mode = yesno(
-            "kinetic_profile.csv exists Do you want to use kinetic information instead of the energy profile data"
-        )
-
-    return kinetic_mode
+    if kinetic_mode:
+        if kinetic_exists:
+            if verb > 2:
+                logging.info("Found kinetic data file.")
+        else:
+            logging.critical("kinetic_data file not found.")
 
 
 def check_km_inp(
@@ -313,6 +313,13 @@ def preprocess_data_mkm(arguments, mode):
         help="""Toggle to plot LFESRs. (default: False)""",
     )
     parser.add_argument(
+        "-k",
+        "--kinetic",
+        dest="kinetic_mode",
+        action="store_true",
+        help="""Toggle to read and use kinetic profiles. (default: False)""",
+    )
+    parser.add_argument(
         "-iq",
         "--iq",
         dest="int_quality",
@@ -390,15 +397,20 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
     )
 
     args = parser.parse_args(arguments)
+    verb = args.verb
+    wdir = args.dir
+    profile_choice = args.profile_choice
+    x_scale = args.xscale
+    more_species_mkm = args.addition
+    quality = args.int_quality
+    temperatures = args.temp
+    kinetic_mode = args.kinetic_mode
+    t_finals = args.time
+    ncore = args.ncore
+    imputer_strat = args.imputer_strat
+    
     if mode == "mkm_solo":
-        verb = args.verb
-        wdir = args.dir
-        x_scale = args.xscale
-        more_species_mkm = args.addition
         profile_choice = args.profile_choice
-        quality = args.int_quality
-        t_finals = args.time
-        temperatures = args.temp
 
         if t_finals is None:
             if verb > 0:
@@ -427,7 +439,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
 
-        kinetic_mode = check_existence(wdir, verb)
+        check_existence(wdir, verb)
         ks = None
         if kinetic_mode:
             filename_xlsx = Path(wdir, "kinetic_data.xlsx")
@@ -498,30 +510,22 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         lmargin = args.lmargin
         rmargin = args.rmargin
         xbase = args.xbase
-        verb = args.verb
-        wdir = args.dir
-        imputer_strat = args.imputer_strat
         report_as_yield = args.percent
-        quality = args.int_quality
         p_quality = args.plot_quality
         plotmode = args.plotmode
-        more_species_mkm = args.addition
         lfesr = args.lfesr
         x_scale = args.xscale
         comp_ci = args.confidence_interval
-        ncore = args.ncore
         nd = args.run_mode
         lfesrs_idx = args.idx
-        times = args.time
-        temperatures = args.temp
-
+        
         nx_path = Path(wdir, "rxn_network.csv")
         df_network = pd.read_csv(nx_path, index_col=0)
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])
 
-        kinetic_mode = check_existence(wdir, verb)
+        check_existence(wdir, verb)
         if kinetic_mode:
             filename_xlsx = Path(wdir, "kinetic_data.xlsx")
             filename_csv = Path(wdir, "kinetic_data.csv")
@@ -577,25 +581,15 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             ncore,
             nd,
             lfesrs_idx,
-            times,
+            t_finals,
             temperatures,
             kinetic_mode,
         )
 
     elif mode == "mkm_cond":
-        wdir = args.dir
-        x_scale = args.xscale
         plot_evo = args.plot_evo
         map_tt = args.map
-        ncore = args.ncore
-        more_species_mkm = args.addition
-        imputer_strat = args.imputer_strat
-        verb = args.verb
-        profile_choice = args.profile_choice
-        quality = args.int_quality
-        t_finals = args.time
-        temperatures = args.temp
-
+        
         if t_finals is None:
             t_finals = [86400]
         elif len(t_finals) == 1:
@@ -610,7 +604,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         elif len(temperatures) > 1:
             pass
 
-        kinetic_mode = check_existence(wdir, verb)
+        check_existence(wdir, verb)
         nx_path = Path(wdir, "rxn_network.csv")
         df_network = pd.read_csv(nx_path, index_col=0)
         df_network.fillna(0, inplace=True)
@@ -695,111 +689,6 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             quality,
         )
 
-
-# to change all dgr_all to np.ndarray
-# def process_data_mkm(
-#     dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
-# ) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
-#     """
-#     Processes data for micokinetic modeling.
-
-#     Args:
-#         dg (numpy.array): free energy profile.
-#         df_network (pandas.DataFrame): Dataframe containing reaction network information.
-#         c0 (numpy.array): Initial conditions.
-#         tags (list): Column names for the free energy profile.
-#         states (list): Column names for the reaction network.
-
-#     Returns:
-#         Tuple: A tuple containing the following:
-#             initial_conc (numpy.ndarray): Initial concentrations.
-#             energy_profile_all (list): List of energy profiles.
-#             dgr_all (list): List of reaction free energies.
-#             coeff_ts_all (list): List of coefficient arrays.
-#             rxn_network_all (numpy.ndarray): Reaction networks.
-#     """
-#     # extract initial conditions
-#     initial_conc = np.array([])
-#     last_row_index = df_network.index[-1]
-#     if isinstance(last_row_index, str):
-#         last_row_index_lower = last_row_index.lower()
-#         if last_row_index_lower in ["initial_conc", "c0", "initial conc"]:
-#             initial_conc = df_network.iloc[-1:].to_numpy()[0]
-#             df_network = df_network.drop(df_network.index[-1])
-#     initial_conc = initial_conc.astype(np.float64)
-#     rxn_network_all = df_network.to_numpy()[:, :].astype(np.int32)
-
-#     # energy data-------------------------------------------
-#     df_all = pd.DataFrame([dg], columns=tags)
-#     df_all = df_all.astype(np.float64)
-#     species_profile = tags  # %%
-#     all_df = []
-#     df_corr_profiles = pd.DataFrame({"R": np.zeros(len(df_all))})
-
-#     for i in range(1, len(species_profile)):
-#         if species_profile[i].lower().startswith("p"):
-#             df_corr_profiles = pd.concat(
-#                 [df_corr_profiles, df_all[species_profile[i]]],
-#                 ignore_index=False,
-#                 axis=1,
-#             )
-#             all_df.append(df_corr_profiles)
-#             df_corr_profiles = pd.DataFrame({"R": np.zeros(len(df_all))})
-#         else:
-#             df_corr_profiles = pd.concat(
-#                 [df_corr_profiles, df_all[species_profile[i]]],
-#                 ignore_index=False,
-#                 axis=1,
-#             )
-
-#     for i in range(len(all_df) - 1):
-#         try:
-#             # step where branching is (the first 1)
-#             branch_step = np.where(
-#                 df_network[all_df[i + 1].columns[1]].to_numpy() == 1
-#             )[0][0]
-#             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[1])[0]
-#         except KeyError:
-#             # due to TS as the first column of the profile
-#             branch_step = np.where(
-#                 df_network[all_df[i + 1].columns[2]].to_numpy() == 1
-#             )[0][0]
-#             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
-#         # int to which new cycle is connected (the first -1)
-
-#         if df_network.columns.to_list()[branch_step + 1].lower().startswith("p"):
-#             # conneting profiles
-#             cp_idx = branch_step
-#         else:
-#             # int to which new cycle is connected (the first -1)
-#             cp_idx = np.where(rxn_network_all[branch_step, :] == -1)[0][0]
-
-#         # state to insert
-#         if states[loc_nx[0] - 1].lower().startswith("p") and not (
-#             states[loc_nx[0]].lower().startswith("p")
-#         ):
-#             # conneting profiles
-#             state_insert = all_df[i].columns[-1]
-#         else:
-#             state_insert = states[cp_idx]
-#         all_df[i + 1]["R"] = df_all[state_insert].values
-#         all_df[i + 1].rename(columns={"R": state_insert}, inplace=True)
-
-#     energy_profile_all = []
-#     dgr_all = []
-#     coeff_ts_all = []
-#     for df in all_df:
-#         energy_profile = df.iloc[0, :-1].values
-#         rxn_species = df.columns.to_list()[:-1]
-#         dgr_all.append(df.values[0][-1])
-#         coeff_ts = np.array(
-#             [1 if "TS" in element else 0 for element in rxn_species], dtype=np.int32
-#         )
-#         coeff_ts_all.append(coeff_ts)
-#         energy_profile_all.append(np.array(energy_profile).astype(np.float64))
-#     rxn_network_all = np.ascontiguousarray(rxn_network_all)
-
-#     return initial_conc, energy_profile_all, dgr_all, coeff_ts_all, rxn_network_all
 
 
 def process_data_mkm(
