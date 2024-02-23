@@ -36,7 +36,8 @@ def eyring(
     """
     if temperature == 0:
         raise ValueError("Temperature cannot be zero.")
-    return kb_h * temperature * np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
+    return kb_h * temperature * \
+        np.exp(-np.atleast_1d(dG_ddag) / (R_ * temperature))
 
 
 def get_dG_ddag(energy_profile, dgr, coeff_TS):
@@ -110,7 +111,8 @@ def get_k(
     energy_profile_reverse = energy_profile_reverse[:-1]
     energy_profile_reverse = energy_profile_reverse - dgr
     energy_profile_reverse = np.insert(energy_profile_reverse, 0, 0)
-    dG_ddag_reverse = get_dG_ddag(energy_profile_reverse, -dgr, coeff_TS_reverse)
+    dG_ddag_reverse = get_dG_ddag(
+        energy_profile_reverse, -dgr, coeff_TS_reverse)
 
     k_forward = eyring(dG_ddag_forward, temperature)
     k_reverse = np.flip(eyring(dG_ddag_reverse, temperature))
@@ -144,14 +146,14 @@ def calc_k(
     ]
     if not isinstance(dgr_all, np.ndarray):
         dgr_all = np.asarray(dgr_all)
-    coeff_TS_all = [
-        np.asarray(e) if not isinstance(e, np.ndarray) else e for e in coeff_TS_all
-    ]
+    coeff_TS_all = [np.asarray(e) if not isinstance(
+        e, np.ndarray) else e for e in coeff_TS_all]
 
     k_forward_all = np.empty(0)
     k_reverse_all = np.empty(0)
 
-    for energy_profile, dgr, coeff_TS in zip(energy_profile_all, dgr_all, coeff_TS_all):
+    for energy_profile, dgr, coeff_TS in zip(
+            energy_profile_all, dgr_all, coeff_TS_all):
         k_forward, k_reverse = get_k(
             energy_profile, dgr, coeff_TS, temperature=temperature
         )
@@ -253,8 +255,18 @@ def system_KE_DE(
 
     boundary = np.zeros((initial_conc.shape[0], 2))
     TOLERANCE = 1
-    r_idx = np.where(char.startswith(states, "R") & ~char.startswith(states, "INT"))[0]
-    p_idx = np.where(char.startswith(states, "P") & ~char.startswith(states, "INT"))[0]
+    r_idx = np.where(
+        char.startswith(
+            states,
+            "R") & ~char.startswith(
+            states,
+            "INT"))[0]
+    p_idx = np.where(
+        char.startswith(
+            states,
+            "P") & ~char.startswith(
+            states,
+            "INT"))[0]
     int_idx = np.setdiff1d(
         np.arange(1, initial_conc.shape[0]), np.concatenate([r_idx, p_idx])
     )
@@ -494,7 +506,8 @@ def calc_km(
             )
 
     try:
-        c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
+        c_target_t = np.array([result_solve_ivp.y[i][-1]
+                              for i in idx_target_all])
 
         r_idx = [
             i
@@ -533,8 +546,10 @@ def test_get_k():
     coeff_TS = np.array([0, 1, 0, 1, 0, 1])
     temperature = 298.15
 
-    expected_k_forward = np.array([1.23420642e02, 2.66908478e-02, 6.51255161e-04])
-    expected_k_reverse = np.array([2.87005583e02, 6.51255161e-04, 4.70404010e-01])
+    expected_k_forward = np.array(
+        [1.23420642e02, 2.66908478e-02, 6.51255161e-04])
+    expected_k_reverse = np.array(
+        [2.87005583e02, 6.51255161e-04, 4.70404010e-01])
 
     k_forward, k_reverse = get_k(energy_profile, dgr, coeff_TS, temperature)
 
@@ -806,9 +821,8 @@ def test_system_KE_DE():
     idx_target_all = [states.index(i) for i in states if "*" in i]
     c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])
 
-    R_idx = [
-        i for i, s in enumerate(states) if s.lower().startswith("r") and "INT" not in s
-    ]
+    R_idx = [i for i, s in enumerate(
+        states) if s.lower().startswith("r") and "INT" not in s]
     Rp = rxn_network_all[:, R_idx]
     Rp_ = []
     for col in range(Rp.shape[1]):
@@ -821,6 +835,63 @@ def test_system_KE_DE():
     c_target_t = np.around(c_target_t, decimals=4)
     expected_c_target_t = np.array([6.336e-01, 3.160e-01, 0.000])
     assert_allclose(c_target_t, expected_c_target_t)
+
+
+def test_calc_km():
+    energy_profile_all = [np.array([0., -19.82, -4.65, -24.45, -39.79, -22.53, -32.12, -38.17,
+                                    -49.23, -36.45], dtype=float),
+                          np.array([-19.82, -4.36, -19.97, -38.49, -15.51, -29.72, -35.33, -48.19,
+                                    -36.37], dtype=float)]
+    dgr_all = [-28.71, -30.07]
+    coeff_TS_all = [np.array([0, 0, 1, 0, 0, 1, 0, 1, 0, 1]),
+                    np.array([0, 1, 0, 0, 1, 0, 1, 0, 1])]
+    rxn_network_all = np.array([
+        [-1, 1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0],
+        [0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0],
+        [0, 0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, -1, 1, 0, 0, 0, 0, 0, 0, -1, 0, 0],
+        [1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+        [0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, -1, 1, 0, 0, 0, -1, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, -1, 1, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, -1, 1, 0, 0, -1, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1]])
+    temperature = 393.15
+    t_span = (0, 86400)
+    initial_conc = np.array(
+        [0.01, 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 1., 1., 0., 0.], dtype=float)
+    states = [
+        'INT2',
+        'INT3',
+        'INT4L',
+        'INT5L',
+        'INT6L',
+        'INT7L',
+        'INT4B',
+        'INT5B',
+        'INT6B',
+        'INT7B',
+        'R-alkene',
+        'R-CO',
+        'R-H$_2$',
+        'P-L*',
+        'P-B*']
+    expected_res = np.array([0.14785136, 0.84215103])
+    res, _ = calc_km(
+        energy_profile_all,
+        dgr_all,
+        coeff_TS_all,
+        rxn_network_all,
+        temperature,
+        t_span,
+        initial_conc,
+        states,
+        report_as_yield=False,
+        quality=0,
+        ks=None,
+    )
+    assert_allclose(expected_res, np.array(res))
 
 
 def main():
@@ -842,7 +913,8 @@ def main():
         initial_conc = np.array([])
         last_row_index = df_network.index[-1]
         if isinstance(last_row_index, str):
-            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
+            if last_row_index.lower() in [
+                    "initial_conc", "c0", "initial conc"]:
                 initial_conc = df_network.iloc[-1:].to_numpy()[0]
                 df_network = df_network.drop(df_network.index[-1])
         rxn_network_all = df_network.to_numpy()[:, :]
