@@ -49,7 +49,7 @@ def yesno(question):
         return False
 
 
-def check_existence(wdir, verb):
+def check_existence(wdir, kinetic_mode, verb):
     """Check for the existence of necessary files."""
     kinetic_mode = False
     k_exist = False
@@ -64,7 +64,8 @@ def check_existence(wdir, verb):
         c0_exist = any([last_row_index.lower() in rows_to_search])
         k_exist = all([column in df.columns for column in columns_to_search])
         if not c0_exist:
-            logging.critical("Initial concentration not found in rxn_network.csv.")
+            logging.critical(
+                "Initial concentration not found in rxn_network.csv.")
 
     else:
         logging.critical("rxn_network.csv not found.")
@@ -93,12 +94,12 @@ def check_existence(wdir, verb):
     kinetic_exists = os.path.exists(
         os.path.join(wdir, "kinetic_data.csv")
     ) or os.path.exists(os.path.join(wdir, "kinetic_data.xlsx"))
-    if kinetic_exists:
-        kinetic_mode = yesno(
-            "kinetic_profile.csv exists Do you want to use kinetic information instead of the energy profile data"
-        )
-
-    return kinetic_mode
+    if kinetic_mode:
+        if kinetic_exists:
+            if verb > 2:
+                logging.info("Found kinetic data file.")
+        else:
+            logging.critical("kinetic_data file not found.")
 
 
 def check_km_inp(
@@ -148,8 +149,7 @@ def check_km_inp(
     if mode == "energy":
         # all INT names in nx are the same as in the profile
         missing_states = [
-            state for state in states_network_int if state not in states_profile
-        ]
+            state for state in states_network_int if state not in states_profile]
         if missing_states:
             clear = False
             logging.warning(
@@ -166,7 +166,8 @@ def check_km_inp(
     # initial conc
     if len(states_network) != len(initial_conc):
         clear = False
-        logging.warning("\nYour initial concentration seems wrong. Double check!")
+        logging.warning(
+            "\nYour initial concentration seems wrong. Double check!")
 
     # check network sanity
     mask = (~df_network.isin([-1, 1])).all(axis=1)
@@ -313,6 +314,13 @@ def preprocess_data_mkm(arguments, mode):
         help="""Toggle to plot LFESRs. (default: False)""",
     )
     parser.add_argument(
+        "-k",
+        "--kinetic",
+        dest="kinetic_mode",
+        action="store_true",
+        help="""Toggle to read and use kinetic profiles. (default: False)""",
+    )
+    parser.add_argument(
         "-iq",
         "--iq",
         dest="int_quality",
@@ -390,15 +398,20 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
     )
 
     args = parser.parse_args(arguments)
+    verb = args.verb
+    wdir = args.dir
+    profile_choice = args.profile_choice
+    x_scale = args.xscale
+    more_species_mkm = args.addition
+    quality = args.int_quality
+    temperatures = args.temp
+    kinetic_mode = args.kinetic_mode
+    t_finals = args.time
+    ncore = args.ncore
+    imputer_strat = args.imputer_strat
+
     if mode == "mkm_solo":
-        verb = args.verb
-        wdir = args.dir
-        x_scale = args.xscale
-        more_species_mkm = args.addition
         profile_choice = args.profile_choice
-        quality = args.int_quality
-        t_finals = args.time
-        temperatures = args.temp
 
         if t_finals is None:
             if verb > 0:
@@ -427,7 +440,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
 
-        kinetic_mode = check_existence(wdir, verb)
+        check_existence(wdir, kinetic_mode, verb)
         ks = None
         if kinetic_mode:
             filename_xlsx = Path(wdir, "kinetic_data.xlsx")
@@ -498,22 +511,14 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         lmargin = args.lmargin
         rmargin = args.rmargin
         xbase = args.xbase
-        verb = args.verb
-        wdir = args.dir
-        imputer_strat = args.imputer_strat
         report_as_yield = args.percent
-        quality = args.int_quality
         p_quality = args.plot_quality
         plotmode = args.plotmode
-        more_species_mkm = args.addition
         lfesr = args.lfesr
         x_scale = args.xscale
         comp_ci = args.confidence_interval
-        ncore = args.ncore
         nd = args.run_mode
         lfesrs_idx = args.idx
-        times = args.time
-        temperatures = args.temp
 
         nx_path = Path(wdir, "rxn_network.csv")
         df_network = pd.read_csv(nx_path, index_col=0)
@@ -521,7 +526,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])
 
-        kinetic_mode = check_existence(wdir, verb)
+        check_existence(wdir, kinetic_mode, verb)
         if kinetic_mode:
             filename_xlsx = Path(wdir, "kinetic_data.xlsx")
             filename_csv = Path(wdir, "kinetic_data.csv")
@@ -577,24 +582,14 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
             ncore,
             nd,
             lfesrs_idx,
-            times,
+            t_finals,
             temperatures,
             kinetic_mode,
         )
 
     elif mode == "mkm_cond":
-        wdir = args.dir
-        x_scale = args.xscale
         plot_evo = args.plot_evo
         map_tt = args.map
-        ncore = args.ncore
-        more_species_mkm = args.addition
-        imputer_strat = args.imputer_strat
-        verb = args.verb
-        profile_choice = args.profile_choice
-        quality = args.int_quality
-        t_finals = args.time
-        temperatures = args.temp
 
         if t_finals is None:
             t_finals = [86400]
@@ -610,7 +605,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         elif len(temperatures) > 1:
             pass
 
-        kinetic_mode = check_existence(wdir, verb)
+        check_existence(wdir, kinetic_mode, verb)
         nx_path = Path(wdir, "rxn_network.csv")
         df_network = pd.read_csv(nx_path, index_col=0)
         df_network.fillna(0, inplace=True)
@@ -696,9 +691,14 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         )
 
 
-def process_data_mkm(
-    dg: np.ndarray, df_network: pd.DataFrame, tags: List[str], states: List[str]
-) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[np.ndarray], np.ndarray]:
+def process_data_mkm(dg: np.ndarray,
+                     df_network: pd.DataFrame,
+                     tags: List[str],
+                     states: List[str]) -> Tuple[np.ndarray,
+                                                 List[np.ndarray],
+                                                 List[float],
+                                                 List[np.ndarray],
+                                                 np.ndarray]:
     """
     Processes data for micokinetic modeling.
 
@@ -765,7 +765,8 @@ def process_data_mkm(
             loc_nx = np.where(np.array(states) == all_df[i + 1].columns[2])[0]
         # int to which new cycle is connected (the first -1)
 
-        if df_network.columns.to_list()[branch_step + 1].lower().startswith("p"):
+        if df_network.columns.to_list()[
+                branch_step + 1].lower().startswith("p"):
             # conneting profiles
             cp_idx = branch_step
         else:
@@ -923,7 +924,8 @@ def test_process_data_mkm():
 
     assert np.array_equal(dgr_all, dgr_all_expected)
     assert len(coeff_ts_all) == len(coeff_ts_all_expected)
-    for coeff_ts, coeff_ts_expected in zip(coeff_ts_all, coeff_ts_all_expected):
+    for coeff_ts, coeff_ts_expected in zip(
+            coeff_ts_all, coeff_ts_all_expected):
         assert np.array_equal(coeff_ts, coeff_ts_expected)
 
     assert np.array_equal(rxn_network_all, rxn_network_all_expected)
