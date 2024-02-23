@@ -49,7 +49,7 @@ def yesno(question):
         return False
 
 
-def check_existence(wdir, verb, kinetic_mode):
+def check_existence(wdir, kinetic_mode, verb):
     """Check for the existence of necessary files."""
     kinetic_mode = False
     k_exist = False
@@ -439,7 +439,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         df_network.fillna(0, inplace=True)
         states = df_network.columns[:].tolist()
 
-        check_existence(wdir, verb)
+        check_existence(wdir, kinetic_mode, verb)
         ks = None
         if kinetic_mode:
             filename_xlsx = Path(wdir, "kinetic_data.xlsx")
@@ -525,7 +525,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         states = df_network.columns[:].tolist()
         n_target = len([states.index(i) for i in states if "*" in i])
 
-        check_existence(wdir, verb)
+        check_existence(wdir, kinetic_mode, verb)
         if kinetic_mode:
             filename_xlsx = Path(wdir, "kinetic_data.xlsx")
             filename_csv = Path(wdir, "kinetic_data.csv")
@@ -604,7 +604,7 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         elif len(temperatures) > 1:
             pass
 
-        check_existence(wdir, verb)
+        check_existence(wdir, kinetic_mode, verb)
         nx_path = Path(wdir, "rxn_network.csv")
         df_network = pd.read_csv(nx_path, index_col=0)
         df_network.fillna(0, inplace=True)
