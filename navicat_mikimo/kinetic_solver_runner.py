@@ -317,7 +317,7 @@ def test_get_k():
     # Test case 1: CoL6 pincer co2
     energy_profile = np.array([0.0, 14.6, 0.5, 20.1, -1.7, 20.1])
     dgr = 2.2
-    coeff_TS = np.array([0, 1, 0, 1, 0, 1])
+    coeff_TS = np.array([0, 1, 0, 1, 0, 1], dtype=np.int32)
     temperature = 298.15
 
     expected_k_forward = np.array([1.23420642e02, 2.66908478e-02, 6.51255161e-04])
@@ -331,7 +331,7 @@ def test_get_k():
     # Test case 2
     energy_profile = np.array([0.0, 5.0, -5.0, 8.0])
     dgr = -12.0
-    coeff_TS = np.array([0, 1, 0, 1])
+    coeff_TS = np.array([0, 1, 0, 1], dtype=np.int32)
     temperature = 298.15
 
     expected_k_forward = np.array([1.34349679e09, 1.83736712e03])
@@ -350,8 +350,8 @@ def test_add_rate():
     y = np.array([1.0, 2.0, 3.0, 4.0])
     k_forward_all = np.array([1.0, 2.0, 3.0])
     k_reverse_all = np.array([0.5, 1.0, 1.5])
-    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]])
-    a = 0
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]], dtype=np.int32)
+    a = int(0)
 
     expected_rate = 1.0 * (1.0 ** np.abs(-1)) - 0.5 * (2.0 ** np.abs(1))
 
@@ -363,8 +363,8 @@ def test_add_rate():
     y = np.array([1.5, 2.5, 3.5, 4.5])
     k_forward_all = np.array([2.0, 3.0])
     k_reverse_all = np.array([1.0, 1.5])
-    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0]])
-    a = 1
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0]], dtype=np.int32)
+    a = int(1)
 
     expected_rate = 3.0 * (2.5 ** np.abs(-1)) - 1.5 * (3.5 ** np.abs(1))
 
@@ -376,8 +376,8 @@ def test_add_rate():
     y = np.array([1.0, 2.0, 3.0, 4.0])
     k_forward_all = np.array([1.0, 1.0, 1.0])
     k_reverse_all = np.array([1.0, 1.0, 1.0])
-    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]])
-    a = 2
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]], dtype=np.int32)
+    a = int(2)
 
     expected_rate = 1.0 * (1.0 ** np.abs(-1)) - 1.0 * (2.0 ** np.abs(1))
 
@@ -418,9 +418,10 @@ def test_add_rate():
             [0.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0, -1.0, 0.0, 0.0],
             [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0],
             [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0],
-        ]
+        ],
+        dtype=np.int32,
     )
-    a = 4
+    a = int(4)
 
     expected_rate = -2.2396083183576385
 
@@ -436,8 +437,8 @@ def test_calc_dX_dt():
     y = np.array([1.0, 2.0, 3.0, 4.0])
     k_forward_all = np.array([1.0, 2.0, 3.0])
     k_reverse_all = np.array([0.5, 1.0, 1.5])
-    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]])
-    a = 0
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]], dtype=np.int32)
+    a = int(0)
 
     expected_dX_dt = 1.0 * (1.0 ** np.abs(-1)) - 0.5 * (2.0 ** np.abs(1))
 
@@ -449,8 +450,8 @@ def test_calc_dX_dt():
     y = np.array([1.5, 2.5, 3.5, 4.5])
     k_forward_all = np.array([2.0, 3.0])
     k_reverse_all = np.array([1.0, 1.5])
-    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0]])
-    a = 1
+    rxn_network_all = np.array([[-1, 1, 0, 0], [0, -1, 1, 0]], dtype=np.int32)
+    a = int(1)
 
     expected_dX_dt = (
         -3.0 * (2.5 ** np.abs(-1))
@@ -495,9 +496,9 @@ def test_calc_dX_dt():
             [0.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0, -1.0, 0.0, 0.0],
             [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0],
             [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0],
-        ]
+        ], dtype=np.int32
     )
-    a = 0
+    a = int(0)
 
     expected_dX_dt = -2.29310268633785
 
@@ -561,7 +562,7 @@ def test_system_KE_DE():
             [1.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, -1.0, 0.0],
             [-1.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, -1.0, 1.0],
-        ]
+        ], dtype=np.int32
     )
     dydt = system_KE_DE(
         k_forward_all, k_reverse_all, rxn_network_all, initial_conc, states
@@ -605,6 +606,66 @@ def test_system_KE_DE():
     c_target_t = np.around(c_target_t, decimals=4)
     expected_c_target_t = np.array([6.336e-01, 3.160e-01, 0.000])
     assert_allclose(c_target_t, expected_c_target_t)
+
+
+
+def test_calc_km():
+    energy_profile_all = [np.array([0., -19.82, -4.65, -24.45, -39.79, -22.53, -32.12, -38.17,
+                                    -49.23, -36.45], dtype=float),
+                          np.array([-19.82, -4.36, -19.97, -38.49, -15.51, -29.72, -35.33, -48.19,
+                                    -36.37], dtype=float)]
+    dgr_all = [-28.71, -30.07]
+    coeff_TS_all = [np.array([0, 0, 1, 0, 0, 1, 0, 1, 0, 1], dtype=np.int32),
+                    np.array([0, 1, 0, 0, 1, 0, 1, 0, 1], dtype=np.int32)]
+    rxn_network_all = np.array([
+        [-1, 1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0],
+        [0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0],
+        [0, 0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, -1, 1, 0, 0, 0, 0, 0, 0, -1, 0, 0],
+        [1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+        [0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, -1, 1, 0, 0, 0, -1, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, -1, 1, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, -1, 1, 0, 0, -1, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1]], dtype=np.int32) 
+    temperature = 393.15
+    t_span = (0, 86400)
+    initial_conc = np.array(
+        [0.01, 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 1., 1., 0., 0.], dtype=float)
+    states = [
+        'INT2',
+        'INT3',
+        'INT4L',
+        'INT5L',
+        'INT6L',
+        'INT7L',
+        'INT4B',
+        'INT5B',
+        'INT6B',
+        'INT7B',
+        'R-alkene',
+        'R-CO',
+        'R-H$_2$',
+        'P-L*',
+        'P-B*']
+    expected_res = np.array([0.14785136, 0.84215103])
+    res, _ = calc_km(
+        energy_profile_all,
+        dgr_all,
+        coeff_TS_all,
+        rxn_network_all,
+        temperature,
+        t_span,
+        initial_conc,
+        states,
+        report_as_yield=False,
+        quality=2,
+        ks=None,
+    )
+    res = np.around(res, decimals=3) 
+    expected_res = np.around(expected_res, decimals=3)
+    assert_allclose(expected_res, np.array(res))
 
 
 def main():
