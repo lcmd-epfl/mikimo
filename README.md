@@ -1,4 +1,4 @@
-# mikimo: microkinetic modeling and microkinetic volcano plots for homogeneous catalytic reactions
+# mikimo: microkinetic modeling and microkinetic volcano plots for homogeneous catalytic reactions (cython version)
 
 ![workflow](./images/logo.png)
 
@@ -33,7 +33,8 @@
 
 
 ## Dependencies [↑](#dependencies)
-The code runs on Python and Cython (>=0.29.22) with the following dependencies: 
+The code runs on Python and Cython (>=3.0.0) with the following dependencies: 
+- `Cython`
 - `numpy`
 - `scipy`
 - `autograd`

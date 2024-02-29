@@ -1,4 +1,5 @@
-numpy==1.24.1
+Cython>=3.0.0
+numpy=1.24.1
 scipy==1.10.0
 autograd==1.5
 matplotlib==3.6.3
