@@ -1,5 +1,7 @@
 # mikimo: microkinetic modeling and microkinetic volcano plots for homogeneous catalytic reactions
-[![DOI](https://zenodo.org/badge/381737392.svg)](https://zenodo.org/records/12731466)
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12731466.svg)](https://doi.org/10.5281/zenodo.12731466)
+[![PyPI version](https://badge.fury.io/py/navicat_mikimo.svg)](https://pypi.org/project/navicat-mikimo/)
 
 ![workflow](./images/logo.png)
 
