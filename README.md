@@ -1,4 +1,5 @@
 # mikimo: microkinetic modeling and microkinetic volcano plots for homogeneous catalytic reactions
+[![DOI](https://zenodo.org/badge/381737392.svg)](https://zenodo.org/records/12731466)
 
 ![workflow](./images/logo.png)
 
@@ -173,6 +174,10 @@ To overcome these limitations and offer more flexibility, users have the option 
 
 ## Citation [↑](#citation)
 
-If you use navicat_mikimo in your work, please cite our work and the forthcoming publication.
+If you use navicat_mikimo in your work, please cite our work and the publication.
 
+```
+Worakul, T., Laplaza, R., Das, S., Wodrich, M.D., Corminboeuf, C., Microkinetic Molecular Volcano Plots for Enhanced Catalyst Selectivity and Activity Predictions. ACS Catalysis 2024 14 (13), 9829-9839. 
+```
+[![DOI](https://img.shields.io/badge/DOI-10.1021/acscatal.4c01175-red)](https://pubs.acs.org/doi/10.1021/acscatal.4c01175)
 
