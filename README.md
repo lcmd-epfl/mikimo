@@ -52,7 +52,7 @@ The code runs on pure python with the following dependencies:
 ## Install [↑](#install)
 
 ```python
-pip install .
+pip install navicat-mikimo
 ```
 
 or 
