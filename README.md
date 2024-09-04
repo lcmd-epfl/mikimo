@@ -61,6 +61,9 @@ or
 python setup.py install
 ```
 
+We also have a faster Cythonized version of the code available. It can be accessed in the `mikimo_cyth` branch.
+
+
 ## Usages [↑](#usages)
 
 The code requires two essential inputs for the analysis: energy data and reaction network (along with initial concentrations to be incorporated in the reaction network). All these files must be in the working directory or in the directory targeted with the `-d` option..
