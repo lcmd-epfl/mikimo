@@ -1,4 +1,7 @@
-# mikimo: microkinetic modeling and microkinetic volcano plots for homogeneous catalytic reactions (cython version)
+# mikimo: microkinetic modeling and microkinetic volcano plots for homogeneous catalytic reactions
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12731466.svg)](https://doi.org/10.5281/zenodo.12731466)
+[![PyPI version](https://badge.fury.io/py/navicat_mikimo.svg)](https://pypi.org/project/navicat-mikimo/)
 
 ![workflow](./images/logo.png)
 
@@ -33,8 +36,7 @@
 
 
 ## Dependencies [↑](#dependencies)
-The code runs on Python and Cython (>=3.0.0) with the following dependencies: 
-- `Cython`
+The code runs on pure python with the following dependencies: 
 - `numpy`
 - `scipy`
 - `autograd`
@@ -56,7 +58,7 @@ pip install .
 or 
 
 ```python
-python setup.py install build_ext --inplace
+python setup.py install
 ```
 
 ## Usages [↑](#usages)
@@ -155,7 +157,7 @@ python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 
 7. Using filtering to smooth the plot:
 
 ```python
-python replot.py examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
+python -m navicat_mikimo replot examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
 ```
 
 You can find examples demonstrating how to read h5 files and regenerate plots in the "examples" folder.
@@ -174,6 +176,10 @@ To overcome these limitations and offer more flexibility, users have the option 
 
 ## Citation [↑](#citation)
 
-If you use navicat_mikimo in your work, please cite our work and the forthcoming publication.
+If you use navicat_mikimo in your work, please cite our work and the publication.
 
+```
+Worakul, T., Laplaza, R., Das, S., Wodrich, M.D., Corminboeuf, C., Microkinetic Molecular Volcano Plots for Enhanced Catalyst Selectivity and Activity Predictions. ACS Catalysis 2024 14 (13), 9829-9839. 
+```
+[![DOI](https://img.shields.io/badge/DOI-10.1021/acscatal.4c01175-red)](https://pubs.acs.org/doi/10.1021/acscatal.4c01175)
 
