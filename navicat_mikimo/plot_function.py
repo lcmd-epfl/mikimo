@@ -1,3 +1,4 @@
+import json
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -260,10 +261,15 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
         tail = str(f"_{name}")
 
     fig.savefig(f"mkm{tail}.png", dpi=400)
-    np.savetxt(f"t{tail}.txt", result_solve_ivp.t)
-    np.savetxt(f"cat{tail}.txt", result_solve_ivp.y[0, :])
-    np.savetxt(f"Rs{tail}.txt", result_solve_ivp.y[r_indices])
-    np.savetxt(f"Ps{tail}.txt", result_solve_ivp.y[p_indices])
+    output_data = {
+        "time": result_solve_ivp.t.tolist(),
+        "catalyst": result_solve_ivp.y[0, :].tolist(),
+        "reactants": result_solve_ivp.y[r_indices].tolist(),
+        "products": result_solve_ivp.y[p_indices].tolist(),
+    }
+
+    with open(f"mkm_output{tail}.json", "w") as f:
+        json.dump(output_data, f, indent=4)
 
 
 def plot_save_cond(x, Pfs, var, prod_name, verb=1):
