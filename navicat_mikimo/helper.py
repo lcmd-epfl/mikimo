@@ -8,8 +8,6 @@ from typing import List, Tuple
 
 import autograd.numpy as np
 import pandas as pd
-from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -24,6 +22,11 @@ def call_imputter(imp_alg):
     Returns:
         An instance of the specified imputer type.
     """
+    # Lazy import to avoid paying sklearn import cost on code paths that do not
+    # use missing-value imputation.
+    from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+    from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
+
     if imp_alg == "knn":
         imputer = KNNImputer(n_neighbors=5, weights="uniform")
     elif imp_alg == "iterative":

@@ -668,6 +668,74 @@ def test_calc_km():
     assert_allclose(expected_res, np.array(res))
 
 
+def _extract_initial_concentrations(df_network):
+    initial_conc = np.array([])
+    last_row_index = df_network.index[-1]
+    if isinstance(last_row_index, str):
+        if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
+            initial_conc = df_network.iloc[-1:].to_numpy()[0]
+            df_network = df_network.drop(df_network.index[-1])
+    return initial_conc, df_network
+
+
+def _run_simulation_with_kinetic_profile(
+    df_network,
+    states,
+    temperature,
+    t_span,
+    quality,
+    ks,
+):
+    initial_conc, df_network = _extract_initial_concentrations(df_network)
+    rxn_network_all = df_network.to_numpy()[:, :]
+    ks_actual = 10 ** ks
+    _, result_solve_ivp = calc_km(
+        None,
+        None,
+        None,
+        rxn_network_all,
+        temperature,
+        t_span,
+        initial_conc,
+        states,
+        report_as_yield=False,
+        quality=quality,
+        ks=ks_actual,
+    )
+    return initial_conc, result_solve_ivp
+
+
+def _run_simulation_with_energy_profile(
+    dg,
+    df_network,
+    tags,
+    states,
+    temperature,
+    t_span,
+):
+    (
+        initial_conc,
+        energy_profile_all,
+        dgr_all,
+        coeff_TS_all,
+        rxn_network_all,
+    ) = process_data_mkm(dg, df_network, tags, states)
+    _, result_solve_ivp = calc_km(
+        energy_profile_all,
+        dgr_all,
+        coeff_TS_all,
+        rxn_network_all,
+        temperature,
+        t_span,
+        initial_conc,
+        states,
+        report_as_yield=False,
+        quality=2,
+        ks=None,
+    )
+    return initial_conc, result_solve_ivp
+
+
 def main():
     (
         dg,
@@ -682,50 +750,24 @@ def main():
         quality,
     ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")
 
+    t_span = (0, t_final)
     if ks is not None:
-        t_span = (0, t_final)
-        initial_conc = np.array([])
-        last_row_index = df_network.index[-1]
-        if isinstance(last_row_index, str):
-            if last_row_index.lower() in ["initial_conc", "c0", "initial conc"]:
-                initial_conc = df_network.iloc[-1:].to_numpy()[0]
-                df_network = df_network.drop(df_network.index[-1])
-        rxn_network_all = df_network.to_numpy()[:, :]
-        ks_actual = 10**ks
-        _, result_solve_ivp = calc_km(
-            None,
-            None,
-            None,
-            rxn_network_all,
-            temperature,
-            t_span,
-            initial_conc,
-            states,
-            report_as_yield=False,
+        initial_conc, result_solve_ivp = _run_simulation_with_kinetic_profile(
+            df_network=df_network,
+            states=states,
+            temperature=temperature,
+            t_span=t_span,
             quality=quality,
-            ks=ks_actual,
+            ks=ks,
         )
     else:
-        (
-            initial_conc,
-            energy_profile_all,
-            dgr_all,
-            coeff_TS_all,
-            rxn_network_all,
-        ) = process_data_mkm(dg, df_network, tags, states)
-        t_span = (0, t_final)
-        _, result_solve_ivp = calc_km(
-            energy_profile_all,
-            dgr_all,
-            coeff_TS_all,
-            rxn_network_all,
-            temperature,
-            t_span,
-            initial_conc,
-            states,
-            report_as_yield=False,
-            quality=2,
-            ks=None,
+        initial_conc, result_solve_ivp = _run_simulation_with_energy_profile(
+            dg=dg,
+            df_network=df_network,
+            tags=tags,
+            states=states,
+            temperature=temperature,
+            t_span=t_span,
         )
 
     states_ = [s.replace("*", "") for s in states]

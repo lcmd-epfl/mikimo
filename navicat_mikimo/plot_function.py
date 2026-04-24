@@ -136,7 +136,12 @@ def plot_evo(result_solve_ivp, name, states, x_scale, more_species_mkm=None):
     plt.ylim(ymin, ymax)
     plt.yticks(np.arange(0, ymax + 0.1, ybase))
     filename_out = str(f"mkm_{name}.png")
-    fig.savefig(filename_out, dpi=400)
+    fig.savefig(
+        filename_out,
+        dpi=400,
+        pil_kwargs={"compress_level": 1, "optimize": False},
+    )
+    plt.close(fig)
 
 
 def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
@@ -260,7 +265,12 @@ def plot_evo_save(result_solve_ivp, name, states, x_scale, more_species_mkm):
     else:
         tail = str(f"_{name}")
 
-    fig.savefig(f"mkm{tail}.png", dpi=400)
+    fig.savefig(
+        f"mkm{tail}.png",
+        dpi=400,
+        pil_kwargs={"compress_level": 1, "optimize": False},
+    )
+    plt.close(fig)
     output_data = {
         "time": result_solve_ivp.t.tolist(),
         "catalyst": result_solve_ivp.y[0, :].tolist(),
@@ -312,7 +322,12 @@ def plot_save_cond(x, Pfs, var, prod_name, verb=1):
     plt.legend(loc="best")
     plt.xlabel(var)
     plt.ylabel("Product concentration (M)")
-    fig.savefig(f"{var}_screen.png", dpi=400)
+    fig.savefig(
+        f"{var}_screen.png",
+        dpi=400,
+        pil_kwargs={"compress_level": 1, "optimize": False},
+    )
+    plt.close(fig)
 
     if "Temperature" in var:
         var = "temperature"
@@ -455,7 +470,12 @@ def plot_2d_combo(
     plt.ylim(0, ymax)
     plt.yticks(np.arange(0, ymax + 0.1, ybase))
     plt.legend(fontsize=10, loc="upper right", frameon=False, borderpad=0)
-    fig.savefig(filename, dpi=400)
+    fig.savefig(
+        filename,
+        dpi=400,
+        pil_kwargs={"compress_level": 1, "optimize": False},
+    )
+    plt.close(fig)
 
 
 def plot_3d_m(
@@ -529,7 +549,8 @@ def plot_3d_m(
             linewidths=0.15,
             edgecolors="black",
         )
-    plt.savefig(filename)
+    plt.savefig(filename, pil_kwargs={"compress_level": 1, "optimize": False})
+    plt.close()
 
 
 def plot_3d_np(
@@ -588,7 +609,8 @@ def plot_3d_np(
     cbar.set_ticks(tick_positions)
     cbar.set_ticklabels(tick_labels)
 
-    plt.savefig(filename)
+    plt.savefig(filename, pil_kwargs={"compress_level": 1, "optimize": False})
+    plt.close()
 
 
 def plot_3d_contour_regions_np(
@@ -647,4 +669,5 @@ def plot_3d_contour_regions_np(
             rotation=90,
         )
         cbar.ax.get_yaxis().labelpad = 20
-    plt.savefig(filename)
+    plt.savefig(filename, pil_kwargs={"compress_level": 1, "optimize": False})
+    plt.close()

@@ -11,7 +11,7 @@ from navicat_volcanic.helpers import bround
 from scipy.integrate import solve_ivp
 from tqdm import tqdm
 
-from .helper import preprocess_data_mkm, process_data_mkm, call_imputter
+from .helper import call_imputter, preprocess_data_mkm, process_data_mkm
 from .kinetic_solver import calc_k, system_KE_DE
 from .kinetic_solver_runner import calc_km
 from .plot_function import (
@@ -20,6 +20,7 @@ from .plot_function import (
     plot_evo_save,
     plot_save_cond,
 )
+
 
 def run_mkm_3d(
     grid: Tuple[np.ndarray, np.ndarray],
@@ -80,7 +81,7 @@ def run_mkm_3d(
     atol_values = [1e-9, 1e-9, 1e-10]
     last_ = [rtol_values[-1], atol_values[-1]]
     success = False
-    while success == False:
+    while not success:
         atol = atol_values.pop(0)
         rtol = rtol_values.pop(0)
         try:
@@ -150,7 +151,7 @@ def main():
 
     if map_tt:
         if verb > 0:
-            print(f"-------Constructing time-temperature map-------\n")
+            print("-------Constructing time-temperature map-------\n")
             print(f"Time span: {t_finals} s")
             print(f"Temperature span: {temperatures} s")
         assert (
@@ -230,7 +231,7 @@ def main():
         x2label = "log$_{10}$(Time) [s]"
 
         alabel = "Total product concentration [M]"
-        afilename = f"time_temperature_activity_map.png"
+        afilename = "time_temperature_activity_map.png"
 
         activity_grid = np.sum(grid_d_fill, axis=0)
         amin = activity_grid.min()
@@ -424,9 +425,7 @@ def main():
 
         elif len(t_finals) > 1 and len(temperatures) > 1:
             if verb > 0:
-                print(
-                    f"-------Screening over both reaction time and temperature-------\n"
-                )
+                print("-------Screening over both reaction time and temperature-------\n")
                 print(f"{t_finals} s")
                 print(f"{temperatures} K\n")
             combinations = list(itertools.product(t_finals, temperatures))
@@ -481,13 +480,8 @@ def main():
                 data_dict[prod_name[i]] = product_conc
 
             df = pd.DataFrame(data_dict)
-            df.to_csv(f"time_temperature_screen.csv", index=False)
+            df.to_csv("time_temperature_screen.csv", index=False)
             if verb > 0:
                 print(df.to_string(index=False))
 
-    print(
-        """\nI have a heart that can't be filled
-Cast me an unbreaking spell to make these uplifting extraordinary day pours down
-Alone in the noisy neon city
-steps that feels like about to break my heels ."""
-    )
+    return None

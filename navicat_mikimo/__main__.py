@@ -1,13 +1,28 @@
+import importlib
 import sys
 
 import fire
 
-from . import kinetic_solver_runner, km_volcanic, screen_reaction_condition
+
+def _get_mode_handler(mode):
+    modules = {
+        "mkm": "navicat_mikimo.kinetic_solver_runner",
+        "vp": "navicat_mikimo.km_volcanic",
+        "cond": "navicat_mikimo.screen_reaction_condition",
+    }
+    if mode not in modules:
+        raise ValueError(
+            f"Unknown mode '{mode}'. Valid modes are: mkm, vp, cond."
+        )
+    module = importlib.import_module(modules[mode])
+    return module.main
 
 
 def run(mode):
     """
-    Perform microkinetic modelling (mkm) for homogeneous reaction using energy data and the coulping with volcanic to perform mkm in a high-throughput fashion.
+    Perform microkinetic modelling (mkm) for homogeneous reactions.
+
+    Uses energy data and coupling with volcanic for high-throughput runs.
 
     Run mikimo by the specified mode, which can be one of the following:
     - 'mkm': Perform a single MKM run using the top-most row in the reaction data file.
@@ -25,12 +40,7 @@ def run(mode):
     Returns:
         None
     """
-    if mode == "mkm":
-        sys.exit(kinetic_solver_runner.main())
-    elif mode == "vp":
-        sys.exit(km_volcanic.main())
-    elif mode == "cond":
-        sys.exit(screen_reaction_condition.main())
+    sys.exit(_get_mode_handler(mode)())
 
 
 def main():
