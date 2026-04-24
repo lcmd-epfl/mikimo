@@ -25,6 +25,7 @@ def build_legacy_argv_from_dict(cfg: Dict[str, Any]) -> List[str]:
         "-e",
         str(shared.get("profile_choice", 0)),
     ]
+    argv.extend(["--outdir", str(shared.get("outdir", "."))])
     _append_list_option(argv, "-Tf", shared.get("time"))
     _append_list_option(argv, "-t", shared.get("temp"))
     argv.extend(["-x", str(shared.get("xscale", "ls"))])
@@ -33,6 +34,8 @@ def build_legacy_argv_from_dict(cfg: Dict[str, Any]) -> List[str]:
     argv.extend(["-ncore", str(shared.get("ncore", 1))])
     argv.extend(["-is", str(shared.get("imputer_strat", "knn"))])
     argv.extend(["-v", str(shared.get("verb", 2))])
+    if shared.get("quiet"):
+        argv.append("--quiet")
     if shared.get("kinetic_mode"):
         argv.append("-k")
 

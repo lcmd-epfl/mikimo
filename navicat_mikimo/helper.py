@@ -3,15 +3,17 @@ import logging
 import multiprocessing
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
 
 import autograd.numpy as np
 import pandas as pd
 
+from navicat_mikimo.console import configure_console, item, section
 from navicat_mikimo.io_config import build_config_from_namespace
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.WARNING, format="[%(levelname)s] %(message)s")
 
 
 def call_imputter(imp_alg):
@@ -180,7 +182,7 @@ def check_km_inp(
     if weird_step:
         clear = False
         for s in weird_step:
-            print(f"\nYour step {s} is likely wrong.")
+            print(item("Likely malformed network step", s))
 
     mask_r = (~df_network.iloc[:, r_indices].isin([-1])).all(axis=0).to_numpy()
     if mask_r.any():
@@ -218,6 +220,14 @@ def preprocess_data_mkm(arguments, mode):
         default=".",
         type=str,
         help="Directory containing all required input files (reaction_data, rxn_network in csv or xlsx format)",
+    )
+    parser.add_argument(
+        "-o",
+        "--outdir",
+        dest="outdir",
+        default=".",
+        type=str,
+        help="Directory for generated outputs (default: current working directory).",
     )
     parser.add_argument(
         "-e",
@@ -372,10 +382,18 @@ def preprocess_data_mkm(arguments, mode):
         "-v",
         "--v",
         "--verb",
+        "--verbose",
         dest="verb",
         type=int,
         default=2,
         help="Verbosity level of the code. Higher is more verbose and vice versa. Set to at least 2 to generate csv/h5 output files. (default: 1)",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        dest="quiet",
+        action="store_true",
+        help="Reduce console output (equivalent to verbosity 0).",
     )
     parser.add_argument(
         "-ncore",
@@ -405,8 +423,28 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
     cli_cfg = build_config_from_namespace(args, mode)
     shared = cli_cfg.shared
 
-    verb = shared.verb
-    wdir = shared.dir
+    verb = 0 if shared.quiet else shared.verb
+    configure_console()
+    logging.getLogger().setLevel(logging.ERROR if verb == 0 else logging.WARNING)
+    wdir = str(Path(shared.dir).resolve())
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    default_outdir_by_mode = {
+        "mkm_solo": Path("outputs") / "mkm" / stamp,
+        "mkm_screening": Path("outputs") / "vp" / stamp,
+        "mkm_cond": Path("outputs") / "cond" / stamp,
+    }
+    raw_outdir = shared.outdir
+    if raw_outdir == "." and mode in default_outdir_by_mode:
+        raw_outdir = str(default_outdir_by_mode[mode])
+
+    outdir = Path(raw_outdir).expanduser()
+    if not outdir.is_absolute():
+        outdir = (Path.cwd() / outdir).resolve()
+    outdir.mkdir(parents=True, exist_ok=True)
+    os.chdir(outdir)
+    if verb > 0:
+        print(section("Run Configuration"))
+        print(item("Output directory", outdir))
     profile_choice = shared.profile_choice
     x_scale = shared.xscale
     more_species_mkm = shared.addition
@@ -422,24 +460,24 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
 
         if t_finals is None:
             if verb > 0:
-                print("No time input, use the default value of 86400 s (1d).")
+                print(item("Info", "No time input; using default 86400 s (1 day)."))
             t_finals = 86400
         elif len(t_finals) == 1:
             t_finals = t_finals[0]
         elif len(t_finals) > 1:
             if verb > 0:
-                print("t_final is a range, use the first value.")
+                print(item("Info", "Time range provided; using first value."))
             t_finals = t_finals[0]
 
         if temperatures is None:
             if verb > 0:
-                print("No temperature input, use the default value of 298.15 K.")
+                print(item("Info", "No temperature input; using default 298.15 K."))
             temperatures = 298.15
         elif len(temperatures) == 1:
             temperatures = temperatures[0]
         elif len(temperatures) > 1:
             if verb > 0:
-                print("Temperature input is a range, use the first value.")
+                print(item("Info", "Temperature range provided; using first value."))
             temperatures = temperatures[0]
 
         rnx = Path(wdir, "rxn_network.csv")
@@ -497,10 +535,12 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         clear = check_km_inp(df, df_network)
 
         if not clear:
-            print("\nRecheck your reaction network and your reaction data.\n")
+            print(section("Input Validation"))
+            print(item("Status", "Please recheck reaction network and reaction data."))
         else:
             if verb > 0:
-                print("\nMKM inputs appear to be valid.\n")
+                print(section("Input Validation"))
+                print(item("Status", "MKM inputs appear valid."))
         return (
             dg,
             df_network,
@@ -553,10 +593,12 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
 
             clear = check_km_inp(df, df_network)
             if not clear:
-                print("\nRecheck your reaction network and your reaction data.\n")
+                print(section("Input Validation"))
+                print(item("Status", "Please recheck reaction network and reaction data."))
             else:
                 if verb > 0:
-                    print("\nMKM inputs appear to be valid.\n")
+                    print(section("Input Validation"))
+                    print(item("Status", "MKM inputs appear valid."))
 
         tags = np.array([str(tag) for tag in df.columns[1:]], dtype=object)
         if ncore == -1:
@@ -675,10 +717,12 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         clear = check_km_inp(df, df_network)
 
         if not clear:
-            print("\nRecheck your reaction network and your reaction data.\n")
+            print(section("Input Validation"))
+            print(item("Status", "Please recheck reaction network and reaction data."))
         else:
             if verb > 0:
-                print("\nMKM inputs appear to be valid.\n")
+                print(section("Input Validation"))
+                print(item("Status", "MKM inputs appear valid."))
         return (
             dg,
             df_network,

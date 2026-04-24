@@ -107,6 +107,7 @@ The main tool is `navicat_mikimo`. Below are the available flags:
 | Flag | Long Flag | Description | Default |
 | :--- | :--- | :--- | :--- |
 | `-d` | `--dir` | Directory containing input files. | `.` |
+| `-o` | `--outdir` | Directory where output artifacts are written. | mode-specific timestamped folder |
 | `-e` | `--eprofile_choice` | Index of energy profile to use (for single runs). | `0` |
 | `-t` | `--temp` | Temperature(s) in Kelvin. | `298.15` |
 | `-Tf` | `--Time` | Total reaction time(s) in seconds. | `86400` (1 day) |
@@ -114,6 +115,7 @@ The main tool is `navicat_mikimo`. Below are the available flags:
 | `-nd` | `--run_mode` | `0`: MKM for all profiles, `1`: Volcano Plot, `2`: Activity Map. | `1` |
 | `-ncore`| `--ncore` | Number of CPU cores for parallel computing. | `1` |
 | `-v` | `--verb` | Verbosity level (2 generates output files). | `2` |
+| `-q` | `--quiet` | Minimize console output (sets verbosity to 0). | `False` |
 | `-pm` | `--plotmode` | Plot detail level (`0`-`3`). | `1` |
 | `-p` | `--percent` | Report activity as percent yield instead of concentration. | `False` |
 | `-ev` | `--plot_evo` | Toggle to generate evolution plots for all profiles. | `False` |
@@ -129,7 +131,7 @@ The code offers three main modes of operation:
 ### 1. Single MKM Run (`mkm`)
 Performs a single microkinetic modeling run. If multiple profiles exist, the top-most row (or specified via `-e`) is used.
 ```python
-python -m navicat_mikimo mkm -d [DIR]
+navicat_mikimo mkm -d [DIR]
 ```
 
 ### 2. Screening / Volcano Plots (`vp`)
@@ -139,16 +141,28 @@ Screens over all profiles in the reaction data file.
 *   **Activity/Selectivity Map:** `-nd 2`
 
 ```python
-python -m navicat_mikimo vp -d [DIR] -nd 1
+navicat_mikimo vp -d [DIR] -nd 1
 ```
 
 ### 3. Conditions Screening (`cond`)
 Screens over reaction time and/or temperature ranges.
 ```python
-python -m navicat_mikimo cond -d [DIR]
+navicat_mikimo cond -d [DIR]
 ```
 
 ## Outputs [↑](#outputs)
+
+Default output locations:
+- `mkm`: `outputs/mkm/<timestamp>/`
+- `vp`: `outputs/vp/<timestamp>/`
+- `cond`: `outputs/cond/<timestamp>/`
+
+Timestamp format: `YYYYmmdd_HHMMSS` (for example `20260424_195500`).
+Use `--outdir` to override.
+
+Runtime logging:
+- At startup, every mode prints `Run Configuration` with the resolved `Output directory`.
+- At completion, `vp` and `cond` print `Output Summary` listing generated artifacts and the same output directory.
 
 *   **Single Run (`mkm`):** 
     *   `mkm_output.json`: Time-course data.
@@ -174,49 +188,49 @@ python replot.py [h5_file] [options]
 
 **Example:**
 ```python
-python -m navicat_mikimo replot examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
+navicat_mikimo replot examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
 ```
 
 ## Examples [↑](#examples)
 
 1. Microkinetic modeling for Pd-catalyzed carbocyclization-borylation of enallene in the presence of chiral phosphoric acid (298.15 K, 1 min): 
 ```python
-python -m navicat_mikimo mkm -d test_cases/pd_carbocylic_borylation/ -t 298.15 -Tf 60
+navicat_mikimo mkm -d test_cases/pd_carbocylic_borylation/ -t 298.15 -Tf 60
 ```
 
 2. Microkinetic modeling for all profiles of the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
-python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 0
+navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 0
 ```
 
 3. Constructing microkinetic volcano plot for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
-python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 1 -ncore 24
+navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 1 -ncore 24
 ```
 
 4. Constructing microkinetic activity and selectivity maps for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (323.15 K, 2 h):
 ```python
-python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 2 -ncore 24
+navicat_mikimo vp -d test_cases/pincer_CO2/ -t 323.15 -Tf 7200 -nd 2 -ncore 24
 ```
 
 5. Constructing microkinetic activity and selectivity maps with a descriptor variable representing catalyst and temperature [273.15-423.15 K] for the catalytic hydrosilylation of carbon dioxide with metal pincer complexes (2h):
 ```python
-python -m navicat_mikimo vp -d test_cases/pincer_CO2/ -t 273.15 423.15 -Tf 7200 -nd 1 -ncore 24
+navicat_mikimo vp -d test_cases/pincer_CO2/ -t 273.15 423.15 -Tf 7200 -nd 1 -ncore 24
 ```
 
 6. Constructing microkinetic activity and selectivity maps with reaction time [2-24 hr] and temperature [273.15-423.15 K] as descriptors for the catalytic hydrosilylation of carbon dioxide with the Co pincer complex:
 ```python
-python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 -t 273.15 423.15 -ncore 24
+navicat_mikimo cond -d test_cases/pincer_CO2_jacs/ -tt -Tf 7200 86400 -t 273.15 423.15 -ncore 24
 ```
 
 7. Generate evolution plots for all profiles in a dataset:
 ```python
-python -m navicat_mikimo vp -d [DIR] -nd 0 -ev
+navicat_mikimo vp -d [DIR] -nd 0 -ev
 ```
 
 8. Using filtering to smooth the plot:
 ```python
-python -m navicat_mikimo replot examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
+navicat_mikimo replot examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
 ```
 
 You can find examples demonstrating how to read h5 files and regenerate plots in the "examples" folder.
@@ -227,16 +241,25 @@ For reproducible runs, you can use either a YAML config file or Hydra overrides.
 
 1. YAML config runner (simple, explicit file):
 ```bash
-python -m navicat_mikimo.config_runner --config examples/configs/mkm_test1.yaml
+navicat_mikimo_config --config examples/configs/mkm_test1.yaml
 ```
 
 2. Hydra entrypoint (composed config + overrides):
 ```bash
 python -m pip install -e .[hydra]
-python -m navicat_mikimo.hydra_main mode=mkm shared.dir=test_cases/test_1 shared.temp=[298.15] shared.time=[60]
+navicat_mikimo_hydra mode=mkm shared.dir=test_cases/test_1 shared.temp=[298.15] shared.time=[60]
 ```
 
-Current recommendation: keep using legacy `python -m navicat_mikimo ...` commands for day-to-day work while this config workflow is stabilized.
+3. Hydra multirun sweep example:
+```bash
+navicat_mikimo_hydra --multirun mode=mkm shared.dir=test_cases/test_1 shared.temp='[298.15]' shared.time='[30],[60]' shared.verb=0
+```
+
+When to use which:
+- `navicat_mikimo_hydra`: best for interactive overrides and sweeps (`--multirun`).
+- `navicat_mikimo_config`: best for stable, file-based reproducible runs.
+
+Current recommendation: keep using legacy `navicat_mikimo ...` commands for day-to-day work while this config workflow is stabilized.
 
 ## Quickstart Validation [↑](#quickstart-validation)
 
@@ -244,9 +267,9 @@ After installation, run:
 
 ```bash
 pytest -q
-python -m navicat_mikimo mkm -d test_cases/test_1 -t 298.15 -Tf 60 -v 1
-python -m navicat_mikimo vp -d test_cases/pincer_CO2 -t 323.15 -Tf 7200 -nd 0 -ncore 1 -v 1
-python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs -Tf 7200 7300 -t 298.15 -ncore 1 -v 1
+navicat_mikimo mkm -d test_cases/test_1 -t 298.15 -Tf 60 -v 1
+navicat_mikimo vp -d test_cases/pincer_CO2 -t 323.15 -Tf 7200 -nd 0 -ncore 1 -v 1
+navicat_mikimo cond -d test_cases/pincer_CO2_jacs -Tf 7200 7300 -t 298.15 -ncore 1 -v 1
 ```
 
 These are the same commands used for current performance baselines in `PERFORMANCE_BASELINE.md`.
@@ -263,6 +286,9 @@ These are the same commands used for current performance baselines in `PERFORMAN
 4. **Unexpected solver behavior in stiff systems**  
    Solver fallback diagnostics are attached on `solve_ivp` results as
    `mikimo_solver_diagnostics` (attempt list, fallback usage, selected method).
+5. **Console color output**  
+   Color is auto-enabled on interactive terminals. Force behavior with:
+   `MIKIMO_COLOR=1` (force on), `MIKIMO_COLOR=0` or `NO_COLOR=1` (force off).
 
 ## Development & Release Workflow [↑](#development--release-workflow)
 

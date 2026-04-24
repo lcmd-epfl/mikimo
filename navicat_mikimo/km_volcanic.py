@@ -3,6 +3,7 @@ import itertools
 import logging
 import multiprocessing
 import sys
+from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 import h5py
@@ -29,6 +30,7 @@ from scipy.interpolate import interp1d
 from tqdm import tqdm
 
 from . import km_k_volcanic
+from .console import item, section
 from .helper import call_imputter, preprocess_data_mkm, process_data_mkm
 from .kinetic_solver_runner import calc_km
 from .plot_function import (
@@ -40,6 +42,21 @@ from .plot_function import (
 )
 
 logging.basicConfig(level=logging.WARNING)
+
+
+def _print_output_summary(paths: List[str], verb: int) -> None:
+    if verb <= 0:
+        return
+    existing = [p for p in paths if Path(p).exists()]
+    if not existing:
+        return
+    print(section("Output Summary"))
+    print(item("Output directory", Path.cwd()))
+    print(item("Artifacts generated", len(existing)))
+    for p in existing[:12]:
+        print(item(" -", p))
+    if len(existing) > 12:
+        print(item(" -", f"... and {len(existing) - 12} more"))
 
 
 def process_n_calc_2d(
@@ -330,9 +347,8 @@ def evol_mode(
         None
     """
     if verb > 0:
-        print(
-            "\n------------Evol mode: plotting evolution for all profiles------------------\n"
-        )
+        print(section("Evolution Mode"))
+        print(item("Task", "plotting evolution for all profiles"))
 
     prod_conc_pt = []
     result_solve_ivp_all = []
@@ -370,7 +386,7 @@ def evol_mode(
             plot_evo(result_solve_ivp, names[i], states_, x_scale, more_species_mkm)
 
         except Exception as e:
-            print(f"Cannot perform mkm for {names[i]} due to {e}.")
+            print(item("MKM failed", f"{names[i]} ({e})"))
             prod_conc_pt.append(np.array([np.nan] * n_target))
             result_solve_ivp_all.append("Shiki")
 
@@ -386,7 +402,13 @@ def evol_mode(
         df_ev.to_csv("prod_conc.csv", index=False)
         print(df_ev.to_string(index=False))
 
-    print("\n")
+    _print_output_summary(
+        [
+            "prod_conc.csv",
+            *[f"mkm_{name}.png" for name in names],
+        ],
+        verb,
+    )
 
 
 def get_srps_1d(
@@ -700,9 +722,8 @@ def main(arguments=None):
         x2max = bround(t_finals_log[1], x2base, "max")
         t_points = np.logspace(x2min, x2max, npoints)
         if verb > 1:
-            print(
-                """Building actvity/selectivity map with time as the second variable."""
-            )
+            print(section("VP Mode"))
+            print(item("Map mode", "activity/selectivity with time as second variable"))
 
     if temperatures is None:
         temperature = 298.15
@@ -722,14 +743,17 @@ def main(arguments=None):
         if x2base == 0:
             x2base = 0.5
         if verb > 1:
+            print(section("VP Mode"))
             print(
-                """Building actvity/selectivity map with temperature as the second variable."""
+                item(
+                    "Map mode", "activity/selectivity with temperature as second variable"
+                )
             )
 
     if ncore == -1:
         ncore = multiprocessing.cpu_count()
     if verb > 2:
-        print(f"Use {ncore} cores for parallel computing.")
+        print(item("Parallel cores", ncore))
 
     if plotmode == 0 and comp_ci:
         plotmode = 1
@@ -744,14 +768,12 @@ def main(arguments=None):
     for i, tag in enumerate(tags):
         if "TS" in tag.upper():
             if verb > 0:
-                print(f"Assuming field {tag} corresponds to a TS.")
+                print(item("Field inference", f"{tag} -> transition state"))
             coeff[i] = True
             regress[i] = True
         elif "DESCRIPTOR" in tag.upper():
             if verb > 0:
-                print(
-                    f"Assuming field {tag} corresponds to a non-energy descriptor variable."
-                )
+                print(item("Field inference", f"{tag} -> non-energy descriptor"))
             start_des = tag.upper().find("DESCRIPTOR")
             tags[i] = "".join(
                 [i for i in tag[:start_des]] + [i for i in tag[start_des + 10 :]]
@@ -760,13 +782,13 @@ def main(arguments=None):
             regress[i] = False
         elif "PRODUCT" in tag.upper():
             if verb > 0:
-                print(f"Assuming ΔG of the reaction(s) are given in field {tag}.")
+                print(item("Field inference", f"{tag} -> reaction free energy (ΔG)"))
             dgr = d[:, i]
             coeff[i] = False
             regress[i] = True
         else:
             if verb > 0:
-                print(f"Assuming field {tag} corresponds to a non-TS stationary point.")
+                print(item("Field inference", f"{tag} -> non-TS stationary point"))
             coeff[i] = False
             regress[i] = True
 
@@ -1003,13 +1025,16 @@ def main(arguments=None):
 
         else:
             if verb > 0:
-                print("\n------------Constructing MKM volcano plot------------------\n")
+                print(section("Constructing MKM Volcano Plot"))
 
             # Volcano line
             if interpolate:
                 if verb > 0:
                     print(
-                        f"Performing microkinetics modelling for the volcano line ({n_point_calc} points)."
+                        item(
+                            "Volcano line",
+                            f"running microkinetic modeling on {n_point_calc} points",
+                        )
                     )
                 selected_indices = np.round(
                     np.linspace(0, len(dgs) - 1, n_point_calc)
@@ -1026,7 +1051,10 @@ def main(arguments=None):
                 trun_dgs = dgs
                 if verb > 0:
                     print(
-                        f"Performing microkinetics modelling for the volcano line ({npoints})."
+                        item(
+                            "Volcano line",
+                            f"running microkinetic modeling on {npoints} points",
+                        )
                     )
             prod_conc = np.zeros((len(dgs), n_target))
             ci = np.zeros((len(dgs), n_target))
@@ -1087,7 +1115,10 @@ def main(arguments=None):
             ci_ = ci_.T
             # Volcano points
             print(
-                f"Performing microkinetics modelling for every profiles in the reaction date ({len(d)} profiles)."
+                item(
+                    "Profile sweep",
+                    f"running microkinetic modeling for all profiles ({len(d)} total)",
+                )
             )
 
             prod_conc_pt = np.zeros((len(d), n_target))
@@ -1228,7 +1259,13 @@ def main(arguments=None):
                     group.create_dataset("ylabel", data=[ylabel.encode()])
                     group.create_dataset("labels", data=prod_names)
 
-            print("\n")
+            _print_output_summary(
+                [
+                    "mkm_vp.h5",
+                    *list(map(lambda x: str(x.name), Path(".").glob("mkm_volcano_*.png"))),
+                ],
+                verb,
+            )
 
     elif nd == 2:
         (
@@ -1477,4 +1514,13 @@ def main(arguments=None):
                 id_labels=prod,
                 plotmode=plotmode,
             )
-        print("\n")
+        _print_output_summary(
+            [
+                "mkm_vp_3d.h5",
+                "mkm_vp_3d_activity.h5",
+                "mkm_vp_3d_selectivity.h5",
+                f"activity_{tag1}_{tag2}.png",
+                f"selectivity_{tag1}_{tag2}.png",
+            ],
+            verb,
+        )

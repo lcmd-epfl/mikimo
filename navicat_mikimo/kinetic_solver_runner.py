@@ -11,6 +11,7 @@ from numpy import char
 from numpy.testing import assert_allclose
 from scipy.integrate import solve_ivp
 
+from .console import concentration_line, section
 from .helper import preprocess_data_mkm, process_data_mkm
 from .kinetic_solver import add_rate, calc_dX_dt, calc_k, get_k
 from .plot_function import plot_evo_save
@@ -735,6 +736,7 @@ def _run_simulation_with_energy_profile(
 
 def main(arguments=None):
     cli_args = sys.argv[2:] if arguments is None else arguments
+    quiet = ("--quiet" in cli_args) or ("-q" in cli_args)
     (
         dg,
         df_network,
@@ -771,19 +773,21 @@ def main(arguments=None):
     states_ = [s.replace("*", "") for s in states]
     plot_evo_save(result_solve_ivp, None, states_, x_scale, more_species_mkm)
 
-    print("\n-------------Reactant Initial Concentration-------------\n")
-    r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
-    for i in r_indices:
-        print("--[{}]: {:.4f}--".format(states[i], initial_conc[i]))
+    if not quiet:
+        print(section("Reactant Initial Concentration"))
+        r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+        for i in r_indices:
+            print(concentration_line(states[i], initial_conc[i]))
 
-    print("\n-------------Reactant Final Concentration-------------\n")
-    r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
-    for i in r_indices:
-        print("--[{}]: {:.4f}--".format(states[i], result_solve_ivp.y[i][-1]))
-    print("\n-------------Product Final Concentration--------------\n")
-    p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
-    for i in p_indices:
-        print("--[{}]: {:.4f}--".format(states[i], result_solve_ivp.y[i][-1]))
+        print(section("Reactant Final Concentration"))
+        r_indices = [i for i, s in enumerate(states) if s.lower().startswith("r")]
+        for i in r_indices:
+            print(concentration_line(states[i], result_solve_ivp.y[i][-1]))
+
+        print(section("Product Final Concentration"))
+        p_indices = [i for i, s in enumerate(states) if s.lower().startswith("p")]
+        for i in p_indices:
+            print(concentration_line(states[i], result_solve_ivp.y[i][-1]))
 
 
 if __name__ == "__main__":

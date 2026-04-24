@@ -1,0 +1,2 @@
+"""Shared Hydra config group."""
+

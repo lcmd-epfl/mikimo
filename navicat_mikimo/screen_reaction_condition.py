@@ -2,6 +2,7 @@
 import itertools
 import os
 import sys
+from pathlib import Path
 from typing import List, Tuple
 
 import h5py
@@ -12,6 +13,7 @@ from navicat_volcanic.helpers import bround
 from scipy.integrate import solve_ivp
 from tqdm import tqdm
 
+from .console import item, section
 from .helper import call_imputter, preprocess_data_mkm, process_data_mkm
 from .kinetic_solver import calc_k, system_KE_DE
 from .kinetic_solver_runner import calc_km
@@ -21,6 +23,19 @@ from .plot_function import (
     plot_evo_save,
     plot_save_cond,
 )
+
+
+def _print_output_summary(paths: List[str], verb: int) -> None:
+    if verb <= 0:
+        return
+    existing = [p for p in paths if Path(p).exists()]
+    if not existing:
+        return
+    print(section("Output Summary"))
+    print(item("Output directory", Path.cwd()))
+    print(item("Artifacts generated", len(existing)))
+    for p in existing:
+        print(item(" -", p))
 
 
 def _resolve_tt_npoints(default=200):
@@ -170,17 +185,18 @@ def main(arguments=None):
         rxn_network_all = df_network.to_numpy()[:, :]
 
     if map_tt:
+        outputs = ["mkm_time_temperature.h5"]
         if verb > 0:
-            print("-------Constructing time-temperature map-------\n")
-            print(f"Time span: {t_finals} s")
-            print(f"Temperature span: {temperatures} s")
+            print(section("Constructing Time-Temperature Map"))
+            print(item("Time span [s]", t_finals))
+            print(item("Temperature span [K]", temperatures))
         assert (
             len(t_finals) > 1 and len(temperatures) > 1
         ), "Require more than 1 time and temperature input"
 
         npoints = _resolve_tt_npoints(default=200)
         if verb > 0:
-            print(f"Grid resolution: {npoints} x {npoints}")
+            print(item("Grid resolution", f"{npoints} x {npoints}"))
         t_finals_log = np.log10(t_finals)
         x1base = np.round((temperatures[1] - temperatures[0]) / 5)
         if x1base == 0:
@@ -284,6 +300,9 @@ def main(arguments=None):
             filename=afilename,
             cmap="jet",
         )
+        outputs.append(afilename)
+        if verb > 2:
+            outputs.append("mkm_time_temperature_activity.h5")
 
         prod = [p for p in states if "*" in p]
         prod = [s.replace("*", "") for s in prod]
@@ -322,6 +341,9 @@ def main(arguments=None):
                 ylabel=slabel,
                 filename=sfilename,
             )
+            outputs.append(sfilename)
+            if verb > 2:
+                outputs.append("mkm_time_temperature_selectivity.h5")
 
         elif n_target > 2:
             dominant_indices = np.argmax(grid_d_fill, axis=0)
@@ -349,11 +371,19 @@ def main(arguments=None):
                 id_labels=prod,
                 nunique=n_target,
             )
+            outputs.append(sfilename)
+            if verb > 2:
+                outputs.append("mkm_time_temperature_selectivity.h5")
+
+        _print_output_summary(outputs, verb)
 
     else:
+        outputs = []
         if len(t_finals) == 1:
             if verb > 0:
-                print(f"-------Screening over temperature: {temperatures} K-------")
+                print(section("Condition Screening"))
+                print(item("Mode", "temperature sweep"))
+                print(item("Temperatures [K]", temperatures))
             final_prod_concs = np.zeros((len(temperatures), len(idx_target_all)))
             t_final = t_finals[0]
             t_span = (0, t_final)
@@ -393,10 +423,13 @@ def main(arguments=None):
                 prod_name,
                 verb=verb,
             )
+            outputs.extend(["Temperature (K)_screen.png", "temperature_screen.csv"])
 
         elif len(temperatures) == 1:
             if verb > 0:
-                print(f"-------Screening over reaction time: {t_finals} s-------\n")
+                print(section("Condition Screening"))
+                print(item("Mode", "time sweep"))
+                print(item("Times [s]", t_finals))
             final_prod_concs = np.zeros((len(t_finals), len(idx_target_all)))
             temperature = temperatures[0]
             for i, tf in enumerate(t_finals):
@@ -444,12 +477,14 @@ def main(arguments=None):
             plot_save_cond(
                 t_finals, final_prod_concs.T, "Time [s]", prod_name, verb=verb
             )
+            outputs.extend(["Time [s]_screen.png", "time_screen.csv"])
 
         elif len(t_finals) > 1 and len(temperatures) > 1:
             if verb > 0:
-                print("-------Screening over both reaction time and temperature-------\n")
-                print(f"{t_finals} s")
-                print(f"{temperatures} K\n")
+                print(section("Condition Screening"))
+                print(item("Mode", "time + temperature sweep"))
+                print(item("Times [s]", t_finals))
+                print(item("Temperatures [K]", temperatures))
             combinations = list(itertools.product(t_finals, temperatures))
             final_prod_concs = np.zeros((len(combinations), len(idx_target_all)))
             for i, Tt in enumerate(combinations):
@@ -505,5 +540,8 @@ def main(arguments=None):
             df.to_csv("time_temperature_screen.csv", index=False)
             if verb > 0:
                 print(df.to_string(index=False))
+            outputs.append("time_temperature_screen.csv")
+
+        _print_output_summary(outputs, verb)
 
     return None

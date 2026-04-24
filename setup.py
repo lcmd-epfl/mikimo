@@ -48,7 +48,9 @@ setup(
         "navicat_volcanic",
         "openpyxl",
     ],
-    extras_require={"hydra": ["hydra-core>=1.3,<1.4"]},
+    extras_require={
+        "hydra": ["hydra-core>=1.3,<1.4"],
+    },
     keywords="computational chemistry utility",
     entry_points={
         "console_scripts": [

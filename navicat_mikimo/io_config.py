@@ -5,6 +5,8 @@ from typing import List, Optional, Union
 @dataclass
 class SharedCLIConfig:
     dir: str = "."
+    outdir: str = "."
+    quiet: bool = False
     profile_choice: int = 0
     time: Optional[List[float]] = None
     temp: Optional[List[float]] = None
@@ -50,6 +52,8 @@ CLIConfig = Union[MKMSoloConfig, MKMScreeningConfig, MKMCondConfig]
 def build_config_from_namespace(args, mode: str) -> CLIConfig:
     shared = SharedCLIConfig(
         dir=args.dir,
+        outdir=args.outdir,
+        quiet=args.quiet,
         profile_choice=args.profile_choice,
         time=args.time,
         temp=args.temp,

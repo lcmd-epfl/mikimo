@@ -26,6 +26,7 @@ def build_legacy_argv(cfg: DictConfig) -> List[str]:
     mode_cfg: Dict[str, object] = OmegaConf.to_container(cfg.mode_config, resolve=True)
 
     argv: List[str] = ["-d", str(shared["dir"]), "-e", str(shared["profile_choice"])]
+    argv.extend(["--outdir", str(shared.get("outdir", "."))])
     _append_list_option(argv, "-Tf", shared.get("time"))
     _append_list_option(argv, "-t", shared.get("temp"))
     argv.extend(["-x", str(shared["xscale"])])
@@ -34,6 +35,8 @@ def build_legacy_argv(cfg: DictConfig) -> List[str]:
     argv.extend(["-ncore", str(shared["ncore"])])
     argv.extend(["-is", str(shared["imputer_strat"])])
     argv.extend(["-v", str(shared["verb"])])
+    if shared.get("quiet"):
+        argv.append("--quiet")
     if shared.get("kinetic_mode"):
         argv.append("-k")
 

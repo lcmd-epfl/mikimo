@@ -1,4 +1,6 @@
 dir: .
+outdir: .
+quiet: false
 profile_choice: 0
 time: null
 temp: null
@@ -9,4 +11,3 @@ ncore: 1
 imputer_strat: knn
 verb: 1
 kinetic_mode: false
-
