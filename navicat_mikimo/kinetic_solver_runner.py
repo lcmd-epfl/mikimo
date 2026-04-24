@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import logging
 import sys
 import warnings
 from typing import Callable, List, Tuple, Union
@@ -15,6 +16,7 @@ from .kinetic_solver import add_rate, calc_dX_dt, calc_k, get_k
 from .plot_function import plot_evo_save
 
 warnings.filterwarnings("ignore")
+logger = logging.getLogger(__name__)
 
 
 def system_KE_DE(
@@ -147,7 +149,6 @@ def calc_km(
     # if all fail, return NaN
     rtol_values = [1e-3, 1e-6, 1e-9]
     atol_values = [1e-6, 1e-9, 1e-9]
-    last_ = [rtol_values[-1], atol_values[-1]]
 
     if quality == 0:
         max_step = np.nan
@@ -179,7 +180,6 @@ def calc_km(
         )
         rtol_values = [1e-6, 1e-9, 1e-10]
         atol_values = [1e-9, 1e-9, 1e-10]
-        last_ = [rtol_values[-1], atol_values[-1]]
     elif quality > 2:
         max_step = (t_span[1] - t_span[0]) / 50.0
         first_step = np.min(
@@ -195,90 +195,87 @@ def calc_km(
         )
         rtol_values = [1e-6, 1e-9, 1e-10]
         atol_values = [1e-9, 1e-9, 1e-10]
-        last_ = [rtol_values[-1], atol_values[-1]]
-    success = False
-    cont = False
+    solver_diagnostics = {
+        "attempts": [],
+        "fallback_used": False,
+        "selected_method": None,
+    }
+    result_solve_ivp = None
 
-    while not success:
-        atol = atol_values.pop(0)
-        rtol = rtol_values.pop(0)
+    def _attempt_solve(method, rtol, atol, stage):
         try:
-            result_solve_ivp = solve_ivp(
+            result = solve_ivp(
                 dydt,
                 t_span,
                 initial_conc,
-                method="BDF",
+                method=method,
                 dense_output=True,
                 rtol=rtol,
                 atol=atol,
-                # jac=dydt.jac,
                 max_step=max_step,
                 first_step=first_step,
             )
-            success = True
-
-        except Exception:
-            if rtol == last_[0] and atol == last_[1]:
-                success = True
-                cont = True
-            continue
-
-    if cont:
-        rtol_values = [1e-6, 1e-9, 1e-10]
-        atol_values = [1e-9, 1e-9, 1e-10]
-        last_ = [rtol_values[-1], atol_values[-1]]
-        success = False
-        cont = False
-        while success == False:
-            atol = atol_values.pop(0)
-            rtol = rtol_values.pop(0)
-            try:
-                result_solve_ivp = solve_ivp(
-                    dydt,
-                    t_span,
-                    initial_conc,
-                    method="BDF",
-                    dense_output=True,
-                    rtol=rtol,
-                    atol=atol,
-                    max_step=max_step,
-                    first_step=first_step,
-                )
-                success = True
-
-            except Exception:
-                if rtol == last_[0] and atol == last_[1]:
-                    success = True
-                    cont = True
-                continue
-
-    if cont:
-        try:
-            result_solve_ivp = solve_ivp(
-                dydt,
-                t_span,
-                initial_conc,
-                method="LSODA",
-                dense_output=True,
-                rtol=1e-6,
-                atol=1e-9,
-                max_step=max_step,
-                first_step=first_step,
+            solver_diagnostics["attempts"].append(
+                {
+                    "stage": stage,
+                    "method": method,
+                    "rtol": rtol,
+                    "atol": atol,
+                    "status": "success",
+                }
             )
-        except Exception:
-            # Last resort
-            result_solve_ivp = solve_ivp(
-                dydt,
-                t_span,
-                initial_conc,
-                method="Radau",
-                dense_output=True,
-                rtol=1e-6,
-                atol=1e-9,
-                max_step=max_step,
-                first_step=first_step,
-                # jac=dydt.jac,
+            return result
+        except Exception as exc:
+            solver_diagnostics["attempts"].append(
+                {
+                    "stage": stage,
+                    "method": method,
+                    "rtol": rtol,
+                    "atol": atol,
+                    "status": "error",
+                    "error": repr(exc),
+                }
             )
+            return None
+
+    # Phase 1: BDF attempts (autograd path)
+    for rtol, atol in zip(rtol_values, atol_values):
+        result_solve_ivp = _attempt_solve("BDF", rtol, atol, "bdf_primary")
+        if result_solve_ivp is not None:
+            break
+
+    # Phase 2: retry BDF with stricter defaults
+    if result_solve_ivp is None:
+        solver_diagnostics["fallback_used"] = True
+        bdf_retry_pairs = [(1e-6, 1e-9), (1e-9, 1e-9), (1e-10, 1e-10)]
+        for rtol, atol in bdf_retry_pairs:
+            result_solve_ivp = _attempt_solve("BDF", rtol, atol, "bdf_retry")
+            if result_solve_ivp is not None:
+                break
+
+    # Phase 3: switch solver family
+    if result_solve_ivp is None:
+        solver_diagnostics["fallback_used"] = True
+        result_solve_ivp = _attempt_solve("LSODA", 1e-6, 1e-9, "lsoda_fallback")
+
+    if result_solve_ivp is None:
+        solver_diagnostics["fallback_used"] = True
+        result_solve_ivp = _attempt_solve("Radau", 1e-6, 1e-9, "radau_last_resort")
+
+    if result_solve_ivp is None:
+        raise RuntimeError("All ODE solver attempts failed. See diagnostics for details.")
+
+    successful_attempts = [
+        a for a in solver_diagnostics["attempts"] if a.get("status") == "success"
+    ]
+    if successful_attempts:
+        solver_diagnostics["selected_method"] = successful_attempts[-1]["method"]
+    result_solve_ivp.mikimo_solver_diagnostics = solver_diagnostics
+    if solver_diagnostics["fallback_used"]:
+        logger.warning(
+            "ODE fallback path used (selected method: %s).",
+            solver_diagnostics["selected_method"],
+        )
 
     try:
         c_target_t = np.array([result_solve_ivp.y[i][-1] for i in idx_target_all])

@@ -35,6 +35,9 @@
 * [Outputs](#outputs-)
 * [Replotting Utility](#replotting-utility-)
 * [Examples](#examples-)
+* [Quickstart Validation](#quickstart-validation-)
+* [Troubleshooting](#troubleshooting-)
+* [Development & Release Workflow](#development--release-workflow-)
 * [Limitations](#limitations-)
 * [Citation](#citation-)
 
@@ -218,6 +221,55 @@ python -m navicat_mikimo replot examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
 
 You can find examples demonstrating how to read h5 files and regenerate plots in the "examples" folder.
 
+## Quickstart Validation [↑](#quickstart-validation)
+
+After installation, run:
+
+```bash
+pytest -q
+python -m navicat_mikimo mkm -d test_cases/test_1 -t 298.15 -Tf 60 -v 1
+python -m navicat_mikimo vp -d test_cases/pincer_CO2 -t 323.15 -Tf 7200 -nd 0 -ncore 1 -v 1
+python -m navicat_mikimo cond -d test_cases/pincer_CO2_jacs -Tf 7200 7300 -t 298.15 -ncore 1 -v 1
+```
+
+These are the same commands used for current performance baselines in `PERFORMANCE_BASELINE.md`.
+
+## Troubleshooting [↑](#troubleshooting)
+
+1. **`rxn_network.csv` / `reaction_data` not found**  
+   Use an absolute directory for `-d` or run from the intended input folder.
+2. **Matplotlib/font cache permission warnings**  
+   Set writable cache paths:
+   `MPLCONFIGDIR=/tmp/mpl XDG_CACHE_HOME=/tmp/cache`.
+3. **Large `cond -tt` map is too slow for smoke tests**  
+   Set `MIKIMO_TT_NPOINTS` (for example `MIKIMO_TT_NPOINTS=8`) to reduce grid size.
+4. **Unexpected solver behavior in stiff systems**  
+   Solver fallback diagnostics are attached on `solve_ivp` results as
+   `mikimo_solver_diagnostics` (attempt list, fallback usage, selected method).
+
+## Development & Release Workflow [↑](#development--release-workflow)
+
+Use the local quality gates:
+
+```bash
+python -m pip install -r dev-requirements.txt
+python -m pip install -e .
+make check
+```
+
+Test strategy:
+- Unit/regression tests are in `tests/unit/`.
+- CLI integration smoke tests are in `tests/integration/` and use `test_cases/`.
+- Numerical behavior is validated with `numpy.testing.assert_allclose`.
+
+Release build:
+
+```bash
+python -m build
+```
+
+CI runs pytest + lint on Python 3.9 and 3.11. PyPI publish workflow builds tagged releases (`v*`).
+
 ## Limitations [↑](#limitations)
 
 1. **Overlapping states** of different pathways before the reference state (starting point).
@@ -232,5 +284,26 @@ If you use navicat_mikimo in your work, please cite our work and the publication
 
 ```
 Worakul, T., Laplaza, R., Das, S., Wodrich, M.D., Corminboeuf, C., Microkinetic Molecular Volcano Plots for Enhanced Catalyst Selectivity and Activity Predictions. ACS Catalysis 2024 14 (13), 9829-9839. 
+```
+
+BibTeX:
+
+```bibtex
+@article{worakul_microkinetic_2024,
+	title = {Microkinetic {Molecular} {Volcano} {Plots} for {Enhanced} {Catalyst} {Selectivity} and {Activity} {Predictions}},
+	volume = {14},
+	copyright = {https://creativecommons.org/licenses/by-nc-nd/4.0/},
+	issn = {2155-5435, 2155-5435},
+	url = {https://pubs.acs.org/doi/10.1021/acscatal.4c01175},
+	doi = {10.1021/acscatal.4c01175},
+	language = {en},
+	number = {13},
+	urldate = {2026-04-24},
+	journal = {ACS Catalysis},
+	author = {Worakul, Thanapat and Laplaza, Rubén and Das, Shubhajit and Wodrich, Matthew D. and Corminboeuf, Clemence},
+	month = jul,
+	year = {2024},
+	pages = {9829--9839},
+}
 ```
 [![DOI](https://img.shields.io/badge/DOI-10.1021/acscatal.4c01175-red)](https://pubs.acs.org/doi/10.1021/acscatal.4c01175)

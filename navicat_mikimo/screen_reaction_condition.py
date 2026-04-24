@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import itertools
+import os
 import sys
 from typing import List, Tuple
 
@@ -20,6 +21,24 @@ from .plot_function import (
     plot_evo_save,
     plot_save_cond,
 )
+
+
+def _resolve_tt_npoints(default=200):
+    """Resolve grid size for cond -tt mode from environment."""
+    raw = os.getenv("MIKIMO_TT_NPOINTS")
+    if raw is None:
+        return default
+    try:
+        npoints = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid MIKIMO_TT_NPOINTS='{raw}'. Expected an integer >= 2."
+        ) from exc
+    if npoints < 2:
+        raise ValueError(
+            f"Invalid MIKIMO_TT_NPOINTS={npoints}. Expected an integer >= 2."
+        )
+    return npoints
 
 
 def run_mkm_3d(
@@ -158,7 +177,9 @@ def main():
             len(t_finals) > 1 and len(temperatures) > 1
         ), "Require more than 1 time and temperature input"
 
-        npoints = 200
+        npoints = _resolve_tt_npoints(default=200)
+        if verb > 0:
+            print(f"Grid resolution: {npoints} x {npoints}")
         t_finals_log = np.log10(t_finals)
         x1base = np.round((temperatures[1] - temperatures[0]) / 5)
         if x1base == 0:
