@@ -202,10 +202,32 @@ def check_km_inp(
 
 
 def preprocess_data_mkm(arguments, mode):
+    mode_label = {
+        "mkm_solo": "mkm",
+        "mkm_screening": "vp",
+        "mkm_cond": "cond",
+    }.get(mode, mode)
+
     parser = argparse.ArgumentParser(
         prog="mikimo",
-        description="Perform microkinetic simulations and generate microkinetic volcano plots for homogeneous catalytic reactions.",
-        epilog="Remember to cite the mikimo paper: (Submitted!)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "=== MIKIMO CLI ===\n"
+            f"Mode: {mode_label}\n\n"
+            "Input files expected in --dir:\n"
+            "  - rxn_network.csv\n"
+            "  - reaction_data.csv/.xlsx  (or kinetic_data.csv/.xlsx with --kinetic)\n\n"
+            "Tip: outputs are written to timestamped mode folders by default.\n"
+            "Use --outdir to override."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  mkm : navicat_mikimo mkm  -d test_cases/test_1 -t 298.15 -Tf 60\n"
+            "  vp  : navicat_mikimo vp   -d test_cases/pincer_CO2 -t 323.15 -Tf 7200 -nd 0\n"
+            "  cond: navicat_mikimo cond -d test_cases/pincer_CO2_jacs -Tf 7200 7300 -t 298.15\n\n"
+            "Please cite mikimo if used in published work: \n" \
+            "Worakul, T. et al. ACS Catal. 2024, 14 (13), 9829–9839."
+        ),
     )
 
     parser.add_argument(
@@ -227,7 +249,7 @@ def preprocess_data_mkm(arguments, mode):
         dest="outdir",
         default=".",
         type=str,
-        help="Directory for generated outputs (default: current working directory).",
+        help="Directory for generated outputs (default: outputs/<mode>/<timestamp>).",
     )
     parser.add_argument(
         "-e",

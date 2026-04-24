@@ -3,6 +3,14 @@ import sys
 
 import fire
 
+BANNER = r"""
+███    ███ ██ ██   ██ ██ ███    ███  ██████
+████  ████ ██ ██  ██  ██ ████  ████ ██    ██
+██ ████ ██ ██ █████   ██ ██ ████ ██ ██    ██
+██  ██  ██ ██ ██  ██  ██ ██  ██  ██ ██    ██
+██      ██ ██ ██   ██ ██ ██      ██  ██████
+"""
+
 
 def _get_mode_handler(mode):
     modules = {
@@ -20,22 +28,22 @@ def _get_mode_handler(mode):
 
 def run(mode):
     """
-    Perform microkinetic modelling (mkm) for homogeneous reactions.
+    MIKIMO: microkinetic modeling toolkit
 
-    Uses energy data and coupling with volcanic for high-throughput runs.
+    Perform microkinetic modeling for homogeneous catalytic reactions.
 
-    Run mikimo by the specified mode, which can be one of the following:
-    - 'mkm': Perform a single MKM run using the top-most row in the reaction data file.
-    - 'vp': Screen over all energy profiles in the reaction data file.
-    - 'cond': Screen over reaction time and/or temperature.
+    Modes:
+    - mkm  : single profile simulation and concentration evolution
+    - vp   : profile screening, volcano plots, activity/selectivity maps
+    - cond : reaction-condition screening over time and/or temperature
 
-    Usage:
-    - For 'mkm' mode: navicat_mikimo mkm
-    - For 'vp' mode: navicat_mikimo vp
-    - For 'cond' mode: navicat_mikimo cond
+    Quick start:
+    - navicat_mikimo mkm  -d test_cases/test_1 -t 298.15 -Tf 60
+    - navicat_mikimo vp   -d test_cases/pincer_CO2 -t 323.15 -Tf 7200 -nd 0
+    - navicat_mikimo cond -d test_cases/pincer_CO2_jacs -Tf 7200 7300 -t 298.15
 
     Args:
-        mode (str): The mode to run [Valid choices: 'mkm', 'vp', or 'cond'].
+        mode (str): One of: mkm, vp, cond.
 
     Returns:
         None
@@ -44,6 +52,7 @@ def run(mode):
 
 
 def main():
+    print(BANNER)
     fire.Fire(run)
 
 
