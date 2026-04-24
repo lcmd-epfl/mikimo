@@ -1,0 +1,7 @@
+defaults:
+  - shared: default
+  - mode_config: mkm
+  - _self_
+
+mode: mkm
+

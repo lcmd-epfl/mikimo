@@ -33,6 +33,13 @@ classifiers = [
 
 [project.scripts]
 navicat_mikimo = "navicat_mikimo.__main__:main"
+navicat_mikimo_hydra = "navicat_mikimo.hydra_main:main"
+navicat_mikimo_config = "navicat_mikimo.config_runner:main"
+
+[project.optional-dependencies]
+hydra = [
+    "hydra-core>=1.3,<1.4",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -597,7 +597,8 @@ def get_srps_2d(
     )
 
 
-def main():
+def main(arguments=None):
+    cli_args = sys.argv[2:] if arguments is None else arguments
     # %% loading and processing------------------------------------------------------------------------#
     (
         df,
@@ -624,7 +625,7 @@ def main():
         times,
         temperatures,
         kinetic_mode,
-    ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_screening")
+    ) = preprocess_data_mkm(cli_args, mode="mkm_screening")
 
     if kinetic_mode:
         print(

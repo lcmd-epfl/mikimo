@@ -48,8 +48,15 @@ setup(
         "navicat_volcanic",
         "openpyxl",
     ],
+    extras_require={"hydra": ["hydra-core>=1.3,<1.4"]},
     keywords="computational chemistry utility",
-    entry_points={"console_scripts": ["navicat_mikimo=navicat_mikimo.__main__:main"]},
+    entry_points={
+        "console_scripts": [
+            "navicat_mikimo=navicat_mikimo.__main__:main",
+            "navicat_mikimo_hydra=navicat_mikimo.hydra_main:main",
+            "navicat_mikimo_config=navicat_mikimo.config_runner:main",
+        ]
+    },
     include_package_data=True,
     ext_modules=cythonize(extensions),
     include_dirs=[np.get_include()],

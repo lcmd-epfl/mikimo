@@ -221,6 +221,23 @@ python -m navicat_mikimo replot examples/data/vp/data_a.h5 -p 3 3 3 -w 20 20 20
 
 You can find examples demonstrating how to read h5 files and regenerate plots in the "examples" folder.
 
+## Config-Driven Runs (Optional) [↑](#config-driven-runs-optional)
+
+For reproducible runs, you can use either a YAML config file or Hydra overrides.
+
+1. YAML config runner (simple, explicit file):
+```bash
+python -m navicat_mikimo.config_runner --config examples/configs/mkm_test1.yaml
+```
+
+2. Hydra entrypoint (composed config + overrides):
+```bash
+python -m pip install -e .[hydra]
+python -m navicat_mikimo.hydra_main mode=mkm shared.dir=test_cases/test_1 shared.temp=[298.15] shared.time=[60]
+```
+
+Current recommendation: keep using legacy `python -m navicat_mikimo ...` commands for day-to-day work while this config workflow is stabilized.
+
 ## Quickstart Validation [↑](#quickstart-validation)
 
 After installation, run:

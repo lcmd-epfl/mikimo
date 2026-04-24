@@ -1,0 +1,11 @@
+xbase: 20.0
+lmargin: 20
+rmargin: 20
+idx: null
+percent: false
+plotmode: 1
+confidence_interval: false
+lfesr: false
+plot_quality: 1
+run_mode: 1
+

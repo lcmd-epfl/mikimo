@@ -733,7 +733,8 @@ def _run_simulation_with_energy_profile(
     return initial_conc, result_solve_ivp
 
 
-def main():
+def main(arguments=None):
+    cli_args = sys.argv[2:] if arguments is None else arguments
     (
         dg,
         df_network,
@@ -745,7 +746,7 @@ def main():
         more_species_mkm,
         ks,
         quality,
-    ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_solo")
+    ) = preprocess_data_mkm(cli_args, mode="mkm_solo")
 
     t_span = (0, t_final)
     if ks is not None:

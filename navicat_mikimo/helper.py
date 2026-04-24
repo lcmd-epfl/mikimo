@@ -9,6 +9,8 @@ from typing import List, Tuple
 import autograd.numpy as np
 import pandas as pd
 
+from navicat_mikimo.io_config import build_config_from_namespace
+
 logging.basicConfig(level=logging.WARNING)
 
 
@@ -400,17 +402,20 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
     )
 
     args = parser.parse_args(arguments)
-    verb = args.verb
-    wdir = args.dir
-    profile_choice = args.profile_choice
-    x_scale = args.xscale
-    more_species_mkm = args.addition
-    quality = args.int_quality
-    temperatures = args.temp
-    kinetic_mode = args.kinetic_mode
-    t_finals = args.time
-    ncore = args.ncore
-    imputer_strat = args.imputer_strat
+    cli_cfg = build_config_from_namespace(args, mode)
+    shared = cli_cfg.shared
+
+    verb = shared.verb
+    wdir = shared.dir
+    profile_choice = shared.profile_choice
+    x_scale = shared.xscale
+    more_species_mkm = shared.addition
+    quality = shared.int_quality
+    temperatures = shared.temp
+    kinetic_mode = shared.kinetic_mode
+    t_finals = shared.time
+    ncore = shared.ncore
+    imputer_strat = shared.imputer_strat
     
     if mode == "mkm_solo":
         profile_choice = args.profile_choice
@@ -510,17 +515,17 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         )
 
     elif mode == "mkm_screening":
-        lmargin = args.lmargin
-        rmargin = args.rmargin
-        xbase = args.xbase
-        report_as_yield = args.percent
-        p_quality = args.plot_quality
-        plotmode = args.plotmode
-        lfesr = args.lfesr
+        lmargin = cli_cfg.lmargin
+        rmargin = cli_cfg.rmargin
+        xbase = cli_cfg.xbase
+        report_as_yield = cli_cfg.percent
+        p_quality = cli_cfg.plot_quality
+        plotmode = cli_cfg.plotmode
+        lfesr = cli_cfg.lfesr
         x_scale = args.xscale
-        comp_ci = args.confidence_interval
-        nd = args.run_mode
-        lfesrs_idx = args.idx
+        comp_ci = cli_cfg.confidence_interval
+        nd = cli_cfg.run_mode
+        lfesrs_idx = cli_cfg.idx
         
         nx_path = Path(wdir, "rxn_network.csv")
         df_network = pd.read_csv(nx_path, index_col=0)
@@ -590,8 +595,8 @@ time range (-T time_1 time_2) in K and s respectively. (default: False)""",
         )
 
     elif mode == "mkm_cond":
-        plot_evo = args.plot_evo
-        map_tt = args.map
+        plot_evo = cli_cfg.plot_evo
+        map_tt = cli_cfg.map
         
         if t_finals is None:
             t_finals = [86400]

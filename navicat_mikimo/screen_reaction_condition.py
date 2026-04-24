@@ -126,7 +126,8 @@ def run_mkm_3d(
             continue
 
 
-def main():
+def main(arguments=None):
+    cli_args = sys.argv[2:] if arguments is None else arguments
     (
         dg,
         df_network,
@@ -143,7 +144,7 @@ def main():
         verb,
         ks,
         quality,
-    ) = preprocess_data_mkm(sys.argv[2:], mode="mkm_cond")
+    ) = preprocess_data_mkm(cli_args, mode="mkm_cond")
 
     idx_target_all = [states.index(i) for i in states if "*" in i]
     prod_name = [s for i, s in enumerate(states) if s.lower().startswith("p")]
